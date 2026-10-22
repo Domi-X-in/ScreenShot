@@ -1,0 +1,9 @@
+# SwiftPM build products
+.build/
+# App bundle made by build.sh
+build/
+# macOS
+.DS_Store
+# Editors
+.swiftpm/
+*.xcuserstate
