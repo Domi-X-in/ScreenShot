@@ -12,19 +12,21 @@ Leyenda: 🔴 urgente · 🟠 paridad con Shottr · 🟢 mejora propia · 🔧 m
 - [x] **GitHub**: repositorio público [Domi-X-in/ScreenShot](https://github.com/Domi-X-in/ScreenShot), rama `main` publicada.
 - [x] **ROADMAP.md** (este archivo) en el repositorio.
 
-## Fase 1 — Verificar lo que ya existe 🔴
+## Fase 1 — Verificar lo que ya existe 🔴 ✅
 
-Las capturas reales nunca se han probado de principio a fin; las pruebas actuales cubren el editor, no la captura.
+Autotest de captura en vivo (`Tools/live-capture-test.sh`): la app se lanza con su propio permiso de Grabación de pantalla, dibuja ventanas de prueba (bloques de color, texto, QR y un documento desplazable) y las captura de verdad. Resultado: **18 comprobaciones superadas, 1 omitida**.
 
-- [ ] **Autotest de captura en vivo**, que la propia app ejecuta con su permiso de Grabación de pantalla:
-  - [ ] Captura de pantalla completa
-  - [ ] Captura de área y repetición del área
-  - [ ] Captura de ventana (con y sin sombra) y de la ventana activa
-  - [ ] Captura con retardo (3 s)
-  - [ ] **Captura con desplazamiento (scroll)**: automática y manual
-  - [ ] Reconocimiento de texto/QR sobre una captura real
-  - [ ] Selección de área en un segundo monitor (si hay uno conectado)
-- [ ] Corregir lo que falle en esas pruebas.
+- [x] **Autotest de captura en vivo**, que la propia app ejecuta con su permiso de Grabación de pantalla:
+  - [x] Captura de pantalla completa: la pantalla entera (1080×1920) con contenido real
+  - [x] Captura de área a través de la superposición (arrastrando con el ratón) y repetición del área
+  - [x] Captura de ventana sin sombra (exacta) y con sombra; lista de ventanas de otras apps y captura de una de ellas
+  - [x] Captura con retardo (3 s)
+  - [x] **Captura con desplazamiento (modo manual)**: documento de 1500 px unido sin errores, 15/15 franjas en su sitio
+  - [x] Reconocimiento de texto y de QR sobre capturas reales
+  - [ ] Selección de área en un segundo monitor (omitida: solo hay un monitor conectado)
+  - [ ] Desplazamiento **automático** (necesita el permiso de Accesibilidad; no probado)
+- [x] Corregir lo que falle en esas pruebas:
+  - [x] **La sombra de las capturas de ventana no se capturaba** (ScreenCaptureKit omite las sombras por defecto). Ahora se captura la ventana con su sombra sobre fondo transparente (628×268 en lugar de 600×240).
 
 ## Fase 2 — Mantenimiento 🔧
 

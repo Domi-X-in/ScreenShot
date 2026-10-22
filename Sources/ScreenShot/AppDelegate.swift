@@ -26,7 +26,7 @@ import AppKit
 
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
-        if SelfTest.runIfRequested() || SelectionSelfTest.runIfRequested() || TextSelfTest.runIfRequested() || TextStyleSelfTest.runIfRequested() || InfoSelfTest.runIfRequested() || CalloutSelfTest.runIfRequested() || AppearanceSelfTest.runIfRequested() || DefaultsSelfTest.runIfRequested() {
+        if LiveCaptureTest.runIfRequested() || SelfTest.runIfRequested() || SelectionSelfTest.runIfRequested() || TextSelfTest.runIfRequested() || TextStyleSelfTest.runIfRequested() || InfoSelfTest.runIfRequested() || CalloutSelfTest.runIfRequested() || AppearanceSelfTest.runIfRequested() || DefaultsSelfTest.runIfRequested() {
             // Self-test drives the editor and quits.
         } else if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
             DebugSnapshots.runIfRequested()

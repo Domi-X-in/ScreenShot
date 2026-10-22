@@ -145,7 +145,11 @@ import ScreenCaptureKit
     }
 
     /// Applies the "after capture" preferences.
+    /// Live capture self-test only: receives each capture instead of the copy/save/editor handling.
+    var captureHookForTest: ((CGImage, CGFloat) -> Void)?
+
     func handleCapture(_ img: CGImage, scale: CGFloat, area: Bool = false) {
+        if let hook = captureHookForTest { hook(img, scale); return }
         let copy = Settings.afterCopy, save = Settings.afterSave
         let show = Settings.afterShow || (!copy && !save)
         if copy {

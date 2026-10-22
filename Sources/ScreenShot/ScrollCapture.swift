@@ -4,6 +4,8 @@ import ApplicationServices
 /// Scrolling capture (Shottr's ScrollCapturer): repeatedly captures an area while it scrolls and stitches the new rows.
 @MainActor final class ScrollCapture {
     static var current: ScrollCapture?
+    /// Live capture self-test only: receives the stitched result instead of opening the editor.
+    static var onFinishForTest: ((CGImage) -> Void)?
 
     private let screen: NSScreen
     private let rect: CGRect // display-local points, top-left origin
@@ -171,6 +173,7 @@ import ApplicationServices
         panel?.orderOut(nil)
         ScrollCapture.current = nil
         guard let img = Stitcher.compose(strips) else { return }
+        if let hook = ScrollCapture.onFinishForTest { hook(img); return }
         AppLogic.shared.handleCapture(img, scale: screen.backingScaleFactor)
     }
 }
