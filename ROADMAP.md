@@ -8,9 +8,9 @@ Leyenda: 🔴 urgente · 🟠 paridad con Shottr · 🟢 mejora propia · 🔧 m
 
 ## Fase 0 — Base del proyecto 🔴
 
-- [ ] **Control de versiones**: repositorio git con `.gitignore` (sin `.build/`, `build/`, `.DS_Store`) y primer commit.
-- [ ] **GitHub**: repositorio nuevo, código subido y rama `main` publicada.
-- [ ] **ROADMAP.md** (este archivo) en el repositorio.
+- [x] **Control de versiones**: repositorio git con `.gitignore` (sin `.build/`, `build/`, `.DS_Store`) y primer commit (`263ae0d`).
+- [x] **GitHub**: repositorio público [Domi-X-in/ScreenShot](https://github.com/Domi-X-in/ScreenShot), rama `main` publicada.
+- [x] **ROADMAP.md** (este archivo) en el repositorio.
 
 ## Fase 1 — Verificar lo que ya existe 🔴
 
