@@ -2,6 +2,7 @@ import AppKit
 import CoreImage.CIFilterBuiltins
 import ScreenCaptureKit
 
+#if SCREENSHOT_SELFTESTS
 /// Live capture self-test: real screen captures of test windows this app draws, using the app's own Screen Recording
 /// permission. Launch through Launch Services so the permission applies, e.g.
 /// `open -n -W build/ScreenShot.app --env SCREENSHOT_SELFTEST_LIVE=/tmp/live.txt --args -saveFolder /tmp/x`.
@@ -28,7 +29,8 @@ import ScreenCaptureKit
         resultURL = URL(fileURLWithPath: path)
         Task { @MainActor in
             await run()
-            write("\(failures == 0 ? "LIVE SELFTEST OK" : "LIVE SELFTEST FAILED (\(failures))")")
+            let skippedAll = lines.contains { $0.hasPrefix("SKIP the screen is locked") }
+            write(skippedAll ? "LIVE SELFTEST SKIPPED (screen locked)" : failures == 0 ? "LIVE SELFTEST OK" : "LIVE SELFTEST FAILED (\(failures))")
             exit(failures == 0 ? 0 : 1)
         }
         return true
@@ -59,10 +61,7 @@ import ScreenCaptureKit
 
     /// Color at a point given in image pixels (top-left origin), in sRGB.
     private static func color(_ img: CGImage, _ x: CGFloat, _ y: CGFloat) -> NSColor? {
-        let rep = NSBitmapImageRep(cgImage: img)
-        let px = Int(x), py = Int(y)
-        guard px >= 0, py >= 0, px < rep.pixelsWide, py < rep.pixelsHigh else { return nil }
-        return rep.colorAt(x: px, y: py)?.usingColorSpace(.sRGB)
+        PixelReader(img).color(Int(x), Int(y))
     }
 
     /// Index of the candidate closest to `c` (sRGB distance). Captures come back in the display's color space,
@@ -126,6 +125,11 @@ import ScreenCaptureKit
 
     private static func run() async {
         write("Live capture self-test · macOS \(ProcessInfo.processInfo.operatingSystemVersionString) · \(NSScreen.screens.count) display(s)")
+        // A locked screen (e.g. while working remotely) shows the lock screen instead of the test windows.
+        if (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool == true {
+            skip("the screen is locked: unlock the Mac and run again (captures would only see the lock screen)")
+            return
+        }
         guard CGPreflightScreenCaptureAccess() else {
             check(false, "Screen Recording permission is granted to this app")
             return
@@ -377,3 +381,4 @@ private final class BandsView: NSView {
         }
     }
 }
+#endif

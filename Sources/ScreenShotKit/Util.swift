@@ -99,3 +99,36 @@ extension CGContext {
 extension CGImage {
     var size: CGSize { CGSize(width: width, height: height) }
 }
+
+/// Exact pixel colors in sRGB: the image is drawn once into an 8-bit sRGB buffer (proper color management) and read
+/// directly. NSBitmapImageRep.colorAt misreads some images' color spaces and shifts the values (pure red came back
+/// as #FF2600), which made copied colors and Erase fills slightly wrong.
+final class PixelReader {
+    let width: Int
+    let height: Int
+    private var data: [UInt8]
+
+    init(_ img: CGImage) {
+        width = img.width
+        height = img.height
+        data = [UInt8](repeating: 0, count: width * height * 4)
+        let (w, h) = (width, height)
+        data.withUnsafeMutableBytes { p in
+            guard let ctx = CGContext(data: p.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+    }
+
+    /// Color at a top-left-origin pixel, or nil outside the image.
+    func color(_ x: Int, _ y: Int) -> NSColor? {
+        guard x >= 0, y >= 0, x < width, y < height else { return nil }
+        let i = (y * width + x) * 4 // bitmap rows run top to bottom
+        let a = CGFloat(data[i + 3]) / 255
+        guard a > 0 else { return NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0) }
+        // Stored premultiplied; undo that for the real color.
+        return NSColor(srgbRed: min(1, CGFloat(data[i]) / 255 / a), green: min(1, CGFloat(data[i + 1]) / 255 / a),
+                       blue: min(1, CGFloat(data[i + 2]) / 255 / a), alpha: a)
+    }
+}

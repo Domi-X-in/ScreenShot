@@ -26,13 +26,20 @@ import AppKit
 
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
-        if LiveCaptureTest.runIfRequested() || SelfTest.runIfRequested() || SelectionSelfTest.runIfRequested() || TextSelfTest.runIfRequested() || TextStyleSelfTest.runIfRequested() || InfoSelfTest.runIfRequested() || CalloutSelfTest.runIfRequested() || AppearanceSelfTest.runIfRequested() || DefaultsSelfTest.runIfRequested() {
-            // Self-test drives the editor and quits.
-        } else if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
+        #if SCREENSHOT_SELFTESTS
+        // Debug builds only: a self-test or UI snapshot run, chosen by environment variable, drives the app and quits.
+        let selfTests: [() -> Bool] = [
+            LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
+            TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
+            AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested,
+        ]
+        if selfTests.contains(where: { $0() }) { return }
+        if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
             DebugSnapshots.runIfRequested()
-        } else {
-            Capturer.requestPermissionOnFirstLaunch()
+            return
         }
+        #endif
+        Capturer.requestPermissionOnFirstLaunch()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

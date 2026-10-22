@@ -76,7 +76,7 @@ final class CurtainView: NSView {
     weak var controller: CurtainController?
     private let screen: NSScreen
     private let image: CGImage
-    private let bitmap: NSBitmapImageRep
+    private let pixels: PixelReader
     private let scale: CGFloat
     private let mode: CurtainMode
     private var windowMode: Bool
@@ -93,7 +93,7 @@ final class CurtainView: NSView {
     init(frame: CGRect, screen: NSScreen, image: CGImage, windowList: [WindowInfo], mode: CurtainMode) {
         self.screen = screen
         self.image = image
-        self.bitmap = NSBitmapImageRep(cgImage: image)
+        self.pixels = PixelReader(image)
         self.scale = CGFloat(image.width) / frame.width
         self.mode = mode
         self.windowMode = mode == .window
@@ -270,7 +270,7 @@ final class CurtainView: NSView {
 
         var color: NSColor?
         var hex = ""
-        if px >= 0, py >= 0, px < bitmap.pixelsWide, py < bitmap.pixelsHigh, let c = bitmap.colorAt(x: px, y: py) {
+        if let c = pixels.color(px, py) {
             color = c
             hex = c.hexString + "   "
         }

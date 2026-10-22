@@ -841,7 +841,7 @@ extension Annotation: Codable {
 }
 
 final class EditorDocument {
-    var image: CGImage { didSet { concealCache.removeAll(); bitmapCache = nil } }
+    var image: CGImage { didSet { concealCache.removeAll(); pixelCache = nil } }
     let scale: CGFloat
     var objects: [Annotation] = []
     var backdrop: Backdrop = .none
@@ -872,7 +872,7 @@ final class EditorDocument {
 
     /// Pixelated patches keyed by region, so moving a blur re-conceals what is under it (Shottr's "reconceal").
     private var concealCache: [String: CGImage] = [:]
-    private var bitmapCache: NSBitmapImageRep?
+    private var pixelCache: PixelReader?
 
     init(image: CGImage, scale: CGFloat) {
         self.image = image
@@ -939,11 +939,11 @@ final class EditorDocument {
 
     /// Shottr's "Copy Text Color": the darkest pixel within `radius` of a point (text is usually darker than its background).
     func darkestColor(around p: CGPoint, radius: Int = 10) -> NSColor? {
-        let bmp = bitmap
+        let px = pixels
         var best: (NSColor, CGFloat)?
-        for y in (Int(p.y) - radius)...(Int(p.y) + radius) where y >= 0 && y < bmp.pixelsHigh {
-            for x in (Int(p.x) - radius)...(Int(p.x) + radius) where x >= 0 && x < bmp.pixelsWide {
-                guard let c = bmp.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+        for y in (Int(p.y) - radius)...(Int(p.y) + radius) {
+            for x in (Int(p.x) - radius)...(Int(p.x) + radius) {
+                guard let c = px.color(x, y) else { continue }
                 if best == nil || c.luminance < best!.1 { best = (c, c.luminance) }
             }
         }
@@ -952,14 +952,14 @@ final class EditorDocument {
 
     /// Shottr's "Copy Average Color": the mean color of an area (sampled on a grid for speed).
     func averageColor(in r: CGRect) -> NSColor? {
-        let bmp = bitmap
+        let px = pixels
         let area = r.integral.intersection(imageRect)
         guard area.width >= 1, area.height >= 1 else { return nil }
         let step = max(1, Int(max(area.width, area.height) / 120))
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, n: CGFloat = 0
         for y in stride(from: Int(area.minY), to: Int(area.maxY), by: step) {
             for x in stride(from: Int(area.minX), to: Int(area.maxX), by: step) {
-                guard let c = bmp.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                guard let c = px.color(x, y) else { continue }
                 red += c.redComponent; green += c.greenComponent; blue += c.blueComponent; n += 1
             }
         }
@@ -969,12 +969,11 @@ final class EditorDocument {
     /// Background color around `r` for Erase: the most common color on its outline, averaged within that color group,
     /// so a region straddling two backgrounds takes the dominant one instead of a muddy mix.
     func edgeColor(around r: CGRect) -> NSColor {
-        let bmp = bitmap
+        let px = pixels
         let outer = r.insetBy(dx: -2, dy: -2).integral
         var groups: [Int: (r: CGFloat, g: CGFloat, b: CGFloat, n: CGFloat)] = [:]
         func sample(_ x: Int, _ y: Int) {
-            guard x >= 0, y >= 0, x < bmp.pixelsWide, y < bmp.pixelsHigh,
-                  let c = bmp.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return }
+            guard let c = px.color(x, y) else { return }
             let key = Int(c.redComponent * 15) << 8 | Int(c.greenComponent * 15) << 4 | Int(c.blueComponent * 15)
             var e = groups[key] ?? (0, 0, 0, 0)
             e.r += c.redComponent; e.g += c.greenComponent; e.b += c.blueComponent; e.n += 1
@@ -991,11 +990,12 @@ final class EditorDocument {
         return NSColor(srgbRed: best.r / best.n, green: best.g / best.n, blue: best.b / best.n, alpha: 1)
     }
 
-    var bitmap: NSBitmapImageRep {
-        if let b = bitmapCache { return b }
-        let b = NSBitmapImageRep(cgImage: image)
-        bitmapCache = b
-        return b
+    /// Exact sRGB pixel colors of the image (built on first use, rebuilt when the image changes).
+    var pixels: PixelReader {
+        if let p = pixelCache { return p }
+        let p = PixelReader(image)
+        pixelCache = p
+        return p
     }
 
     /// Continues from the most recently placed counter, so typing 10 on one badge makes the next one 11.

@@ -1,5 +1,6 @@
 import AppKit
 
+#if SCREENSHOT_SELFTESTS
 /// UI self-check: with SCREENSHOT_SNAPSHOT_DIR and SCREENSHOT_SNAPSHOT_IMAGE set, opens each window, renders it to PNG
 /// with AppKit's own view drawing (no screen recording needed) and quits. Does nothing otherwise.
 @MainActor enum DebugSnapshots {
@@ -404,8 +405,15 @@ import AppKit
 /// Info cells self-test (color, size/resize, zoom). Runs only with SCREENSHOT_SELFTEST_INFO=<image path>.
 @MainActor enum InfoSelfTest {
     static func runIfRequested() -> Bool {
-        guard let path = ProcessInfo.processInfo.environment["SCREENSHOT_SELFTEST_INFO"],
-              let ns = NSImage(contentsOfFile: path), let img = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return false }
+        guard ProcessInfo.processInfo.environment["SCREENSHOT_SELFTEST_INFO"] != nil else { return false }
+        // Its own known image, so the color checks don't depend on the sample picture: a blue screen with a black bar.
+        let ctx = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+        ctx.setFillColor(NSColor(hex: 0x2E86DE).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
+        ctx.setFillColor(NSColor.black.cgColor)
+        ctx.fill(CGRect(x: 0, y: 1024 - 890, width: 1024, height: 20)) // rows 870…890 from the top
+        let img = ctx.makeImage()!
         var failures = 0
         func check(_ ok: Bool, _ what: String) {
             print(ok ? "PASS" : "FAIL", what)
@@ -686,3 +694,4 @@ import AppKit
         exit(failures == 0 ? 0 : 1)
     }
 }
+#endif

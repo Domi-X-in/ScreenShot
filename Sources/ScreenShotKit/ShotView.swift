@@ -667,9 +667,9 @@ final class ShotView: NSView, NSTextFieldDelegate {
         updateCursor(at: convert(event.locationInWindow, from: nil))
         let p = toImage(convert(event.locationInWindow, from: nil))
         let x = Int(p.x.rounded(.down)), y = Int(p.y.rounded(.down))
-        let bmp = doc.bitmap
-        let inside = x >= 0 && y >= 0 && x < bmp.pixelsWide && y < bmp.pixelsHigh
-        hoverColor = inside ? bmp.colorAt(x: x, y: y) : nil
+        let px = doc.pixels
+        let inside = x >= 0 && y >= 0 && x < px.width && y < px.height
+        hoverColor = inside ? px.color(x, y) : nil
         hoverPixel = inside ? CGPoint(x: x, y: y) : nil
         controller?.updateHoverColor(hoverColor)
     }
