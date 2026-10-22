@@ -90,11 +90,6 @@ import UniformTypeIdentifiers
         }
     }
 
-    private static func symbol(_ name: String, _ label: String) -> NSImage? {
-        NSImage(systemSymbolName: name, accessibilityDescription: label)?
-            .withSymbolConfiguration(.init(pointSize: 14, weight: .regular))
-    }
-
     private func buildLayout() {
         guard let win = window else { return }
         let content = NSView()
@@ -503,12 +498,21 @@ final class InfoCellsView: NSView {
         colorCell = ClickableStack(views: [swatch, colorText]) { [weak self] in self?.onColorBox?(colorCell) }
         colorCell.spacing = 6
         colorCell.toolTip = "Color under the cursor · Tab copies it · click for color options"
+        colorCell.setAccessibilityElement(true)
+        colorCell.setAccessibilityRole(.button)
+        colorCell.setAccessibilityLabel("Color under the cursor, color options")
         var sizeCell: ClickableStack!
         sizeCell = ClickableStack(views: [Self.stack([sizeValue, sizeCaption])]) { [weak self] in self?.onSizeBox?(sizeCell) }
         sizeCell.toolTip = "Click to resize the image ( ⇧+] )"
+        sizeCell.setAccessibilityElement(true)
+        sizeCell.setAccessibilityRole(.button)
+        sizeCell.setAccessibilityLabel("Image size, resize")
         var zoomCell: ClickableStack!
         zoomCell = ClickableStack(views: [Self.stack([zoomValue, zoomCaption])]) { [weak self] in self?.onZoomBox?(zoomCell) }
         zoomCell.toolTip = "Click for zoom controls"
+        zoomCell.setAccessibilityElement(true)
+        zoomCell.setAccessibilityRole(.button)
+        zoomCell.setAccessibilityLabel("Zoom controls")
 
         let row = NSStackView(views: [colorCell, Self.separator(), sizeCell, Self.separator(), zoomCell])
         row.spacing = 8
@@ -577,6 +581,11 @@ final class ClickableStack: NSStackView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func mouseDown(with event: NSEvent) { onClick() }
+
+    override func accessibilityPerformPress() -> Bool {
+        onClick()
+        return true
+    }
 }
 
 // MARK: - Drag out
@@ -589,6 +598,9 @@ final class DragOutView: NSView, NSDraggingSource {
         self.provider = provider
         super.init(frame: CGRect(x: 0, y: 0, width: 40, height: 28))
         toolTip = "Drag'n'Drop Image"
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Drag the image into another app")
         let icon = NSImageView(image: NSImage(systemSymbolName: "hand.draw", accessibilityDescription: "Drag image")!
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))!)
         icon.contentTintColor = .secondaryLabelColor
@@ -679,12 +691,14 @@ final class OptionsBar: NSView, NSMenuDelegate {
         colorButton.target = self
         colorButton.action = #selector(showColors)
         colorButton.toolTip = "Color"
+        colorButton.setAccessibilityLabel("Color")
         colorButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
 
         widthSlider.controlSize = .small
         widthSlider.target = self
         widthSlider.action = #selector(widthChanged)
         widthSlider.toolTip = "Size"
+        widthSlider.setAccessibilityLabel("Size")
         widthSlider.widthAnchor.constraint(equalToConstant: 84).isActive = true
 
         Self.images(arrowControl, ArrowStyle.allCases.map { ($0.symbol, $0.title) })

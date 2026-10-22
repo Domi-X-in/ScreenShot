@@ -105,7 +105,12 @@ final class IconPalette: NSView {
 
 /// One palette button: hover wash, accent pill when selected, a small press animation.
 final class PaletteButton: NSView {
-    var isSelected = false { didSet { refresh(animated: true) } }
+    var isSelected = false {
+        didSet {
+            refresh(animated: true)
+            setAccessibilityValue(isSelected ? "selected" : nil)
+        }
+    }
     private let image = NSImageView()
     private let pill = Theme.accentGradientLayer()
     private var hovering = false { didSet { refresh(animated: true) } }
@@ -114,6 +119,10 @@ final class PaletteButton: NSView {
     init(symbol: String, tooltip: String, width: CGFloat, action: @escaping () -> Void) {
         self.action = action
         super.init(frame: .zero)
+        // VoiceOver: a named button that can be pressed.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(tooltip)
         wantsLayer = true
         layer?.cornerRadius = 7
         pill.cornerRadius = 7
@@ -166,6 +175,11 @@ final class PaletteButton: NSView {
     override func mouseEntered(with event: NSEvent) { hovering = true }
     override func mouseExited(with event: NSEvent) { hovering = false }
 
+    override func accessibilityPerformPress() -> Bool {
+        action()
+        return true
+    }
+
     override func mouseDown(with event: NSEvent) {
         // Quick press feedback, then act.
         layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -200,6 +214,10 @@ final class PillButton: NSView {
         pill.opacity = 0
         layer?.addSublayer(pill)
         toolTip = tooltip
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(title)
+        setAccessibilityHelp(tooltip)
         label.stringValue = title
         label.font = .systemFont(ofSize: 12, weight: .semibold)
         icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?.withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
@@ -244,6 +262,11 @@ final class PillButton: NSView {
     override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) { action() }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func accessibilityPerformPress() -> Bool {
+        action()
+        return true
+    }
 }
 
 /// Segmented control for options-bar choices: right-click a segment to make it the default for new annotations.

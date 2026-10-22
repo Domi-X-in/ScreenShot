@@ -92,6 +92,14 @@ Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: fact
 
 `⌘⇧1` fullscreen · `⌘⇧2` area · `⌘⇧7` any window · `⌘⇧8` scrolling · `⌘⇧9` text/QR · `⌘⇧0` repeat area. You can change them in Preferences › Hotkeys.
 
+## Tests
+
+```
+Tools/test.sh                      # unit tests (swift test)
+Tools/integration-tests.sh         # in-app self-tests on the debug build
+Tools/integration-tests.sh --live  # also real captures (needs Screen Recording and an unlocked screen)
+```
+
 ## Not reproduced
 
-Paid or service-backed features: license/payments, S3 and cloud upload, telemetry, auto-updater, the screenshot Library, GIF overlay, Autoadjust, Imprint Selection Size, Cut Out, hand-drawn styles, the full backdrop panel (aspect presets, mesh gradients, image backdrops) and the color-format picker.
+Paid or service-backed features: license/payments, S3 and cloud upload, telemetry, auto-updater, the screenshot Library, GIF overlay, Autoadjust, Imprint Selection Size, Cut Out, hand-drawn styles, the full backdrop panel (aspect presets, mesh gradients, image backdrops).

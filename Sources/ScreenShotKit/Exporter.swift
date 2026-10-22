@@ -102,21 +102,4 @@ import UniformTypeIdentifiers
         }
     }
 
-    static func saveAs(_ img: CGImage, scale: CGFloat, window: NSWindow) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png, .jpeg]
-        panel.nameFieldStringValue = fileName(ext: "png")
-        panel.directoryURL = Settings.saveFolder
-        panel.beginSheetModal(for: window) { resp in
-            guard resp == .OK, let url = panel.url else { return }
-            let type: UTType = ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) ? .jpeg : .png
-            do {
-                guard let data = encode(img, scale: scale, type: type) else { throw CocoaError(.fileWriteUnknown) }
-                try data.write(to: url, options: .atomic)
-                Toast.show("Saved \(url.lastPathComponent)")
-            } catch {
-                Toast.show("Failed to save file: \(error.localizedDescription)")
-            }
-        }
-    }
 }

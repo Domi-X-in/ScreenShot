@@ -121,9 +121,6 @@ final class RecentStrip: NSView {
         }
     }
 
-    @objc private func browse() {
-        onBrowse?()
-    }
 }
 
 private final class FlippedClip: NSClipView {
@@ -166,6 +163,9 @@ private final class RecentTile: NSView {
         caption.alignment = .center
         caption.lineBreakMode = .byTruncatingTail
         caption.stringValue = Self.relativeDate(url)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Screenshot \(url.deletingPathExtension().lastPathComponent), \(caption.stringValue)")
 
         for v in [card, caption] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -243,6 +243,11 @@ private final class RecentTile: NSView {
     override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) { onSelect(url) }
 
+    override func accessibilityPerformPress() -> Bool {
+        onSelect(url)
+        return true
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         let m = NSMenu()
         m.addItem(withTitle: "Edit Here", action: #selector(open), keyEquivalent: "").target = self
@@ -280,6 +285,9 @@ private final class BrowseTile: NSView {
         dash.lineDashPattern = [4, 3]
         layer?.addSublayer(dash)
         toolTip = "Open an older screenshot from the Screenshots folder"
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Open an older screenshot")
         let icon = NSImageView(image: NSImage(systemSymbolName: "folder", accessibilityDescription: "Open folder")!
             .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))!)
         icon.contentTintColor = .secondaryLabelColor
@@ -323,4 +331,9 @@ private final class BrowseTile: NSView {
     override func mouseEntered(with event: NSEvent) { hovering = true }
     override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) { action() }
+
+    override func accessibilityPerformPress() -> Bool {
+        action()
+        return true
+    }
 }

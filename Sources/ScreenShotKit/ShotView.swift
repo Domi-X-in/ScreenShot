@@ -76,6 +76,14 @@ final class ShotView: NSView, NSTextFieldDelegate {
         self.doc = doc
         super.init(frame: .zero)
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .cursorUpdate], owner: self))
+        setAccessibilityElement(true)
+        setAccessibilityRole(.image)
+    }
+
+    override func accessibilityLabel() -> String? {
+        let kinds = doc.objects.map(\.kind.title)
+        let summary = kinds.isEmpty ? "no annotations" : "\(kinds.count) annotation\(kinds.count == 1 ? "" : "s"): " + kinds.joined(separator: ", ")
+        return "Screenshot \(doc.image.width) by \(doc.image.height) pixels, \(summary)"
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -124,12 +132,6 @@ final class ShotView: NSView, NSTextFieldDelegate {
         commitText()
         needsDisplay = true
         controller?.updateInfo()
-    }
-
-    /// 100% (one image pixel per screen pixel) or back to fit, like clicking Shottr's zoom cell.
-    func toggleActualSize() {
-        let actual = 1 / (window?.backingScaleFactor ?? doc.scale)
-        setZoom(abs(zoom - actual) < 0.001 ? nil : actual)
     }
 
     override func magnify(with event: NSEvent) {

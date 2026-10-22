@@ -28,16 +28,16 @@ Autotest de captura en vivo (`Tools/live-capture-test.sh`): la app se lanza con 
 - [x] Corregir lo que falle en esas pruebas:
   - [x] **La sombra de las capturas de ventana no se capturaba** (ScreenCaptureKit omite las sombras por defecto). Ahora se captura la ventana con su sombra sobre fondo transparente (628×268 en lugar de 600×240).
 
-## Fase 2 — Mantenimiento 🔧
+## Fase 2 — Mantenimiento 🔧 ✅
 
-- [ ] **Tests estándar**: mover los 8 autotests a un target `swift test`, fuera de la app que se distribuye.
-- [ ] **CI en GitHub Actions**: compilar y ejecutar los tests en cada push.
-- [ ] **Limpieza**: quitar el código que dejó sin uso el rediseño (helper de iconos de la barra antigua, botón de carpeta antiguo de la tira, etc.).
-- [ ] **Rendimiento con capturas grandes (5K)**:
-  - [ ] Medir el autoguardado en capturas Retina grandes.
-  - [ ] Guardar la imagen original una sola vez en lugar de en cada autoguardado.
-  - [ ] Evitar recodificar el PNG completo cuando solo cambian las anotaciones.
-- [ ] **Accesibilidad**: nombres para VoiceOver en los botones personalizados de la barra, paletas y tira de recientes.
+- [x] **Tests estándar**: target `ScreenShotTests` (Swift Testing, 21 tests) sobre la librería `ScreenShotKit`; `Tools/test.sh`. Los autotests de la app quedaron solo en la build debug (`SCREENSHOT_SELFTESTS`) y se ejecutan con `Tools/integration-tests.sh` (8 suites, 79 comprobaciones).
+- [x] **CI en GitHub Actions**: `.github/workflows/ci.yml` compila, ejecuta `swift test` y las pruebas de integración en cada push.
+- [x] **Limpieza**: eliminadas 4 funciones sin uso (helper de iconos antiguo, botón de carpeta antiguo, `toggleActualSize`, `saveAs`). De paso se corrigió la lectura de color de píxeles (`PixelReader`), que leía rojo puro como #FF2600.
+- [x] **Rendimiento con capturas grandes (5K)**:
+  - [x] Medido (5120×2880): render 10 ms, PNG renderizado 227 ms, escritura con datos de edición 270 ms → **507 ms por autoguardado**.
+  - [x] La imagen original se codifica una sola vez (`BasePNGCache`) → **279 ms** en los autoguardados siguientes.
+  - [ ] Pendiente: el PNG visible se sigue recodificando entero en cada autoguardado (~230 ms). Aceptable porque se hace fuera del tecleo; revisar si molesta.
+- [x] **Accesibilidad**: VoiceOver nombra y permite pulsar los botones de la barra, paletas, píldoras, tira de recientes, casillas de color/tamaño/zoom y el botón de arrastrar; el lienzo se anuncia como imagen con su tamaño y sus anotaciones.
 
 ## Fase 3 — Paridad con Shottr 🟠
 
