@@ -2,8 +2,9 @@ import AppKit
 import ImageIO
 import Vision
 
-/// Shottr's screenshot Library: every image in the Screenshots folder, newest first, with search (file name, date and
-/// the text inside the screenshot) and adjustable thumbnail size. Clicking one opens it in the editor.
+/// The app's home window ("Open ScreenShot") and Shottr's screenshot Library: capture buttons, then every image in the
+/// Screenshots folder, newest first, with search (file name, date and the text inside the screenshot) and adjustable
+/// thumbnail size. Clicking one opens it in the editor.
 @MainActor final class LibraryWindowController: NSWindowController, NSCollectionViewDataSource, NSCollectionViewDelegate, NSSearchFieldDelegate {
     static var shared: LibraryWindowController?
 
@@ -27,8 +28,8 @@ import Vision
     init() {
         let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 980, height: 680), styleMask: [.titled, .closable, .resizable, .miniaturizable],
                            backing: .buffered, defer: false)
-        win.title = "Library"
-        win.minSize = NSSize(width: 520, height: 360)
+        win.title = "ScreenShot"
+        win.minSize = NSSize(width: 820, height: 380)
         win.isReleasedWhenClosed = false
         win.center()
         win.setFrameAutosaveName("ScreenShotLibrary")
@@ -57,18 +58,34 @@ import Vision
         let small = NSImageView(image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!)
         let big = NSImageView(image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!.withSymbolConfiguration(.init(pointSize: 16, weight: .regular))!)
         for i in [small, big] { i.contentTintColor = .secondaryLabelColor }
-        let finder = NSButton(title: "Show Folder", image: NSImage(systemSymbolName: "folder", accessibilityDescription: nil)!, target: self,
-                              action: #selector(showFolder))
-        finder.imagePosition = .imageLeading
-        finder.bezelStyle = .rounded
-        let other = NSButton(title: "Open Other…", target: self, action: #selector(openOther))
-        other.bezelStyle = .rounded
+        // Captures start from here too, so the window works as the app's home. Captures leave the app's own windows out.
+        let captures = NSSegmentedControl(images: [
+            NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "Area")!,
+            NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Window")!,
+            NSImage(systemSymbolName: "rectangle.inset.filled", accessibilityDescription: "Fullscreen")!,
+        ], trackingMode: .momentary, target: self, action: #selector(capture(_:)))
+        for (i, (label, action)) in [("Area", HotkeyAction.area), ("Window", .anyWindow), ("Fullscreen", .fullscreen)].enumerated() {
+            captures.setLabel(label, forSegment: i)
+            captures.setImageScaling(.scaleProportionallyDown, forSegment: i)
+            let keys = HotKeyCenter.shared.shortcut(for: action).map { " (\($0.display))" } ?? ""
+            captures.setToolTip("\(label) screenshot\(keys)", forSegment: i)
+        }
+        captures.setAccessibilityLabel("Take a screenshot")
+        func iconButton(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
+            let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: self, action: action)
+            b.bezelStyle = .rounded
+            b.toolTip = tip
+            return b
+        }
+        let finder = iconButton("folder", "Show the Screenshots folder in Finder", #selector(showFolder))
+        let other = iconButton("doc.badge.plus", "Open another image…", #selector(openOther))
+        let prefs = iconButton("gearshape", "Preferences…", #selector(openPreferences))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let bar = NSStackView(views: [search, countLabel, spacer, small, sizeSlider, big, finder, other])
+        let bar = NSStackView(views: [captures, search, countLabel, spacer, small, sizeSlider, big, finder, other, prefs])
         bar.spacing = 10
         bar.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
-        search.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        search.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
 
         layout.minimumInteritemSpacing = 14
         layout.minimumLineSpacing = 18
@@ -131,6 +148,14 @@ import Vision
     @objc private func showFolder() { NSWorkspace.shared.open(Settings.saveFolder) }
 
     @objc private func openOther() { AppLogic.shared.chooseFile() }
+
+    @objc private func openPreferences() { (NSApp.delegate as? AppDelegate)?.showPreferences() }
+
+    @objc private func capture(_ sender: NSSegmentedControl) {
+        let actions: [HotkeyAction] = [.area, .anyWindow, .fullscreen]
+        guard actions.indices.contains(sender.selectedSegment) else { return }
+        AppLogic.shared.run(actions[sender.selectedSegment])
+    }
 
     // MARK: Collection view
 

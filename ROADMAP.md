@@ -70,7 +70,8 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 - [ ] **Orden de capas**: Traer al frente / Enviar al fondo; alinear y distribuir varios objetos.
 - [ ] **Auto-censura**: un clic desenfoca todos los emails, teléfonos y números de tarjeta que encuentre el OCR.
 - [ ] **Menú Compartir** (Mail, Mensajes, AirDrop) junto a Copiar / Guardar / Fijar.
-- [x] **Guía de primer uso**: ventana animada de 6 pasos (bienvenida, demo animada de captura y anotación, permiso de Grabación de pantalla con estado en vivo, carpeta y qué hacer tras cada captura, atajos como teclas, confeti y "Take My First Screenshot"). Se reanuda en su paso si macOS reinicia la app; se reabre desde el menú (Welcome Guide…).
+- [x] **Guía de primer uso**: ventana animada de 8 pasos (bienvenida, demo animada de captura y anotación, animación de la barra de menús con "Open ScreenShot" y de ⇧⌘2, permiso de Grabación de pantalla con estado en vivo, carpeta y qué hacer tras cada captura, apariencia Clara/Oscura/Sistema con vistas previas, atajos como teclas, confeti y "Take My First Screenshot").
+- [x] **Ventana principal "Open ScreenShot"**: botones de captura (Área, Ventana, Pantalla completa) y la Biblioteca; se abre desde el menú (⌘L) o al abrir la app de nuevo. Se reanuda en su paso si macOS reinicia la app; se reabre desde el menú (Welcome Guide…).
 - [ ] **Interfaz en español** (localización completa, con el inglés como alternativa).
 
 ## Fase 5 — Distribución 🟢

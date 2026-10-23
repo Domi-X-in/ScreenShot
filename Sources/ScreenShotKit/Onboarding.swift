@@ -18,8 +18,8 @@ import QuartzCore
     }
 
     static let size = CGSize(width: 780, height: 540)
-    private let pages: [OnboardingPage.Type] = [WelcomePage.self, DemoPage.self, PermissionPage.self, FolderPage.self,
-                                                 ShortcutsPage.self, DonePage.self]
+    private let pages: [OnboardingPage.Type] = [WelcomePage.self, DemoPage.self, MenuBarPage.self, PermissionPage.self, FolderPage.self,
+                                                 AppearancePage.self, ShortcutsPage.self, DonePage.self]
     private(set) var index = -1
     private let stage = NSView()
     private var current: OnboardingPage?
@@ -378,7 +378,7 @@ final class DemoPage: OnboardingPage {
     override func stop() { demo.stop() }
 }
 
-/// 3 · Screen Recording: live status that turns green the moment access is granted.
+/// 4 · Screen Recording: live status that turns green the moment access is granted.
 final class PermissionPage: OnboardingPage {
     private var icon: NSView!
     private var title: NSView!
@@ -441,7 +441,7 @@ final class PermissionPage: OnboardingPage {
     }
 }
 
-/// 4 · Where screenshots go and what happens after each one.
+/// 5 · Where screenshots go and what happens after each one.
 final class FolderPage: OnboardingPage {
     private var icon: NSView!
     private var title: NSView!
@@ -535,12 +535,11 @@ final class FolderPage: OnboardingPage {
     }
 }
 
-/// 5 · Shortcuts as keycaps that pop in one after another, and where the app lives.
+/// 7 · Shortcuts as keycaps that pop in one after another.
 final class ShortcutsPage: OnboardingPage {
     private var title: NSView!
     private var caption: NSView!
     private var rows: [NSView] = []
-    private let menuBar = MenuBarHint()
 
     override func build() {
         title = headline("Shortcuts that stick", y: 26, size: 30)
@@ -552,34 +551,28 @@ final class ShortcutsPage: OnboardingPage {
             (.anyWindow, "Window", "Click any window"),
             (.scrolling, "Scrolling", "Long pages in one image"),
             (.ocr, "Copy text", "Recognize text or a QR code"),
+            (.repeatArea, "Repeat area", "The same area as last time"),
         ]
-        let colW: CGFloat = 330, rowH: CGFloat = 56
+        let colW: CGFloat = 330, rowH: CGFloat = 66
         for (i, (action, name, detail)) in actions.enumerated() {
             let col = i < 3 ? 0 : 1
             let r = i < 3 ? i : i - 3
             let row = ShortcutRow(keys: HotKeyCenter.shared.shortcut(for: action)?.display ?? "—", title: name, detail: detail)
-            row.frame = CGRect(x: (bounds.width - colW * 2 - 20) / 2 + CGFloat(col) * (colW + 20), y: 112 + CGFloat(r) * rowH,
-                               width: colW, height: rowH - 8)
+            row.frame = CGRect(x: (bounds.width - colW * 2 - 20) / 2 + CGFloat(col) * (colW + 20), y: 126 + CGFloat(r) * rowH,
+                               width: colW, height: 50)
             addSubview(row)
             rows.append(row)
         }
-        menuBar.frame = CGRect(x: (bounds.width - 330) / 2 + 175, y: 112 + 2 * rowH, width: 330, height: rowH - 8)
-        menuBar.frame.origin.x = (bounds.width - 330 * 2 - 20) / 2 + 350
-        addSubview(menuBar)
     }
 
     override func play() {
         rise(title, delay: 0.05)
         rise(caption, delay: 0.15)
         for (i, r) in rows.enumerated() { pop(r, delay: 0.25 + Double(i) * 0.09) }
-        rise(menuBar, delay: 0.75)
-        menuBar.start()
     }
-
-    override func stop() { menuBar.stop() }
 }
 
-/// 6 · Confetti, a check that draws itself, and the first screenshot one click away.
+/// 8 · Confetti, a check that draws itself, and the first screenshot one click away.
 final class DonePage: OnboardingPage {
     private var check: CheckmarkView!
     private var title: NSView!
@@ -1065,58 +1058,6 @@ final class Keycap: NSView {
     }
 }
 
-/// A sliver of menu bar with the app's camera icon and a bouncing arrow pointing at it.
-final class MenuBarHint: GlassCardLike {
-    init() {
-        super.init(radius: 12)
-        let bar = NSView(frame: CGRect(x: 12, y: 12, width: 132, height: 24))
-        bar.wantsLayer = true
-        bar.layer?.cornerRadius = 6
-        bar.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
-        addSubview(bar)
-        let symbols = ["wifi", "battery.75percent", "camera.viewfinder"]
-        for (i, s) in symbols.enumerated() {
-            let v = NSImageView(frame: CGRect(x: 10 + CGFloat(i) * 40, y: 3, width: 20, height: 18))
-            v.image = NSImage(systemSymbolName: s, accessibilityDescription: nil)
-            v.contentTintColor = i == 2 ? NSColor(hex: 0xFF8A5C) : NSColor.white.withAlphaComponent(0.6)
-            bar.addSubview(v)
-        }
-        let t = NSTextField(labelWithString: "Everything else")
-        t.font = .systemFont(ofSize: 14, weight: .semibold)
-        t.textColor = .white
-        t.frame = CGRect(x: 158, y: 24, width: 170, height: 18)
-        addSubview(t)
-        let d = NSTextField(labelWithString: "lives in the menu bar")
-        d.font = .systemFont(ofSize: 11.5)
-        d.textColor = NSColor.white.withAlphaComponent(0.55)
-        d.frame = CGRect(x: 158, y: 7, width: 170, height: 16)
-        addSubview(d)
-        setAccessibilityElement(true)
-        setAccessibilityRole(.staticText)
-        setAccessibilityLabel("Everything else lives in the menu bar, under the camera icon")
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func start() {
-        guard let cam = subviews.first?.subviews.last else { return }
-        cam.wantsLayer = true
-        guard let l = cam.layer else { return }
-        l.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-        l.position = CGPoint(x: cam.frame.midX, y: cam.frame.midY)
-        let pulse = CABasicAnimation(keyPath: "transform.scale")
-        pulse.fromValue = 1
-        pulse.toValue = 1.25
-        pulse.duration = 0.7
-        pulse.autoreverses = true
-        pulse.repeatCount = .infinity
-        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        l.add(pulse, forKey: "pulse")
-    }
-
-    func stop() { subviews.first?.subviews.last?.layer?.removeAllAnimations() }
-}
-
 /// A check mark that draws itself inside a glowing green ring.
 final class CheckmarkView: NSView {
     private let ring = CAShapeLayer()
@@ -1170,6 +1111,27 @@ final class CheckmarkView: NSView {
             a.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
             s.add(a, forKey: "draw")
         }
+    }
+}
+
+/// Looping keyframe animations that share one clock: each track is (time, value) pairs, and a value holds until the next.
+struct LoopTracks {
+    let cycle: Double
+    let start = CACurrentMediaTime() + 0.2
+
+    func add(_ l: CALayer, _ key: String, _ points: [(Double, Any)]) {
+        let a = CAKeyframeAnimation(keyPath: key)
+        var pts = points
+        if let last = pts.last, last.0 < cycle { pts.append((cycle, last.1)) }
+        a.values = pts.map(\.1)
+        a.keyTimes = pts.map { NSNumber(value: $0.0 / cycle) }
+        a.duration = cycle
+        a.beginTime = start
+        a.repeatCount = .infinity
+        a.fillMode = .both
+        a.calculationMode = .linear
+        a.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: max(1, pts.count - 1))
+        l.add(a, forKey: key)
     }
 }
 
@@ -1328,23 +1290,8 @@ final class CaptureDemoView: NSView {
 
     func start() {
         reset(final: false)
-        let t0 = CACurrentMediaTime() + 0.2
-        let cycle = 5.6
-        /// One looping keyframe animation from (time, value) pairs; the value holds until the next pair.
-        func track(_ l: CALayer, _ key: String, _ points: [(Double, Any)]) {
-            let a = CAKeyframeAnimation(keyPath: key)
-            var pts = points
-            if let last = pts.last, last.0 < cycle { pts.append((cycle, last.1)) }
-            a.values = pts.map(\.1)
-            a.keyTimes = pts.map { NSNumber(value: $0.0 / cycle) }
-            a.duration = cycle
-            a.beginTime = t0
-            a.repeatCount = .infinity
-            a.fillMode = .both
-            a.calculationMode = .linear
-            a.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: max(1, pts.count - 1))
-            l.add(a, forKey: key)
-        }
+        let loop = LoopTracks(cycle: 5.6)
+        let track = loop.add
         let start = CGPoint(x: sel.minX, y: sel.maxY), end = CGPoint(x: sel.maxX, y: sel.minY)
         let dot = CGPath(rect: CGRect(x: start.x, y: start.y, width: 1, height: 1), transform: nil)
         let full = CGPath(rect: sel, transform: nil)

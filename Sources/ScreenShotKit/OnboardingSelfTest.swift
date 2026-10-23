@@ -11,7 +11,7 @@ import ScreenCaptureKit
         guard env["SCREENSHOT_SELFTEST_ONBOARDING"] != nil || env["SCREENSHOT_ONBOARDING_SHOTS"] != nil else { return false }
         let shots = env["SCREENSHOT_ONBOARDING_SHOTS"].map(URL.init(fileURLWithPath:))
         let d = UserDefaults.standard
-        let saved = [Keys.onboardingDone, Keys.onboardingPage, Keys.saveFolder, "askedScreenRecording"].map { ($0, d.object(forKey: $0)) }
+        let saved = [Keys.onboardingDone, Keys.onboardingPage, Keys.saveFolder, "askedScreenRecording", "appearance"].map { ($0, d.object(forKey: $0)) }
         func restore() { for (k, v) in saved { d.set(v, forKey: k) } }
         var failures = 0
         func check(_ ok: Bool, _ what: String) {
@@ -30,7 +30,12 @@ import ScreenCaptureKit
                 if i > 0 { ob.pressContinue() }
                 check(ob.index == i && d.integer(forKey: Keys.onboardingPage) == i, "Continue goes to page \(i + 1) and remembers it")
                 if let shots {
-                    let moments: [Double] = ob.currentPage is DemoPage ? [1.2, 2.1, 3.9] : [2.2]
+                    // Animated scenes are captured at several moments of their loop.
+                    let moments: [Double] = switch ob.currentPage {
+                    case is DemoPage: [1.2, 2.1, 3.9]
+                    case is MenuBarPage: [1.75, 2.45, 3.3, 5.6, 7.7]
+                    default: [2.2]
+                    }
                     var waited = 0.0
                     for (n, t) in moments.enumerated() {
                         try? await Task.sleep(for: .seconds(t - waited))
@@ -39,6 +44,14 @@ import ScreenCaptureKit
                     }
                 } else {
                     try? await Task.sleep(for: .seconds(0.3))
+                }
+                if let look = ob.currentPage as? AppearancePage {
+                    look.debugChoose("light")
+                    check(Settings.appearance == "light" && look.selectedValue == "light" && NSApp.appearance?.name == .aqua,
+                          "picking Light applies it to the app and marks the card")
+                    check(win.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua, "the guide itself stays dark")
+                    look.debugChoose("system")
+                    check(Settings.appearance == "system" && look.selectedValue == "system", "picking System follows macOS again")
                 }
                 if let folder = ob.currentPage as? FolderPage {
                     check(folder.shownPath == (Settings.saveFolder.path as NSString).abbreviatingWithTildeInPath, "the folder page shows the Screenshots folder")
@@ -53,6 +66,7 @@ import ScreenCaptureKit
             check(OnboardingWindowController.shared?.index == 2, "reopening resumes on the page it was on (after macOS restarts the app)")
             OnboardingWindowController.shared?.window?.orderOut(nil)
             restore()
+            Settings.applyAppearance()
             print(failures == 0 ? "ONBOARDING SELFTEST OK" : "ONBOARDING SELFTEST FAILED (\(failures))")
             exit(failures == 0 ? 0 : 1)
         }

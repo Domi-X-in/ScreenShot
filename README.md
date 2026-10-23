@@ -8,7 +8,11 @@ Download `ScreenShot-<version>.zip` (versions are dates: `261023.1` is the first
 
 ## First launch
 
-A welcome guide opens the first time: what the app does (with a live demo of a capture being marked up), Screen Recording permission with a status that turns green when it's granted, the Screenshots folder and what happens after each capture, the shortcuts, and a button to take the first screenshot. If macOS quits the app to apply the permission, the guide resumes where it was. **Welcome Guide…** in the menu bar menu opens it again.
+A welcome guide opens the first time: what the app does (with a live demo of a capture being marked up), an animation of the menu bar icon and its menu (Open ScreenShot) and of ⇧⌘2 starting a capture, Screen Recording permission with a status that turns green when it's granted, the Screenshots folder and what happens after each capture, Light / Dark / System appearance with live previews, the shortcuts, and a button to take the first screenshot. If macOS quits the app to apply the permission, the guide resumes where it was. **Welcome Guide…** in the menu bar menu opens it again.
+
+## Home window
+
+**Open ScreenShot** (first item in the menu bar menu, ⌘L) opens the app's home window: Area, Window and Fullscreen capture buttons, every screenshot in the Library with search, and buttons for the folder, opening another image and Preferences. Opening the app again from Finder or Spotlight shows it too.
 
 ## Build and run
 

@@ -60,8 +60,9 @@ import AppKit
         }
     }
 
+    /// Opening the app again (Finder, Dock, Spotlight) shows its home window.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { showPreferences() }
+        if !flag { showLibrary() }
         return true
     }
 
@@ -74,6 +75,12 @@ import AppKit
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        // The home window: capture buttons and every screenshot (the Library).
+        let open = item("Open ScreenShot", #selector(showLibrary))
+        open.keyEquivalent = "l"
+        open.image = NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: nil)
+        menu.addItem(open)
+        menu.addItem(.separator())
         let order: [HotkeyAction?] = [.fullscreen, .area, .repeatArea, .delayed, nil, .anyWindow, .activeWindow, nil,
                                       .scrolling, .scrollingManual, nil, .ocr]
         for a in order {
@@ -90,9 +97,6 @@ import AppKit
         menu.addItem(.separator())
         menu.addItem(item("Load From Clipboard", #selector(loadClipboard)))
         menu.addItem(item("Open Image…", #selector(openImage)))
-        let library = item("Library…", #selector(showLibrary))
-        library.keyEquivalent = "l"
-        menu.addItem(library)
         menu.addItem(.separator())
         menu.addItem(item("Welcome Guide…", #selector(showWelcome)))
         let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
