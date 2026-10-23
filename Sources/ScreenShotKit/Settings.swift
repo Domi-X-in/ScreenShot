@@ -10,6 +10,7 @@ enum Keys {
     static let saveFormat = "saveFormat"
     static let windowShadow = "windowShadow"
     static let ocrRemoveBreaks = "ocrRemoveBreaks"
+    static let ocrLanguage = "ocrLanguage"
     static let scrollSpeed = "scrollingSpeed"
     static let reverseAutoscroll = "scrollingReverseAutoscroll"
     static let toolColor = "toolColor"
@@ -37,6 +38,7 @@ enum Settings {
             Keys.saveFormat: "png",
             Keys.windowShadow: true,
             Keys.ocrRemoveBreaks: false,
+            Keys.ocrLanguage: "auto",
             Keys.scrollSpeed: 0.5,
             Keys.reverseAutoscroll: false,
             Keys.toolColor: 0,
@@ -55,6 +57,8 @@ enum Settings {
     static var saveFormat: String { d.string(forKey: Keys.saveFormat) ?? "png" }
     static var windowShadow: Bool { d.bool(forKey: Keys.windowShadow) }
     static var ocrRemoveBreaks: Bool { d.bool(forKey: Keys.ocrRemoveBreaks) }
+    /// Shottr's "OCR main language": a Vision language code, or "auto".
+    static var ocrLanguage: String { d.string(forKey: Keys.ocrLanguage) ?? "auto" }
     static var scrollSpeed: Double { d.double(forKey: Keys.scrollSpeed) }
     static var reverseAutoscroll: Bool { d.bool(forKey: Keys.reverseAutoscroll) }
     /// Shottr's "Show Size in Logical Points" (shortcut P): sizes in points instead of pixels.

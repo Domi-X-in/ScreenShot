@@ -27,7 +27,7 @@ import UniformTypeIdentifiers
     // Shottr's adjust group, limited to what this app implements: Resize, Recognize Text or QR, Reset Selection.
     private let adjustPalette = IconPalette(items: [
         .init(symbol: "arrow.up.left.and.down.right.magnifyingglass", tooltip: "Resize ( ⇧+] )"),
-        .init(symbol: "text.viewfinder", tooltip: "Recognize Text or QR (⌘O)"), .init(symbol: "arrow.uturn.backward", tooltip: "Reset Selection (Esc)"),
+        .init(symbol: "text.viewfinder", tooltip: "Recognize Text or QR (⌘O) · only the selected area when using Crop"), .init(symbol: "arrow.uturn.backward", tooltip: "Reset Selection (Esc)"),
     ], mode: .momentary)
     private lazy var cropButton = PillButton(title: "Crop", symbol: "crop", tooltip: "Crop (X) — Enter applies it") { [weak self] in self?.cropClicked() }
     private let info = InfoCellsView()
@@ -335,8 +335,13 @@ import UniformTypeIdentifiers
         close()
     }
 
+    /// Reads the area selected with the Crop tool, or the whole screenshot when nothing is selected.
     @objc func ocrImage() {
-        OCR.run(doc.image)
+        if let r = shotView.cropSelection, let part = doc.image.cropping(to: r) {
+            OCR.run(part)
+        } else {
+            OCR.run(doc.image)
+        }
     }
 
     func escape() {
@@ -935,7 +940,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         switch tool {
         case .counter: hint.stringValue = "Type digits to renumber · drag the bubble tip to point it"
         case .crop where cutOut: hint.stringValue = "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
-        case .crop: hint.stringValue = "Select the area to keep · Enter crops · C copies its average color · Esc resets"
+        case .crop: hint.stringValue = "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
         case .select: hint.stringValue = "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
         case .text: hint.stringValue = "Click to type · double-click text to edit"
         case .ruler: hint.stringValue = "Drag to measure · Shift snaps to 45°"

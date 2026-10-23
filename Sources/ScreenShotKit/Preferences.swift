@@ -131,6 +131,7 @@ import ServiceManagement
 
     static func advanced() -> NSView {
         let form = PrefForm()
+        form.row("OCR main language", [DefaultsPopup(key: Keys.ocrLanguage, options: [("auto", "Automatic")] + OCR.languages.map { ($0.code, $0.name) })])
         form.row("OCR line breaks", [DefaultsCheckbox("Remove line breaks", key: Keys.ocrRemoveBreaks)])
         form.row("Action when hiding with Esc", [
             DefaultsCheckbox("Copy Image", key: Keys.escCopy),
@@ -262,6 +263,25 @@ final class DefaultsRadio: NSButton {
 
     // Radios sharing a superview and action are mutually exclusive in AppKit.
     @objc private func picked() { apply() }
+}
+
+final class DefaultsPopup: NSPopUpButton {
+    private let key: String
+    private let values: [String]
+
+    init(key: String, options: [(value: String, title: String)]) {
+        self.key = key
+        values = options.map(\.value)
+        super.init(frame: .zero, pullsDown: false)
+        addItems(withTitles: options.map(\.title))
+        selectItem(at: values.firstIndex(of: UserDefaults.standard.string(forKey: key) ?? "") ?? 0)
+        target = self
+        action = #selector(changed)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func changed() { UserDefaults.standard.set(values[indexOfSelectedItem], forKey: key) }
 }
 
 final class DefaultsSlider: NSSlider {

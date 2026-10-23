@@ -72,6 +72,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
         }
     }
     private var cutStrip: CutOut.Strip?
+    /// The area selected with the Crop tool, if any (for OCR of just that part).
+    var cropSelection: CGRect? {
+        guard tool == .crop, !cutOutMode, let r = cropRect?.integral.intersection(doc.imageRect), r.width >= 2, r.height >= 2 else { return nil }
+        return r
+    }
     private var textField: NSTextField?
     private var editingID: UUID?
     /// When the backdrop last changed, so a slider drag becomes one undo step.

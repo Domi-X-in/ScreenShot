@@ -908,6 +908,7 @@ final class EditorDocument {
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = false
+        OCR.configure(req, language: Settings.ocrLanguage)
         try? VNImageRequestHandler(cgImage: crop).perform([req])
         return (req.results ?? []).map { obs in
             let b = obs.boundingBox // normalized, bottom-left origin

@@ -5,9 +5,9 @@ import Vision
 enum OCR {
     @MainActor static func run(_ img: CGImage) {
         Toast.show("Recognizing…", duration: 10)
-        let removeBreaks = Settings.ocrRemoveBreaks
+        let removeBreaks = Settings.ocrRemoveBreaks, language = Settings.ocrLanguage
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = recognize(img, removeBreaks: removeBreaks)
+            let result = recognize(img, removeBreaks: removeBreaks, language: language)
             DispatchQueue.main.async {
                 guard let (text, isQR) = result else {
                     Toast.show("No text detected")
@@ -21,7 +21,23 @@ enum OCR {
         }
     }
 
-    static func recognize(_ img: CGImage, removeBreaks: Bool) -> (String, Bool)? {
+    /// Languages Vision can read, as (code, display name), for the "OCR main language" setting.
+    static var languages: [(code: String, name: String)] {
+        let codes = (try? VNRecognizeTextRequest().supportedRecognitionLanguages()) ?? ["en-US"]
+        return codes.map { ($0, Locale.current.localizedString(forIdentifier: $0) ?? $0) }
+    }
+
+    /// Points Vision at the chosen language first; "auto" lets it detect the language itself.
+    static func configure(_ req: VNRecognizeTextRequest, language: String) {
+        if language == "auto" {
+            req.automaticallyDetectsLanguage = true
+        } else {
+            req.automaticallyDetectsLanguage = false
+            req.recognitionLanguages = [language] + (language.hasPrefix("en") ? [] : ["en-US"])
+        }
+    }
+
+    static func recognize(_ img: CGImage, removeBreaks: Bool, language: String = "auto") -> (String, Bool)? {
         let handler = VNImageRequestHandler(cgImage: img)
 
         let barcodes = VNDetectBarcodesRequest()
@@ -33,7 +49,7 @@ enum OCR {
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = true
-        req.automaticallyDetectsLanguage = true
+        configure(req, language: language)
         try? handler.perform([req])
         let lines = (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         guard !lines.isEmpty else { return nil }
