@@ -9,6 +9,8 @@ jobs:
   build-and-test:
     name: Build and unit tests
     runs-on: macos-latest
+    # A hung test fails the run instead of holding a runner for hours.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -17,6 +19,7 @@ jobs:
         run: ./build.sh
       - name: Unit tests
         run: swift test
+        timeout-minutes: 8
       - name: Upload the app
         uses: actions/upload-artifact@v4
         with:
@@ -26,6 +29,7 @@ jobs:
   integration:
     name: In-app UI tests
     runs-on: macos-latest
+    timeout-minutes: 20
     # Real windows and mouse/keyboard events on a hosted runner: reported, but not blocking yet.
     continue-on-error: true
     steps:

@@ -1,5 +1,5 @@
 import ScreenShotKit
 
 MainActor.assumeIsolated {
-    ScreenShotApp.run()
+    ScreenShotApp.run(updater: SparkleUpdater())
 }
