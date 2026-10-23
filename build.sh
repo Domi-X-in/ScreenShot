@@ -2,7 +2,8 @@
 # Builds ScreenShot.app with SwiftPM (no Xcode needed) and signs it.
 #   ./build.sh          → build/ScreenShot.app (release; the app to use)
 #   ./build.sh debug    → build/debug/ScreenShot.app (includes the in-app self-tests and UI snapshots)
-# The version comes from the VERSION file; the build number is the commit count, which Sparkle compares.
+# Versions are dates: YYMMDD.N, the Nth release of that day (Tools/release.sh passes VERSION=261023.1).
+# Other builds are YYMMDD.0, below any release of the same day, so updates still compare correctly.
 # With DEVELOPER_ID set (e.g. "Developer ID Application: Name (TEAMID)") the app is signed for notarization;
 # otherwise it is signed ad hoc.
 set -euo pipefail
@@ -21,9 +22,10 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 ditto ".build/$CONFIG/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/ScreenShot" 2>/dev/null || true
 
-VERSION=$(tr -d '[:space:]' < VERSION)
-BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
+VERSION="${VERSION:-$(date +%y%m%d).0}"
+[[ "$VERSION" =~ ^[0-9]{6}\.[0-9]+$ ]] || { echo "VERSION must look like 261023.1"; exit 1; }
+# Shown in the app and compared by Sparkle: both are the same date version.
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 
 if [ -n "${DEVELOPER_ID:-}" ]; then
     # Developer ID: sign Sparkle's helpers inside out, then the app, all with the hardened runtime (needed to notarize).
@@ -42,4 +44,4 @@ else
     codesign --force --sign - --requirements '=designated => identifier "local.screenshot.app"' "$APP"
 fi
 
-echo "Built $APP ($VERSION, build $BUILD)"
+echo "Built $APP ($VERSION)"

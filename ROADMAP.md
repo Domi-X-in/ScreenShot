@@ -76,8 +76,10 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 ## Fase 5 — Distribución 🟢
 
 - [ ] **Firma Developer ID y notarización de Apple**: el script ya lo hace con `DEVELOPER_ID` y `NOTARY_PROFILE`. Falta una cuenta de Apple Developer (99 USD/año) para probarlo; sin ella, la app se publica firmada ad hoc y el primer arranque pide "Abrir de todos modos".
-- [x] **Actualizaciones automáticas** (Sparkle 2.10): comprobación diaria, "Check for Updates…" en el menú y en Preferencias, actualizaciones firmadas con EdDSA. Probado de punta a punta: una copia 0.9.0 se actualiza sola a 9.9.9 desde un servidor local, y una actualización con firma falsa se rechaza.
-- [x] **Releases en GitHub**: `Tools/release.sh <versión>` compila, comprime, firma la actualización, genera `appcast.xml` y las notas de versión, crea la etiqueta y publica la release.
+- [x] **Actualizaciones automáticas** (Sparkle 2.10): comprobación diaria, "Check for Updates…" en el menú y en Preferencias, actualizaciones firmadas con EdDSA. Probado de punta a punta: una copia 261023.9 se actualiza sola a 261023.10 desde un servidor local, y una actualización con firma falsa se rechaza.
+- [x] **Releases en GitHub**: `Tools/release.sh` compila, comprime, firma la actualización, genera `appcast.xml` y las notas de versión, crea la etiqueta y publica la release.
+- [x] **Versiones por fecha**: `YYMMDD.N` en hora local (`261023.1` es la primera publicación del 23-oct-2026; `.2` la segunda de ese día). Las compilaciones de prueba son `YYMMDD.0`. Probado que Sparkle ordena bien `261023.9` → `261023.10`.
+- [ ] Publicar la primera versión.
 
 ---
 

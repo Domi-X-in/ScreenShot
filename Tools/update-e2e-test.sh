@@ -23,8 +23,8 @@ make_copy() { # dest, version, build
     codesign --force --sign - --requirements "=designated => identifier \"$ID\"" "$1"
 }
 mkdir -p "$W/old" "$W/new" "$W/srv"
-make_copy "$W/old/ScreenShot.app" 0.9.0 1 >/dev/null 2>&1
-make_copy "$W/new/ScreenShot.app" 9.9.9 9999 >/dev/null 2>&1
+make_copy "$W/old/ScreenShot.app" 261023.9 261023.9 >/dev/null 2>&1
+make_copy "$W/new/ScreenShot.app" 261023.10 261023.10 >/dev/null 2>&1
 ditto -c -k --sequesterRsrc --keepParent "$W/new/ScreenShot.app" "$W/srv/new.zip"
 SIG=$("$SP/sign_update" --ed-key-file "$KEY" "$W/srv/new.zip")
 if [ $TAMPERED = 1 ]; then
@@ -37,7 +37,7 @@ cat > "$W/srv/appcast.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel><title>test</title>
-    <item><title>9.9.9</title><sparkle:version>9999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString>
+    <item><title>261023.10</title><sparkle:version>261023.10</sparkle:version><sparkle:shortVersionString>261023.10</sparkle:shortVersionString>
       <enclosure url="http://127.0.0.1:$PORT/new.zip" type="application/octet-stream" $SIG/></item>
   </channel>
 </rss>
@@ -52,7 +52,7 @@ defaults write $ID SUAutomaticallyUpdate -bool true
 defaults write $ID askedScreenRecording -bool true
 sleep 1
 open -n "$W/old/ScreenShot.app"
-echo "Old app (0.9.0) running; waiting for it to download the update…"
+echo "Old app (261023.9) running; waiting for it to download the update…"
 for _ in $(seq 1 60); do grep -q "GET /new.zip" "$W/server.log" 2>/dev/null && break; sleep 1; done
 grep -q "GET /appcast.xml" "$W/server.log" && echo "PASS the app read the appcast" || echo "FAIL the app never read the appcast"
 grep -q "GET /new.zip" "$W/server.log" && echo "PASS the app downloaded the update" || echo "FAIL the app never downloaded the update"
@@ -60,15 +60,15 @@ sleep 6 # let Sparkle verify and stage it
 osascript -e "tell application id \"$ID\" to quit" >/dev/null 2>&1 || true
 for _ in $(seq 1 $([ $TAMPERED = 1 ] && echo 15 || echo 40)); do
     v=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$W/old/ScreenShot.app/Contents/Info.plist" 2>/dev/null || echo "?")
-    [ "$v" = 9.9.9 ] && break
+    [ "$v" = 261023.10 ] && break
     sleep 1
 done
 pkill -f "$W/old/ScreenShot.app" 2>/dev/null || true
 if [ $TAMPERED = 1 ]; then
-    if [ "$v" = 0.9.0 ]; then echo "PASS an update whose signature doesn't match was refused (still $v)"; exit 0; fi
+    if [ "$v" = 261023.9 ]; then echo "PASS an update whose signature doesn't match was refused (still $v)"; exit 0; fi
     echo "FAIL a tampered update was installed ($v)"; exit 1
 fi
-if [ "$v" = 9.9.9 ]; then
+if [ "$v" = 261023.10 ]; then
     echo "PASS the update was verified and installed: the app on disk is now $v"
     codesign --verify "$W/old/ScreenShot.app" && echo "PASS the installed app's signature is valid"
 else

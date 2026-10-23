@@ -1,42 +1,40 @@
 #!/bin/bash
 # Publishes a version of ScreenShot on GitHub with automatic updates.
-#   Tools/release.sh 1.1.0             build, zip, sign the update, tag, push and create the GitHub release
-#   Tools/release.sh 1.1.0 --dry-run   everything up to the zip and appcast in dist/, nothing committed or published
+#   Tools/release.sh             build, zip, sign the update, tag, push and create the GitHub release
+#   Tools/release.sh --dry-run   everything up to the zip and appcast in dist/, nothing tagged or published
+#
+# Versions are dates, YYMMDD.N in local time: the first release on 23 Oct 2026 is 261023.1, a second one that day
+# 261023.2, and the next day starts again at .1. The number comes from the existing v<version> tags.
 #
 # Updates: the zip is signed with the EdDSA key in ~/.screenshot-release/sparkle_ed25519.key (exported from the login
 # Keychain item made by Sparkle's generate_keys, account local.screenshot.app); the app checks it against SUPublicEDKey. appcast.xml is attached to every release, and
 # the app reads it from releases/latest/download/appcast.xml.
 #
 # Notarization (optional, needs a paid Apple Developer account):
-#   DEVELOPER_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<notarytool keychain profile> Tools/release.sh 1.1.0
+#   DEVELOPER_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<notarytool keychain profile> Tools/release.sh
 # Create the profile once with: xcrun notarytool store-credentials <profile> --apple-id <email> --team-id <TEAMID>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="${1:?usage: Tools/release.sh <version> [--dry-run]}"
-DRY=0; [ "${2:-}" = "--dry-run" ] && DRY=1
+DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 REPO=Domi-X-in/ScreenShot
 SPARKLE_BIN=.build/artifacts/sparkle/Sparkle/bin
-TAG="v$VERSION"
 
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "Version must look like 1.2.0"; exit 1; }
 if [ $DRY = 0 ]; then
     [ -z "$(git status --porcelain)" ] || { echo "Commit or stash your changes first."; exit 1; }
     [ "$(git branch --show-current)" = main ] || { echo "Release from main."; exit 1; }
-    git rev-parse "$TAG" >/dev/null 2>&1 && { echo "$TAG already exists."; exit 1; }
+    git fetch -q --tags origin
 fi
 
-PREV=$(git describe --tags --abbrev=0 2>/dev/null || true)
-if [ $DRY = 0 ] && [ "$(tr -d '[:space:]' < VERSION)" != "$VERSION" ]; then
-    echo "$VERSION" > VERSION
-    git commit -q -m "Release $VERSION" VERSION
-fi
+# Today's date and the next number for it, after the releases already tagged today.
+DAY=$(date +%y%m%d)
+LAST=$(git tag -l "v$DAY.*" | sed "s/^v$DAY\.//" | sort -n | tail -1)
+VERSION="$DAY.$(( ${LAST:-0} + 1 ))"
+TAG="v$VERSION"
+PREV=$(git tag -l 'v[0-9]*.[0-9]*' --sort=-version:refname | head -1)
+echo "Releasing $VERSION${PREV:+ (previous: $PREV)}"
 
-# Build (the version comes from VERSION; a dry run builds with the version asked for, without touching the file).
-if [ $DRY = 1 ]; then cp VERSION /tmp/screenshot-version.$$; echo "$VERSION" > VERSION; fi
-./build.sh
-if [ $DRY = 1 ]; then mv /tmp/screenshot-version.$$ VERSION; fi
-BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" build/ScreenShot.app/Contents/Info.plist)
+VERSION="$VERSION" ./build.sh
 
 mkdir -p dist
 ZIP="dist/ScreenShot-$VERSION.zip"
@@ -61,7 +59,7 @@ fi
 
 # Release notes: commit subjects since the previous release.
 if [ -n "$PREV" ]; then RANGE="$PREV..HEAD"; else RANGE="HEAD"; fi
-NOTES=$(git log --no-merges --format='- %s' $RANGE | grep -v '^- Release ' | head -40)
+NOTES=$(git log --no-merges --format='- %s' $RANGE | head -40)
 NOTES_HTML=$(printf '%s\n' "$NOTES" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's|^- \(.*\)$|<li>\1</li>|')
 
 cat > dist/appcast.xml <<XML
@@ -73,7 +71,7 @@ cat > dist/appcast.xml <<XML
     <item>
       <title>Version $VERSION</title>
       <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
-      <sparkle:version>$BUILD</sparkle:version>
+      <sparkle:version>$VERSION</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[<ul>
@@ -85,8 +83,8 @@ $NOTES_HTML
 </rss>
 XML
 
-echo "Built $ZIP (build $BUILD) and dist/appcast.xml"
-if [ $DRY = 1 ]; then echo "Dry run: nothing committed, tagged or published."; exit 0; fi
+echo "Built $ZIP and dist/appcast.xml"
+if [ $DRY = 1 ]; then echo "Dry run: nothing tagged or published."; exit 0; fi
 
 git tag -a "$TAG" -m "ScreenShot $VERSION"
 git push origin main "$TAG"
