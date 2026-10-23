@@ -18,27 +18,27 @@ struct OCRTests {
     }
 
     @Test("reads the whole image")
-    func whole() throws {
-        let (text, isQR) = try #require(OCR.recognize(image, removeBreaks: true))
+    func whole() async throws {
+        let (text, isQR) = try #require(await OCR.recognizeAsync(image, removeBreaks: true))
         #expect(!isQR)
         #expect(text.contains("4821") && text.contains("PAID"), "got \(text)")
     }
 
     @Test("an area reads only what is inside it")
-    func area() throws {
+    func area() async throws {
         let part = try #require(image.cropping(to: CGRect(x: 0, y: 0, width: 600, height: 200)))
-        let (text, _) = try #require(OCR.recognize(part, removeBreaks: true))
+        let (text, _) = try #require(await OCR.recognizeAsync(part, removeBreaks: true))
         #expect(text.contains("4821") && !text.contains("PAID"), "got \(text)")
     }
 
     @Test("a main language narrows Vision to it (plus English)")
-    func language() {
+    func language() async {
         #expect(OCR.languages.contains { $0.code.hasPrefix("en") })
         let req = VNRecognizeTextRequest()
         OCR.configure(req, language: "es-ES")
         #expect(!req.automaticallyDetectsLanguage && req.recognitionLanguages == ["es-ES", "en-US"])
         OCR.configure(req, language: "auto")
         #expect(req.automaticallyDetectsLanguage)
-        #expect(OCR.recognize(image, removeBreaks: true, language: "es-ES")?.0.contains("4821") == true)
+        #expect(await OCR.recognizeAsync(image, removeBreaks: true, language: "es-ES")?.0.contains("4821") == true)
     }
 }

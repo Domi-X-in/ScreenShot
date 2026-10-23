@@ -49,6 +49,15 @@ enum OCR {
         }
     }
 
+    /// For async code: Vision blocks its thread while it waits on work of its own, so it must not run on Swift's
+    /// cooperative pool (on a 3-core machine a few recognitions at once take every pool thread and never finish).
+    static func recognizeAsync(_ img: CGImage, removeBreaks: Bool, language: String = "auto") async -> (String, Bool)? {
+        await withCheckedContinuation { done in
+            DispatchQueue.global(qos: .userInitiated).async { done.resume(returning: recognize(img, removeBreaks: removeBreaks, language: language)) }
+        }
+    }
+
+    /// Blocks while Vision works: call it from a GCD queue, or use `recognizeAsync`.
     static func recognize(_ img: CGImage, removeBreaks: Bool, language: String = "auto") -> (String, Bool)? {
         let barcodes = VNDetectBarcodesRequest()
         VisionGate.perform([barcodes], on: img)

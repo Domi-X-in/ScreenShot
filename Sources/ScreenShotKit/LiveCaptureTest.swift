@@ -342,11 +342,11 @@ import ScreenCaptureKit
             let textArea = textRect.offsetBy(dx: patternLocal.minX, dy: patternLocal.minY)
             let textImg = try await Capturer.captureScreen(screen, content: content, sourceRect: textArea)
             dump(textImg, "text")
-            let text = await Task.detached { OCR.recognize(textImg, removeBreaks: false) }.value
+            let text = await OCR.recognizeAsync(textImg, removeBreaks: false)
             check(text?.0.contains("4242") == true && text?.1 == false, "OCR reads the text in a real capture (“\(text?.0 ?? "nothing")”)")
             let qrArea = qrRect.insetBy(dx: -8, dy: -8).offsetBy(dx: patternLocal.minX, dy: patternLocal.minY)
             let qrImg = try await Capturer.captureScreen(screen, content: content, sourceRect: qrArea)
-            let qr = await Task.detached { OCR.recognize(qrImg, removeBreaks: false) }.value
+            let qr = await OCR.recognizeAsync(qrImg, removeBreaks: false)
             check(qr?.0 == qrPayload && qr?.1 == true, "QR code is decoded from a real capture (“\(qr?.0 ?? "nothing")”)")
         } catch {
             check(false, "OCR/QR captures work (\(error.localizedDescription))")
