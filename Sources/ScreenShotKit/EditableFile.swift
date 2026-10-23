@@ -184,6 +184,13 @@ final class BasePNGCache: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(image: CGImage, png: Data)] = []
     private(set) var encodeCount = 0
+    /// Encodes per image, so a check about one document isn't thrown off by others saving at the same time.
+    private var encodes: [ObjectIdentifier: Int] = [:]
+
+    func encodeCount(for image: CGImage) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return encodes[ObjectIdentifier(image)] ?? 0
+    }
 
     func png(for image: CGImage) -> Data? {
         lock.lock()
@@ -195,8 +202,10 @@ final class BasePNGCache: @unchecked Sendable {
         guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return nil }
         lock.lock()
         encodeCount += 1
+        encodes[ObjectIdentifier(image), default: 0] += 1
+        if encodes.count > 64 { encodes.removeAll() }
         entries.insert((image, png), at: 0)
-        if entries.count > 4 { entries.removeLast() } // a few open documents at most
+        if entries.count > 8 { entries.removeLast() } // a few open documents at most
         lock.unlock()
         return png
     }

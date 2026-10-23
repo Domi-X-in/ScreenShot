@@ -43,14 +43,14 @@ struct PerformanceTests {
         #expect(total < 4000)
 
         // The next auto-save of the same document reuses the encoded original.
-        let encodes = BasePNGCache.shared.encodeCount
+        let encodes = BasePNGCache.shared.encodeCount(for: doc.image)
         doc.objects.append(Annotation(kind: .rect, p1: CGPoint(x: 300, y: 300), p2: CGPoint(x: 900, y: 700), style: ToolStyle()))
         let second = Self.timed("second auto-save (render + encode + write)", {
             let r = doc.render()!
             let d = Exporter.encode(r, scale: 2, type: .png)!
             try? EditableFile.write(rendered: d, type: .png, state: EditState(scale: 2, backdrop: .none, objects: doc.objects), base: doc.image, to: url)
         })
-        #expect(BasePNGCache.shared.encodeCount == encodes, "the original is not re-encoded")
+        #expect(BasePNGCache.shared.encodeCount(for: doc.image) == encodes, "the original is not re-encoded")
         #expect(second < total)
         #expect(EditableFile.load(url)?.state?.objects.count == 2)
     }

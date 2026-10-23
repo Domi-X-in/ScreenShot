@@ -231,8 +231,11 @@ final class TextIndex: @unchecked Sendable {
 
     func text(for url: URL) -> String? {
         lock.lock(); defer { lock.unlock() }
-        return entries[url.path]?.text
+        return entries[Self.key(url)]?.text
     }
+
+    /// One key per file however its path is spelled (/var/… and /private/var/… are the same folder).
+    static func key(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
 
     private func modified(_ url: URL) -> Date {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -245,7 +248,7 @@ final class TextIndex: @unchecked Sendable {
 
     @MainActor func indexInBackground(_ urls: [URL]) {
         lock.lock()
-        let todo = urls.filter { u in entries[u.path]?.modified != modified(u) && !queue.contains(u) }
+        let todo = urls.filter { u in entries[Self.key(u)]?.modified != modified(u) && !queue.contains(u) }
         queue = todo + queue
         let start = !running && !queue.isEmpty
         if start { running = true }
@@ -260,7 +263,7 @@ final class TextIndex: @unchecked Sendable {
                 lock.unlock()
                 let text = Self.recognize(url) ?? ""
                 lock.lock()
-                entries[url.path] = Entry(modified: modified(url), text: text)
+                entries[Self.key(url)] = Entry(modified: modified(url), text: text)
                 let last = queue.isEmpty
                 lock.unlock()
                 done += 1
