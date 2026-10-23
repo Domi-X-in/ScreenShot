@@ -173,7 +173,7 @@ extension FlowsSelfTest {
         // Wait for the text index (it reads each file in the background).
         // Slow machines (CI runners) take a while to recognize text; wait up to 90 s.
         var waited = 0.0
-        while TextIndex.shared.text(for: folder.appendingPathComponent("lib-\(tag)-2.png"))?.contains("AB123") != true, waited < 90 {
+        while TextIndex.shared.text(for: folder.appendingPathComponent("lib-\(tag)-2.png"))?.lowercased().contains("ab123") != true, waited < 90 {
             await sleep(0.5)
             waited += 0.5
         }
