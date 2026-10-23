@@ -20,6 +20,12 @@
 	<string>1</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/Domi-X-in/ScreenShot/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>XzzUya6goZfIAszF1kdOlUrtpKlrUMrVGNaQqEH1d5c=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>

@@ -1,0 +1,96 @@
+#!/bin/bash
+# Publishes a version of ScreenShot on GitHub with automatic updates.
+#   Tools/release.sh 1.1.0             build, zip, sign the update, tag, push and create the GitHub release
+#   Tools/release.sh 1.1.0 --dry-run   everything up to the zip and appcast in dist/, nothing committed or published
+#
+# Updates: the zip is signed with the EdDSA key in ~/.screenshot-release/sparkle_ed25519.key (exported from the login
+# Keychain item made by Sparkle's generate_keys, account local.screenshot.app); the app checks it against SUPublicEDKey. appcast.xml is attached to every release, and
+# the app reads it from releases/latest/download/appcast.xml.
+#
+# Notarization (optional, needs a paid Apple Developer account):
+#   DEVELOPER_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<notarytool keychain profile> Tools/release.sh 1.1.0
+# Create the profile once with: xcrun notarytool store-credentials <profile> --apple-id <email> --team-id <TEAMID>
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+VERSION="${1:?usage: Tools/release.sh <version> [--dry-run]}"
+DRY=0; [ "${2:-}" = "--dry-run" ] && DRY=1
+REPO=Domi-X-in/ScreenShot
+SPARKLE_BIN=.build/artifacts/sparkle/Sparkle/bin
+TAG="v$VERSION"
+
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "Version must look like 1.2.0"; exit 1; }
+if [ $DRY = 0 ]; then
+    [ -z "$(git status --porcelain)" ] || { echo "Commit or stash your changes first."; exit 1; }
+    [ "$(git branch --show-current)" = main ] || { echo "Release from main."; exit 1; }
+    git rev-parse "$TAG" >/dev/null 2>&1 && { echo "$TAG already exists."; exit 1; }
+fi
+
+PREV=$(git describe --tags --abbrev=0 2>/dev/null || true)
+if [ $DRY = 0 ] && [ "$(tr -d '[:space:]' < VERSION)" != "$VERSION" ]; then
+    echo "$VERSION" > VERSION
+    git commit -q -m "Release $VERSION" VERSION
+fi
+
+# Build (the version comes from VERSION; a dry run builds with the version asked for, without touching the file).
+if [ $DRY = 1 ]; then cp VERSION /tmp/screenshot-version.$$; echo "$VERSION" > VERSION; fi
+./build.sh
+if [ $DRY = 1 ]; then mv /tmp/screenshot-version.$$ VERSION; fi
+BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" build/ScreenShot.app/Contents/Info.plist)
+
+mkdir -p dist
+ZIP="dist/ScreenShot-$VERSION.zip"
+rm -f "$ZIP"
+if [ -n "${DEVELOPER_ID:-}" ] && [ -n "${NOTARY_PROFILE:-}" ]; then
+    ditto -c -k --keepParent build/ScreenShot.app "$ZIP"
+    xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple build/ScreenShot.app
+    rm -f "$ZIP"
+fi
+ditto -c -k --sequesterRsrc --keepParent build/ScreenShot.app "$ZIP"
+
+# Sparkle signature and length for the appcast enclosure.
+# The key file avoids a Keychain prompt on every release; without it, the Keychain item is used.
+KEY_FILE="${SPARKLE_KEY_FILE:-$HOME/.screenshot-release/sparkle_ed25519.key}"
+if [ -f "$KEY_FILE" ]; then
+    SIG=$("$SPARKLE_BIN/sign_update" --ed-key-file "$KEY_FILE" "$ZIP")
+else
+    SIG=$("$SPARKLE_BIN/sign_update" --account local.screenshot.app "$ZIP")
+fi
+[[ "$SIG" == *edSignature* ]] || { echo "Signing the update failed: $SIG"; exit 1; }
+
+# Release notes: commit subjects since the previous release.
+if [ -n "$PREV" ]; then RANGE="$PREV..HEAD"; else RANGE="HEAD"; fi
+NOTES=$(git log --no-merges --format='- %s' $RANGE | grep -v '^- Release ' | head -40)
+NOTES_HTML=$(printf '%s\n' "$NOTES" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's|^- \(.*\)$|<li>\1</li>|')
+
+cat > dist/appcast.xml <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>ScreenShot</title>
+    <link>https://github.com/$REPO</link>
+    <item>
+      <title>Version $VERSION</title>
+      <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
+      <sparkle:version>$BUILD</sparkle:version>
+      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+$NOTES_HTML
+</ul>]]></description>
+      <enclosure url="https://github.com/$REPO/releases/download/$TAG/ScreenShot-$VERSION.zip" type="application/octet-stream" $SIG/>
+    </item>
+  </channel>
+</rss>
+XML
+
+echo "Built $ZIP (build $BUILD) and dist/appcast.xml"
+if [ $DRY = 1 ]; then echo "Dry run: nothing committed, tagged or published."; exit 0; fi
+
+git tag -a "$TAG" -m "ScreenShot $VERSION"
+git push origin main "$TAG"
+INSTALL='**Install:** unzip, move ScreenShot to Applications and open it. Until the app is notarized, macOS blocks the first launch: open System Settings › Privacy & Security and click **Open Anyway** (or right-click the app › Open). Later versions install themselves from the menu bar icon › Check for Updates.'
+gh release create "$TAG" "$ZIP" dist/appcast.xml --repo "$REPO" --title "ScreenShot $VERSION" \
+    --notes "$(printf '%s\n\n## Changes\n%s\n' "$INSTALL" "$NOTES")"
+echo "Released $TAG: https://github.com/$REPO/releases/tag/$TAG"

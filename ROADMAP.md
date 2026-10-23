@@ -75,9 +75,9 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 
 ## Fase 5 — Distribución 🟢
 
-- [ ] **Firma Developer ID y notarización de Apple** (requiere una cuenta de Apple Developer).
-- [ ] **Actualizaciones automáticas** (Sparkle) a partir de las releases de GitHub.
-- [ ] **Releases en GitHub** con el `.app` comprimido y notas de versión.
+- [ ] **Firma Developer ID y notarización de Apple**: el script ya lo hace con `DEVELOPER_ID` y `NOTARY_PROFILE`. Falta una cuenta de Apple Developer (99 USD/año) para probarlo; sin ella, la app se publica firmada ad hoc y el primer arranque pide "Abrir de todos modos".
+- [x] **Actualizaciones automáticas** (Sparkle 2.10): comprobación diaria, "Check for Updates…" en el menú y en Preferencias, actualizaciones firmadas con EdDSA. Probado de punta a punta: una copia 0.9.0 se actualiza sola a 9.9.9 desde un servidor local, y una actualización con firma falsa se rechaza.
+- [x] **Releases en GitHub**: `Tools/release.sh <versión>` compila, comprime, firma la actualización, genera `appcast.xml` y las notas de versión, crea la etiqueta y publica la release.
 
 ---
 

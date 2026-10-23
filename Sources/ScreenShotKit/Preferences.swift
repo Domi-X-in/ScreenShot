@@ -158,6 +158,15 @@ import ServiceManagement
         form.row("Zoom with mouse wheel", [DefaultsCheckbox("Scroll zooms the editor", key: "wheelZooms")])
         form.row("Default zoom level", [DefaultsCheckbox("Prefer 100%", key: "prefer100")])
         form.row("URL Scheme API", [DefaultsCheckbox("Allow screenshot://grab/area, …", key: Keys.urlScheme)])
+        form.separator()
+        let auto = ClosureCheckbox("Check automatically", on: Updates.shared.automaticallyChecks) { Updates.shared.automaticallyChecks = $0 }
+        auto.isEnabled = Updates.shared.isAvailable
+        let checkNow = ClosureButton(title: "Check Now") { Updates.shared.checkForUpdates(nil) }
+        checkNow.isEnabled = Updates.shared.isAvailable
+        form.row("Updates", [auto, checkNow])
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        let last = Updates.shared.lastCheck.map { "last checked " + $0.formatted(.relative(presentation: .named)) } ?? "never checked"
+        form.note("Version \(version) · \(Updates.shared.isAvailable ? last : "updates work in the installed app")")
         return form.finish()
     }
 }
@@ -331,6 +340,24 @@ final class DefaultsSlider: NSSlider {
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func changed() { UserDefaults.standard.set(doubleValue, forKey: key) }
+}
+
+final class ClosureCheckbox: NSButton {
+    private let handler: (Bool) -> Void
+
+    init(_ title: String, on: Bool, handler: @escaping (Bool) -> Void) {
+        self.handler = handler
+        super.init(frame: .zero)
+        setButtonType(.switch)
+        self.title = title
+        state = on ? .on : .off
+        target = self
+        action = #selector(toggled)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func toggled() { handler(state == .on) }
 }
 
 final class ClosureButton: NSButton {

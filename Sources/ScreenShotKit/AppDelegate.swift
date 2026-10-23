@@ -46,6 +46,7 @@ import AppKit
         }
         #endif
         Capturer.requestPermissionOnFirstLaunch()
+        Updates.shared.start()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -88,6 +89,9 @@ import AppKit
         library.keyEquivalent = "l"
         menu.addItem(library)
         menu.addItem(.separator())
+        let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
+        update.target = Updates.shared
+        menu.addItem(update)
         let prefs = item("Preferences…", #selector(showPreferences))
         prefs.keyEquivalent = ","
         menu.addItem(prefs)
@@ -138,7 +142,9 @@ import AppKit
 
         let prefs = NSMenuItem(title: "Preferences…", action: #selector(showPreferences), keyEquivalent: ",")
         prefs.target = self
-        submenu("ScreenShot", [prefs, .separator(), mi("Hide ScreenShot", "hide:", "h"), .separator(), mi("Quit ScreenShot", "terminate:", "q")])
+        let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
+        update.target = Updates.shared
+        submenu("ScreenShot", [prefs, update, .separator(), mi("Hide ScreenShot", "hide:", "h"), .separator(), mi("Quit ScreenShot", "terminate:", "q")])
         let library = NSMenuItem(title: "Library…", action: #selector(showLibrary), keyEquivalent: "l")
         library.target = self
         submenu("File", [

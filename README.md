@@ -2,6 +2,10 @@
 
 A recreation of [Shottr](https://shottr.cc) 1.9.3 (`cc.ffitch.shottr`) for macOS 14+, written in Swift/AppKit. It was rebuilt from static analysis of the installed `/Applications/Shottr.app` with REA plus the macOS tools `otool`, `strings` and `plutil`. No Shottr code was copied.
 
+## Install
+
+Download `ScreenShot-<version>.zip` from [Releases](https://github.com/Domi-X-in/ScreenShot/releases/latest), unzip it and move **ScreenShot** to Applications. The app is not notarized yet, so the first launch is blocked: open **System Settings › Privacy & Security** and click **Open Anyway** (or right-click the app › Open). After that, new versions install themselves: the app checks GitHub once a day, and **Check for Updates…** is in the menu bar icon and in Preferences › Advanced.
+
 ## Build and run
 
 ```bash
@@ -14,7 +18,7 @@ open build/ScreenShot.app
 
 Only the Command Line Tools are needed (SwiftPM, no Xcode). The app lives in the menu bar (camera icon).
 On first use, macOS asks for **Screen Recording** permission. Automatic scrolling capture also needs **Accessibility**.
-The bundle is signed ad hoc, so macOS may ask for permissions again after each rebuild.
+The bundle is signed ad hoc with its designated requirement pinned to the bundle id, so the permissions survive rebuilds.
 
 ## What the analysis found in Shottr
 
@@ -112,6 +116,20 @@ Tools/test.sh                      # unit tests (swift test)
 Tools/integration-tests.sh         # in-app self-tests on the debug build
 Tools/integration-tests.sh --live  # also real captures (needs Screen Recording and an unlocked screen)
 ```
+
+## Releases and updates
+
+```
+Tools/release.sh 1.1.0 --dry-run   # build, zip and appcast in dist/, nothing published
+Tools/release.sh 1.1.0             # also commits VERSION, tags v1.1.0, pushes and creates the GitHub release
+Tools/update-e2e-test.sh           # an old copy updates itself from a local server
+Tools/update-e2e-test.sh --tampered  # an update with a wrong signature is refused
+```
+
+- The version is in `VERSION`; the build number is the commit count, which Sparkle compares.
+- Updates use [Sparkle](https://sparkle-project.org) 2.10. Each release zip is signed with an EdDSA key, and the app only installs updates whose signature matches `SUPublicEDKey` in `Resources/Info.plist`. The private key is in the login Keychain (account `local.screenshot.app`) and in `~/.screenshot-release/sparkle_ed25519.key`. Keep a copy somewhere safe: without it, installed copies can't be updated.
+- `appcast.xml` is attached to every release, and the app reads it from `releases/latest/download/appcast.xml`.
+- Notarization, once you have an Apple Developer account: `DEVELOPER_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<profile> Tools/release.sh 1.1.0`. This signs with the hardened runtime, notarizes and staples. Create the profile once with `xcrun notarytool store-credentials`.
 
 ## Not reproduced
 
