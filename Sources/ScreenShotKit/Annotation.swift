@@ -916,7 +916,7 @@ final class EditorDocument {
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = false
         OCR.configure(req, language: Settings.ocrLanguage)
-        try? VNImageRequestHandler(cgImage: crop).perform([req])
+        VisionGate.perform([req], on: crop)
         return (req.results ?? []).map { obs in
             let b = obs.boundingBox // normalized, bottom-left origin
             let box = CGRect(x: r.minX + b.minX * r.width, y: r.minY + (1 - b.maxY) * r.height,

@@ -1,6 +1,18 @@
 import AppKit
 import Vision
 
+/// Runs Vision requests one at a time. Simultaneous text recognitions (Library indexing, Blur Text, ⌘O) can
+/// deadlock inside Vision on machines with few cores, so every request in the app goes through here.
+enum VisionGate {
+    private static let lock = NSLock()
+
+    static func perform(_ requests: [VNRequest], on image: CGImage) {
+        lock.lock()
+        defer { lock.unlock() }
+        try? VNImageRequestHandler(cgImage: image).perform(requests)
+    }
+}
+
 /// Text/QR recognition with Vision; the result goes to the clipboard.
 enum OCR {
     @MainActor static func run(_ img: CGImage) {
@@ -38,10 +50,8 @@ enum OCR {
     }
 
     static func recognize(_ img: CGImage, removeBreaks: Bool, language: String = "auto") -> (String, Bool)? {
-        let handler = VNImageRequestHandler(cgImage: img)
-
         let barcodes = VNDetectBarcodesRequest()
-        try? handler.perform([barcodes])
+        VisionGate.perform([barcodes], on: img)
         if let payload = barcodes.results?.compactMap(\.payloadStringValue).first, !payload.isEmpty {
             return (payload, true)
         }
@@ -50,7 +60,7 @@ enum OCR {
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = true
         configure(req, language: language)
-        try? handler.perform([req])
+        VisionGate.perform([req], on: img)
         let lines = (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         guard !lines.isEmpty else { return nil }
         return (lines.joined(separator: removeBreaks ? " " : "\n"), false)

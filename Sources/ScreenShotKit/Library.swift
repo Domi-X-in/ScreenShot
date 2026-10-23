@@ -244,7 +244,7 @@ final class TextIndex: @unchecked Sendable {
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = .fast
         req.usesLanguageCorrection = false
-        try? VNImageRequestHandler(cgImage: img).perform([req])
+        VisionGate.perform([req], on: img)
         return (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
     }
 
