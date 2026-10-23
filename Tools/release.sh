@@ -88,7 +88,18 @@ if [ $DRY = 1 ]; then echo "Dry run: nothing tagged or published."; exit 0; fi
 
 git tag -a "$TAG" -m "ScreenShot $VERSION"
 git push origin main "$TAG"
-INSTALL='**Install:** unzip, move ScreenShot to Applications and open it. Until the app is notarized, macOS blocks the first launch: open System Settings › Privacy & Security and click **Open Anyway** (or right-click the app › Open). Later versions install themselves from the menu bar icon › Check for Updates.'
+INSTALL=$(cat <<'MD'
+**Install**
+
+1. Unzip and move **ScreenShot** to Applications, then open it.
+2. The app isn't notarized by Apple yet, so macOS says *"ScreenShot.app" Not Opened*. Click **Done** (not Move to Trash).
+3. Open **System Settings › Privacy & Security**, scroll to **Security** and click **Open Anyway** next to the ScreenShot message, then confirm. The button shows for about an hour after the blocked launch; if it's gone, open the app again.
+
+Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/ScreenShot.app`
+
+Right-click › Open no longer skips this check on macOS 15 and later. You only do this once: later versions install themselves (menu bar icon › Check for Updates).
+MD
+)
 gh release create "$TAG" "$ZIP" dist/appcast.xml --repo "$REPO" --title "ScreenShot $VERSION" \
     --notes "$(printf '%s\n\n## Changes\n%s\n' "$INSTALL" "$NOTES")"
 echo "Released $TAG: https://github.com/$REPO/releases/tag/$TAG"
