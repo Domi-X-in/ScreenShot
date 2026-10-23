@@ -169,7 +169,13 @@ extension FlowsSelfTest {
         guard let collection = allViews(NSCollectionView.self, in: content).first,
               let search = allViews(NSSearchField.self, in: content).first else { check(false, "it lists screenshots and has a search field"); return }
         // Wait for the text index (it reads each file in the background).
-        for _ in 0..<40 where TextIndex.shared.text(for: folder.appendingPathComponent("lib-2.png"))?.contains("AB123") != true { await sleep(0.5) }
+        // Slow machines (CI runners) take a while to recognize text; wait up to 90 s.
+        var waited = 0.0
+        while TextIndex.shared.text(for: folder.appendingPathComponent("lib-2.png"))?.contains("AB123") != true, waited < 90 {
+            await sleep(0.5)
+            waited += 0.5
+        }
+        check(waited < 90, "the text in new screenshots is recognized in the background (\(waited) s)")
         func searchFor(_ q: String) -> Int {
             search.stringValue = q
             lib.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: search))
@@ -180,7 +186,7 @@ extension FlowsSelfTest {
         check(searchFor("AB123") == 1, "searching text inside a screenshot finds it")
         check(searchFor("flight ab123") == 1, "search ignores case and matches every word")
         check(searchFor("nothing like this") == 0, "a search with no match shows nothing")
-        _ = searchFor("Grocery")
+        _ = searchFor("lib-1")
         collection.selectItems(at: [IndexPath(item: 0, section: 0)], scrollPosition: [])
         lib.collectionView(collection, didSelectItemsAt: [IndexPath(item: 0, section: 0)])
         await sleep(0.4)
