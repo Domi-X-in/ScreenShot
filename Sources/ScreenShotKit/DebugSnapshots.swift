@@ -45,8 +45,15 @@ import AppKit
             ("panel-color", { openPanel(editor, 0) }),
             ("panel-resize", { openPanel(editor, 1) }),
             ("panel-zoom", { openPanel(editor, 2) }),
+            ("editor-cutout", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                let h = CGFloat(ed.doc.image.height)
+                ed.shotView.debugShowCutStrip(.init(rows: true, range: (h * 0.42).rounded()...(h * 0.58).rounded()))
+                return editor
+            }),
             ("editor-backdrop", {
                 guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                ed.shotView.tool = .callout
                 var b = Backdrop()
                 b.isOn = true
                 b.fill = .mesh

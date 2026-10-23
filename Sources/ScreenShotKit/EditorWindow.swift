@@ -85,6 +85,10 @@ import UniformTypeIdentifiers
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { [weak self] in self?.browseFolder() }
         options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
+        options.onCutOutMode = { [weak self] on in
+            self?.shotView.cutOutMode = on
+            self?.window?.makeFirstResponder(self?.shotView)
+        }
     }
 
     private func buildLayout() {
@@ -167,7 +171,7 @@ import UniformTypeIdentifiers
     func syncToolbar() {
         toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
         cropButton.isOn = shotView.tool == .crop
-        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.style, backdrop: doc.backdrop)
+        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.style, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
         updateInfo()
     }
 
@@ -650,6 +654,8 @@ final class DragOutView: NSView, NSDraggingSource {
 final class OptionsBar: NSView, NSMenuDelegate {
     var onChange: ((ToolStyle) -> Void)?
     var onBackdropPanel: ((NSView) -> Void)?
+    var onCutOutMode: ((Bool) -> Void)?
+    private let cropModeControl = NSSegmentedControl(labels: ["Crop", "Cut Out"], trackingMode: .selectOne, target: nil, action: nil)
     private var style = ToolStyle()
 
     private let colorButton = NSButton()
@@ -737,6 +743,14 @@ final class OptionsBar: NSView, NSMenuDelegate {
             self.onBackdropPanel?(self.backdropButton)
         }
 
+        cropModeControl.controlSize = .small
+        cropModeControl.target = self
+        cropModeControl.action = #selector(cropModeChanged)
+        cropModeControl.setImage(NSImage(systemSymbolName: "crop", accessibilityDescription: "Crop"), forSegment: 0)
+        cropModeControl.setImage(NSImage(systemSymbolName: "scissors", accessibilityDescription: "Cut Out"), forSegment: 1)
+        cropModeControl.setToolTip("Keep the selected area (X)", forSegment: 0)
+        cropModeControl.setToolTip("Remove a horizontal or vertical strip and join the rest (⇧X)", forSegment: 1)
+
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = InfoCellsView.infoColor
         hint.lineBreakMode = .byTruncatingTail
@@ -744,11 +758,11 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
         // Clicking these must never take keyboard focus away from a text box being typed in.
         for c in [colorButton, widthSlider, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl, unitControl,
-                  lensShapeControl, lensZoomControl, calloutControl] as [NSControl] {
+                  lensShapeControl, lensZoomControl, calloutControl, cropModeControl] as [NSControl] {
             c.refusesFirstResponder = true
         }
         wireDefaults()
-        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, calloutControl, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl,
+        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, calloutControl, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl,
                                        unitControl, lensShapeControl, lensZoomControl, hint])
         left.spacing = 12
         left.alignment = .centerY
@@ -884,7 +898,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         }
     }
 
-    func update(tool: Tool, style s: ToolStyle, backdrop: Backdrop) {
+    func update(tool: Tool, style s: ToolStyle, backdrop: Backdrop, cutOut: Bool = false) {
         style = s
         colorButton.image = Self.swatch(s.color, size: 24)
         widthSlider.doubleValue = Double(s.width)
@@ -901,6 +915,8 @@ final class OptionsBar: NSView, NSMenuDelegate {
         lensZoomControl.selectedSegment = Self.zoomSteps.firstIndex { abs($0 - s.magnification) < 0.01 } ?? -1
         backdropButton.isOn = backdrop.isOn
 
+        cropModeControl.selectedSegment = cutOut ? 1 : 0
+        cropModeControl.isHidden = tool != .crop
         arrowControl.isHidden = tool != .arrow
         dashControl.isHidden = ![.rect, .oval, .line].contains(tool)
         fillControl.isHidden = ![.rect, .oval].contains(tool)
@@ -914,10 +930,12 @@ final class OptionsBar: NSView, NSMenuDelegate {
         let usesStroke = ![.blur, .spotlight, .crop, .select, .image].contains(tool)
         colorButton.isHidden = !usesStroke
         widthSlider.isHidden = !usesStroke
+        sizeReadout.isHidden = !usesStroke
 
         switch tool {
         case .counter: hint.stringValue = "Type digits to renumber · drag the bubble tip to point it"
-        case .crop: hint.stringValue = "Select the area to keep · Enter crops · Esc resets"
+        case .crop where cutOut: hint.stringValue = "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
+        case .crop: hint.stringValue = "Select the area to keep · Enter crops · C copies its average color · Esc resets"
         case .select: hint.stringValue = "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
         case .text: hint.stringValue = "Click to type · double-click text to edit"
         case .ruler: hint.stringValue = "Drag to measure · Shift snaps to 45°"
@@ -927,6 +945,10 @@ final class OptionsBar: NSView, NSMenuDelegate {
         case .magnifier: hint.stringValue = "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
         default: hint.stringValue = "Shift constrains · Tab copies the color under the cursor"
         }
+    }
+
+    @objc private func cropModeChanged() {
+        onCutOutMode?(cropModeControl.selectedSegment == 1)
     }
 
     @objc private func widthChanged() {

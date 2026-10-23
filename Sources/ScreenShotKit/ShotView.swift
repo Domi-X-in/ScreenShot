@@ -31,8 +31,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
     var tool: Tool = .arrow {
         didSet {
             commitText()
-            if tool != .crop { cropRect = nil }
-            if tool == .crop { Toast.show("Select the area to keep, then hit Enter to crop") }
+            if tool != .crop { cropRect = nil; cutStrip = nil; cutOutMode = false }
+            if tool == .crop && oldValue != .crop {
+                Toast.show(cutOutMode ? "Drag across the part to remove, then hit Enter to cut it out"
+                                      : "Select the area to keep, then hit Enter to crop")
+            }
             controller?.syncToolbar()
             needsDisplay = true
         }
@@ -59,6 +62,16 @@ final class ShotView: NSView, NSTextFieldDelegate {
     private var counterTyping: (id: UUID, at: Date)?
     private var drag: Drag = .none
     private var cropRect: CGRect?
+    /// Crop mode's second option: drag over a strip to remove (Shottr's Cut Out).
+    var cutOutMode = false {
+        didSet {
+            cropRect = nil
+            cutStrip = nil
+            controller?.syncToolbar()
+            needsDisplay = true
+        }
+    }
+    private var cutStrip: CutOut.Strip?
     private var textField: NSTextField?
     private var editingID: UUID?
     /// When the backdrop last changed, so a slider drag becomes one undo step.
@@ -214,7 +227,7 @@ final class ShotView: NSView, NSTextFieldDelegate {
         // While typing, plain text is hidden (the field shows it); a callout keeps its bubble and hides only its text.
         let editingKind = editingID.flatMap { id in doc.objects.first { $0.id == id }?.kind }
         Renderer.render(doc, in: ctx, extra: live, hiddenID: editingKind == .callout ? nil : editingID, selectedIDs: selection,
-                        cropRect: tool == .crop ? cropRect : nil, hairline: 1 / z, interactive: true,
+                        cropRect: tool == .crop ? cropRect : nil, cutStrip: tool == .crop ? cutStrip : nil, hairline: 1 / z, interactive: true,
                         textHiddenID: editingKind == .callout ? editingID : nil)
         if let m = marqueeRect {
             ctx.setFillColor(Palette.accent.withAlphaComponent(0.08).cgColor)
@@ -453,6 +466,7 @@ final class ShotView: NSView, NSTextFieldDelegate {
         if tool == .crop {
             drag = .crop(start: p)
             cropRect = nil
+            cutStrip = nil
             return
         }
         let vp = convert(event.locationInWindow, from: nil)
@@ -610,6 +624,8 @@ final class ShotView: NSView, NSTextFieldDelegate {
         case let .calloutTip(index):
             guard index < doc.objects.count else { return }
             doc.objects[index].pointer = raw
+        case let .crop(start) where cutOutMode:
+            cutStrip = CutOut.strip(from: start, to: raw, in: doc.image.size)
         case let .crop(start):
             let end = constrained(start, raw, .crop, shift)
             cropRect = CGRect(p1: start, p2: end).integral.intersection(doc.imageRect)
@@ -716,13 +732,13 @@ final class ShotView: NSView, NSTextFieldDelegate {
             }
             return
         case 53: // Esc
-            if cropRect != nil { cropRect = nil; needsDisplay = true }
+            if cropRect != nil || cutStrip != nil { cropRect = nil; cutStrip = nil; needsDisplay = true }
             else if tool == .crop { tool = .arrow }
             else if selectedID != nil { selectedID = nil; needsDisplay = true }
             else { controller?.escape() }
             return
         case 36, 76: // Return
-            if tool == .crop { applyCrop() }
+            if tool == .crop { cutOutMode ? applyCutOut() : applyCrop() }
             return
         case 51, 117: // Delete
             if Int(event.keyCode) == 51, eraseCounterDigit() { return }
@@ -743,6 +759,12 @@ final class ShotView: NSView, NSTextFieldDelegate {
         if c == "=" || c == "+", changeMagnifierFactor(by: 1.25, at: nil) { return }
         if c == "-", changeMagnifierFactor(by: 1 / 1.25, at: nil) { return }
         if c == "k" { toggleBackdrop(); return }
+        // Shift+X opens Cut Out; X alone is Crop.
+        if c == "x", flags.contains(.shift) {
+            cutOutMode = true
+            tool = .crop
+            return
+        }
         // Shottr: "Select an area and press C to copy its average color" (the crop selection here).
         if c == "c", tool == .crop, let r = cropRect {
             controller?.copyColor(doc.averageColor(in: r), what: "Average color")
@@ -1092,6 +1114,25 @@ final class ShotView: NSView, NSTextFieldDelegate {
         controller?.documentChanged(resized: true)
     }
 
+    private func applyCutOut() {
+        guard let strip = cutStrip, let img = CutOut.apply(strip, to: doc.image) else { return }
+        pushUndo()
+        doc.image = img
+        doc.objects = CutOut.shift(doc.objects, by: strip)
+        cutStrip = nil
+        controller?.documentChanged(resized: true)
+        needsDisplay = true
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    func debugShowCutStrip(_ strip: CutOut.Strip) {
+        cutOutMode = true
+        tool = .crop
+        cutStrip = strip
+        needsDisplay = true
+    }
+    #endif
+
     func resetSelection() {
         cropRect = nil
         selectedID = nil
@@ -1102,7 +1143,9 @@ final class ShotView: NSView, NSTextFieldDelegate {
 
     func beginCrop() { tool = .crop }
 
-    func applyCropIfAny() { if cropRect != nil { applyCrop() } }
+    func applyCropIfAny() {
+        if cutOutMode { if cutStrip != nil { applyCutOut() } } else if cropRect != nil { applyCrop() }
+    }
 
     // MARK: Text editing
 

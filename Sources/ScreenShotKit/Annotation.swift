@@ -1007,7 +1007,7 @@ enum Renderer {
 
     /// Renders into a flipped context whose units are canvas pixels.
     static func render(_ doc: EditorDocument, in ctx: CGContext, extra: Annotation? = nil, hiddenID: UUID? = nil,
-                       selectedIDs: Set<UUID> = [], cropRect: CGRect? = nil, hairline: CGFloat = 1, interactive: Bool = false,
+                       selectedIDs: Set<UUID> = [], cropRect: CGRect? = nil, cutStrip: CutOut.Strip? = nil, hairline: CGFloat = 1, interactive: Bool = false,
                        textHiddenID: UUID? = nil) {
         let lay = doc.layout
         let size = lay.canvas
@@ -1142,6 +1142,39 @@ enum Renderer {
             ctx.restoreGState()
             let label = "\(Int(c.width)) × \(Int(c.height))  ↩ to crop"
             drawLabel(label, at: CGPoint(x: c.minX, y: c.maxY + 6 * hairline), size: 12 * hairline, ctx: ctx)
+        }
+
+        if let strip = cutStrip {
+            // The band to remove: red tint, diagonal hatching and dashed scissor lines on both edges.
+            let r = strip.rect(in: imgRect.size)
+            ctx.saveGState()
+            ctx.clip(to: r)
+            ctx.setFillColor(NSColor.systemRed.withAlphaComponent(0.28).cgColor)
+            ctx.fill(r)
+            ctx.setStrokeColor(NSColor.systemRed.withAlphaComponent(0.45).cgColor)
+            ctx.setLineWidth(2 * hairline)
+            let step = 14 * hairline
+            var x = r.minX - r.height
+            while x < r.maxX {
+                ctx.move(to: CGPoint(x: x, y: r.maxY))
+                ctx.addLine(to: CGPoint(x: x + r.height, y: r.minY))
+                x += step
+            }
+            ctx.strokePath()
+            ctx.restoreGState()
+            ctx.saveGState()
+            ctx.setStrokeColor(NSColor.systemRed.cgColor)
+            ctx.setLineWidth(1.5 * hairline)
+            ctx.setLineDash(phase: 0, lengths: [6 * hairline, 4 * hairline])
+            if strip.rows {
+                for y in [r.minY, r.maxY] { ctx.move(to: CGPoint(x: r.minX, y: y)); ctx.addLine(to: CGPoint(x: r.maxX, y: y)) }
+            } else {
+                for x in [r.minX, r.maxX] { ctx.move(to: CGPoint(x: x, y: r.minY)); ctx.addLine(to: CGPoint(x: x, y: r.maxY)) }
+            }
+            ctx.strokePath()
+            ctx.restoreGState()
+            let label = "✂︎ \(Int(strip.length)) px  ↩ to cut out"
+            drawLabel(label, at: CGPoint(x: r.minX + 6 * hairline, y: r.minY + 6 * hairline), size: 12 * hairline, ctx: ctx)
         }
     }
 
