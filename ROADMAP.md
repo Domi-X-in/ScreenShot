@@ -79,7 +79,7 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 - [x] **Actualizaciones automáticas** (Sparkle 2.10): comprobación diaria, "Check for Updates…" en el menú y en Preferencias, actualizaciones firmadas con EdDSA. Probado de punta a punta: una copia 261023.9 se actualiza sola a 261023.10 desde un servidor local, y una actualización con firma falsa se rechaza.
 - [x] **Releases en GitHub**: `Tools/release.sh` compila, comprime, firma la actualización, genera `appcast.xml` y las notas de versión, crea la etiqueta y publica la release.
 - [x] **Versiones por fecha**: `YYMMDD.N` en hora local (`261023.1` es la primera publicación del 23-oct-2026; `.2` la segunda de ese día). Las compilaciones de prueba son `YYMMDD.0`. Probado que Sparkle ordena bien `261023.9` → `261023.10`.
-- [ ] Publicar la primera versión.
+- [x] Publicada la primera versión, [261023.1](https://github.com/Domi-X-in/ScreenShot/releases/tag/v261023.1): una copia 261023.0 se actualizó sola desde GitHub.
 
 ---
 
