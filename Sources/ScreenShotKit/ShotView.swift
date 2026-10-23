@@ -432,6 +432,7 @@ final class ShotView: NSView, NSTextFieldDelegate {
     @objc func saveDocument(_ sender: Any?) { controller?.saveImage() }
     @objc func saveDocumentAs(_ sender: Any?) { controller?.saveImageAs() }
     @objc func pinImage(_ sender: Any?) { controller?.pinImage() }
+    @objc func saveGIF(_ sender: Any?) { controller?.saveGIF() }
     @objc func delete(_ sender: Any?) { deleteSelected() }
     @objc func zoomIn(_ sender: Any?) { setZoom(zoom * 1.25) }
     @objc func zoomOut(_ sender: Any?) { setZoom(zoom / 1.25) }

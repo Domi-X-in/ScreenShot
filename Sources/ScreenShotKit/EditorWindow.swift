@@ -331,6 +331,31 @@ import UniformTypeIdentifiers
         }
     }
 
+    /// Saves a GIF that blinks the annotations on and off into the Screenshots folder.
+    @objc func saveGIF() {
+        shotView.commitText()
+        guard !doc.objects.isEmpty else {
+            Toast.show("Add an arrow, box or text first: the GIF blinks the annotations on and off")
+            return
+        }
+        guard let (plain, annotated) = GIFOverlay.frames(doc), let data = GIFOverlay.encode(plain: plain, annotated: annotated) else {
+            Toast.show("Couldn't make the GIF")
+            return
+        }
+        let folder = Settings.saveFolder
+        let url = folder.appendingPathComponent(Exporter.fileName(ext: "gif"))
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([url as NSURL])
+            Toast.show("GIF saved to \(folder.lastPathComponent) and copied")
+            NotificationCenter.default.post(name: .screenshotSaved, object: url)
+        } catch {
+            Toast.show("Failed to save the GIF: \(error.localizedDescription)")
+        }
+    }
+
     @objc func pinImage() {
         guard let img = rendered() else { return }
         Pins.pin(img, scale: doc.scale, near: window?.frame)

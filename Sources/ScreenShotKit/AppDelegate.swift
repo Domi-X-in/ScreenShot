@@ -146,6 +146,7 @@ import AppKit
             .separator(),
             mi("Save", "saveDocument:", "s"),
             mi("Save As…", "saveDocumentAs:", "s", [.command, .shift]),
+            mi("Save Blinking GIF", "saveGIF:", "g", [.command, .shift]),
             mi("Pin", "pinImage:", "p"),
             .separator(),
             mi("Close", "performClose:", "w"),
