@@ -53,3 +53,32 @@ struct LibraryTests {
         #expect(TextIndex(file: indexFile).text(for: url) == index.text(for: url), "reloaded from disk")
     }
 }
+
+@Suite("Library index queue")
+struct LibraryIndexQueueTests {
+    @Test("a screenshot added while indexing is running still gets read")
+    @MainActor func queued() async throws {
+        let dir = tempDir()
+        func shot(_ name: String, _ text: String) throws -> URL {
+            let img = makeImage(900, 160) { ctx in
+                ctx.setFillColor(NSColor.white.cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: 900, height: 160))
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
+                (text as NSString).draw(at: CGPoint(x: 20, y: 50), withAttributes: [.font: NSFont.systemFont(ofSize: 48), .foregroundColor: NSColor.black])
+                NSGraphicsContext.restoreGraphicsState()
+            }
+            let url = dir.appendingPathComponent(name)
+            try NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])!.write(to: url)
+            return url
+        }
+        let first = try (0..<4).map { try shot("old-\($0).png", "Archive item \($0)") }
+        let index = TextIndex(file: dir.appendingPathComponent("index.json"))
+        index.indexInBackground(first)
+        let late = try shot("new.png", "Boarding pass gate 42")
+        index.indexInBackground(first + [late]) // arrives while the first pass is still running
+        for _ in 0..<160 where !(first + [late]).allSatisfy({ index.text(for: $0) != nil }) { try await Task.sleep(for: .milliseconds(250)) }
+        #expect(index.text(for: late)?.lowercased().contains("boarding") == true, "got \(index.text(for: late) ?? "nil")")
+        #expect(first.allSatisfy { index.text(for: $0) != nil }, "the earlier files are read too")
+    }
+}

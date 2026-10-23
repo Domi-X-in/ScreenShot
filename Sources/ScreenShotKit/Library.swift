@@ -239,25 +239,36 @@ final class TextIndex: @unchecked Sendable {
     }
 
     /// Recognizes text in files that are new or changed since they were last indexed, newest first.
+    /// Files waiting to be read, newest first. Files that arrive while a pass is running join the queue, so a screenshot
+    /// taken during indexing is still read (it used to be skipped until the next time the window opened).
+    private var queue: [URL] = []
+
     @MainActor func indexInBackground(_ urls: [URL]) {
         lock.lock()
-        let todo = urls.filter { entries[$0.path]?.modified != modified($0) }
-        let busy = running
-        if !todo.isEmpty { running = true }
+        let todo = urls.filter { u in entries[u.path]?.modified != modified(u) && !queue.contains(u) }
+        queue = todo + queue
+        let start = !running && !queue.isEmpty
+        if start { running = true }
         lock.unlock()
-        guard !todo.isEmpty, !busy else { return }
+        guard start else { return }
         DispatchQueue.global(qos: .utility).async { [self] in
-            for (n, url) in todo.enumerated() {
+            var done = 0
+            while true {
+                lock.lock()
+                guard !queue.isEmpty else { running = false; lock.unlock(); break }
+                let url = queue.removeFirst()
+                lock.unlock()
                 let text = Self.recognize(url) ?? ""
                 lock.lock()
                 entries[url.path] = Entry(modified: modified(url), text: text)
+                let last = queue.isEmpty
                 lock.unlock()
-                if n % 8 == 7 || n == todo.count - 1 {
+                done += 1
+                if done % 8 == 0 || last {
                     save()
                     DispatchQueue.main.async { MainActor.assumeIsolated { self.onUpdate?() } }
                 }
             }
-            lock.lock(); running = false; lock.unlock()
         }
     }
 

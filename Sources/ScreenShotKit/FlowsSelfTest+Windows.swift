@@ -156,9 +156,11 @@ extension FlowsSelfTest {
     /// The home window: its capture buttons, search by name, date and text, opening a screenshot.
     func libraryFlow() async {
         // Three screenshots in the folder, one with recognizable text.
+        // Unique names, so nothing is found from an earlier run's index.
+        let tag = String(UUID().uuidString.prefix(6))
         for (i, text) in ["Quarterly report", "Grocery list", "Flight AB123"].enumerated() {
             let doc = EditorDocument(image: Self.sampleImage(900, 500, text: text), scale: 1)
-            _ = Exporter.saveEditable(doc, rendered: doc.render()!, to: folder.appendingPathComponent("lib-\(i).png"), quiet: true)
+            _ = Exporter.saveEditable(doc, rendered: doc.render()!, to: folder.appendingPathComponent("lib-\(tag)-\(i).png"), quiet: true)
         }
         (NSApp.delegate as? AppDelegate)?.showLibrary()
         await sleep(0.6)
@@ -171,7 +173,7 @@ extension FlowsSelfTest {
         // Wait for the text index (it reads each file in the background).
         // Slow machines (CI runners) take a while to recognize text; wait up to 90 s.
         var waited = 0.0
-        while TextIndex.shared.text(for: folder.appendingPathComponent("lib-2.png"))?.contains("AB123") != true, waited < 90 {
+        while TextIndex.shared.text(for: folder.appendingPathComponent("lib-\(tag)-2.png"))?.contains("AB123") != true, waited < 90 {
             await sleep(0.5)
             waited += 0.5
         }
@@ -182,15 +184,15 @@ extension FlowsSelfTest {
             return collection.numberOfItems(inSection: 0)
         }
         check(searchFor("") >= 3, "all screenshots are listed (\(collection.numberOfItems(inSection: 0)))")
-        check(searchFor("lib-1") == 1, "searching a file name finds it")
+        check(searchFor("lib-\(tag)-1") == 1, "searching a file name finds it")
         check(searchFor("AB123") == 1, "searching text inside a screenshot finds it")
         check(searchFor("flight ab123") == 1, "search ignores case and matches every word")
         check(searchFor("nothing like this") == 0, "a search with no match shows nothing")
-        _ = searchFor("lib-1")
+        _ = searchFor("lib-\(tag)-1")
         collection.selectItems(at: [IndexPath(item: 0, section: 0)], scrollPosition: [])
         lib.collectionView(collection, didSelectItemsAt: [IndexPath(item: 0, section: 0)])
         await sleep(0.4)
-        check(editors.contains { $0.doc.fileURL?.lastPathComponent == "lib-1.png" }, "clicking a result opens it in the editor")
+        check(editors.contains { $0.doc.fileURL?.lastPathComponent == "lib-\(tag)-1.png" }, "clicking a result opens it in the editor")
         lib.window?.close()
     }
 
