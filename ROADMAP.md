@@ -67,7 +67,11 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 ## Fase 4 — Mejoras propias 🟢
 
 - [ ] **Texto en varias líneas** (Mayús+Retorno añade un salto de línea).
-- [ ] **Orden de capas**: Traer al frente / Enviar al fondo; alinear y distribuir varios objetos.
+- [x] **Orden de capas**: Traer al frente / adelante / atrás / al fondo; alinear (6 modos) y distribuir; menú Arrange, botón en la barra y clic derecho.
+- [x] **Guías inteligentes**: al mover, dibujar o cambiar el tamaño, ajuste a bordes y centros de otros objetos y de la captura, con guía rosa (⌘ para desactivar).
+- [x] **Texto dentro de formas**: Return o doble clic en un rectángulo u óvalo para escribir dentro, centrado.
+- [x] **El lienzo crece con el contenido**: lo que se coloca fuera de la captura (imagen pegada, flechas…) se incluye al copiar y guardar.
+- [x] Corregido: el color del callout cambiaba al terminar de escribir y hacer clic fuera.
 - [ ] **Auto-censura**: un clic desenfoca todos los emails, teléfonos y números de tarjeta que encuentre el OCR.
 - [ ] **Menú Compartir** (Mail, Mensajes, AirDrop) junto a Copiar / Guardar / Fijar.
 - [x] **Guía de primer uso**: ventana animada de 8 pasos (bienvenida, demo animada de captura y anotación, animación de la barra de menús con "Open ScreenShot" y de ⇧⌘2, permiso de Grabación de pantalla con estado en vivo, carpeta y qué hacer tras cada captura, apariencia Clara/Oscura/Sistema con vistas previas, atajos como teclas, confeti y "Take My First Screenshot").

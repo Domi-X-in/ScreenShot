@@ -517,8 +517,9 @@ struct Annotation {
 
     /// The text with its base style and per-range runs; `scale` converts image pixels to view points while editing.
     func attributedText(scale: CGFloat = 1) -> NSAttributedString {
+        let base = holdsTextInShape ? shapeFontSize : fontSize
         let m = NSMutableAttributedString(string: text.isEmpty ? " " : text,
-                                          attributes: [.font: font.font(size: fontSize * scale), .foregroundColor: baseTextColor])
+                                          attributes: [.font: font.font(size: base * scale), .foregroundColor: baseTextColor])
         for r in runs ?? [] {
             let range = NSRange(location: r.location, length: r.length)
             guard r.length > 0, NSMaxRange(range) <= m.length else { continue }
@@ -547,9 +548,15 @@ struct Annotation {
                 found.append(run)
             }
         }
-        if found.count <= 1, let only = found.first {
-            // One style for everything: store it as the object's own style.
-            color = NSColor(rgbaHex: only.color) ?? color
+        if holdsTextInShape {
+            // Text inside a rectangle or oval: the outline keeps its own color and width; the text keeps its styles.
+            runs = found.isEmpty ? nil : found
+        } else if found.count <= 1, let only = found.first {
+            // One style for everything: store it as the object's own style. A callout's text is drawn in a contrasting
+            // color on filled designs; that color must not become the bubble's.
+            if kind != .callout || only.color != baseTextColor.rgbaHex {
+                color = NSColor(rgbaHex: only.color) ?? color
+            }
             font = only.font
             width = only.size / 6
             runs = nil
@@ -594,6 +601,10 @@ struct Annotation {
         case .arrow, .line, .ruler:
             return p.distance(toSegment: p1, p2) <= tol
         case .rect, .oval:
+            // A filled shape, or one with text in it, is solid to clicks; an empty outline only on its edge.
+            if fill != .none || !text.isEmpty {
+                return kind == .rect ? rect.insetBy(dx: -tol, dy: -tol).contains(p) : CGPath(ellipseIn: rect.insetBy(dx: -tol, dy: -tol), transform: nil).contains(p)
+            }
             let outer = rect.insetBy(dx: -tol, dy: -tol), inner = rect.insetBy(dx: tol, dy: tol)
             return outer.contains(p) && !(inner.width > 0 && inner.height > 0 && inner.contains(p))
         case .freehand:
@@ -611,6 +622,14 @@ struct Annotation {
         kind == .magnifier && lensShape.path(lensRect.insetBy(dx: -width, dy: -width)).contains(p)
     }
 
+    /// The area an object paints (`bounds` already includes the stroke); nil for effects tied to the image's own pixels.
+    var visualBounds: CGRect? {
+        switch kind {
+        case .blur, .highlighter, .spotlight, .crop: nil
+        default: bounds
+        }
+    }
+
     /// Whether a finished drag produced something worth keeping.
     var isMeaningful: Bool {
         switch kind {
@@ -626,7 +645,19 @@ struct Annotation {
 
 extension Annotation {
     /// Text color before per-letter styles: contrasting on filled callouts, the annotation color otherwise.
-    var baseTextColor: NSColor { kind == .callout && calloutStyle.filled ? color.contrasting : color }
+    var baseTextColor: NSColor {
+        switch kind {
+        case .callout where calloutStyle.filled: color.contrasting
+        case .rect, .oval where fill == .opaque: color.contrasting
+        default: color
+        }
+    }
+
+    /// Rectangles and ovals can hold centered text (Return or double-click to type).
+    var holdsTextInShape: Bool { kind == .rect || kind == .oval }
+
+    /// Text inside a shape: font size from the text's own runs (24 px by default), not the outline width.
+    var shapeFontSize: CGFloat { runs?.first?.size ?? 24 }
 
     /// Where the text starts: the callout's padding inside its box, or `p1` for plain text.
     var textOrigin: CGPoint {
@@ -824,7 +855,17 @@ final class EditorDocument {
     let scale: CGFloat
     var objects: [Annotation] = []
     var backdrop = Backdrop.none { didSet { if backdrop.fill != .blurredImage { blurredCache = nil } } }
-    var layout: BackdropLayout { BackdropLayout(backdrop, imageSize: image.size) }
+    var layout: BackdropLayout { BackdropLayout(backdrop, imageSize: image.size, contentRect: contentRect) }
+
+    /// What the canvas must show, in image coordinates: the image, grown to include anything drawn past its edges
+    /// (a pasted image, an arrow, a callout…). Held still while a drag is in progress, so the view doesn't jump.
+    var contentRect: CGRect { frozenContentRect ?? measuredContentRect }
+    var frozenContentRect: CGRect?
+    var measuredContentRect: CGRect {
+        var r = imageRect
+        for o in objects { if let b = o.visualBounds { r = r.union(b) } }
+        return r.integral
+    }
     /// The blurred screenshot behind a "Blurred Screenshot" backdrop, made once per image.
     private var blurredCache: (image: CGImage, blurred: CGImage?)?
     var blurredBackdrop: CGImage? {
@@ -1039,10 +1080,10 @@ enum Renderer {
             BackdropPainter.paintFill(b, size: size, image: doc.image, blurred: { doc.blurredBackdrop }, in: ctx)
             let shadowColor = NSColor.black.withAlphaComponent(max(0, min(1, b.shadow))).cgColor
             let shadowOffset = CGSize(width: 0, height: -lay.shadowBlur * 0.24)
-            let framed = lay.content.size != imgRect.size
+            let framed = lay.inset > 0
             if framed {
                 // Inset: a frosted frame around the screenshot, carrying the shadow.
-                let ins = lay.imageOrigin.x - lay.content.minX
+                let ins = lay.inset
                 let r = lay.innerRadius + ins
                 let frame = CGPath(roundedRect: lay.content, cornerWidth: r, cornerHeight: r, transform: nil)
                 ctx.saveGState()
@@ -1056,8 +1097,15 @@ enum Renderer {
                 ctx.setLineWidth(max(1, ins * 0.04))
                 ctx.strokePath()
             }
-            ctx.translateBy(x: lay.imageOrigin.x, y: lay.imageOrigin.y)
+        }
+        // Image coordinates from here on (objects past the image's edges have negative or large coordinates).
+        ctx.translateBy(x: lay.imageOrigin.x, y: lay.imageOrigin.y)
+        var imageClip: CGPath?
+        if b.isOn {
             let radius = lay.innerRadius
+            let shadowColor = NSColor.black.withAlphaComponent(max(0, min(1, b.shadow))).cgColor
+            let shadowOffset = CGSize(width: 0, height: -lay.shadowBlur * 0.24)
+            let framed = lay.inset > 0
             let path = CGPath(roundedRect: imgRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
             if !framed && b.shadow > 0 {
                 ctx.saveGState()
@@ -1072,12 +1120,15 @@ enum Renderer {
                 }
                 ctx.restoreGState()
             }
-            if !doc.hasAlpha && radius > 0 {
-                ctx.addPath(path)
-                ctx.clip()
-            }
+            if !doc.hasAlpha && radius > 0 { imageClip = path }
         }
 
+        // The rounded corners clip the image and what alters its pixels; other objects may reach past them.
+        ctx.saveGState()
+        if let imageClip {
+            ctx.addPath(imageClip)
+            ctx.clip()
+        }
         ctx.drawFlipped(doc.image, in: imgRect)
 
         var objs = doc.objects.filter { $0.id != hiddenID }
@@ -1111,6 +1162,7 @@ enum Renderer {
             ctx.fillPath(using: .evenOdd)
             ctx.restoreGState()
         }
+        ctx.restoreGState() // end of the image clip
 
         for o in objs where o.kind != .spotlight && !underSpotlight.contains(o.kind) {
             draw(o, doc: doc, ctx: ctx, showText: o.id != textHiddenID)
@@ -1201,6 +1253,7 @@ enum Renderer {
 
         if o.sketch, [.arrow, .line, .rect, .oval].contains(o.kind) {
             drawSketch(o, ctx: ctx)
+            if showText { drawShapeText(o) }
             return
         }
 
@@ -1220,6 +1273,7 @@ enum Renderer {
             }
             ctx.addPath(path)
             ctx.strokePath()
+            if showText { drawShapeText(o) }
         case .freehand:
             guard let f = o.points.first, o.points.count > 1 else { return }
             ctx.move(to: f)
@@ -1276,6 +1330,20 @@ enum Renderer {
         default:
             break
         }
+    }
+
+    /// Text inside a rectangle or oval: centered both ways, wrapped to the shape's width.
+    static func drawShapeText(_ o: Annotation) {
+        guard o.holdsTextInShape, !o.text.isEmpty else { return }
+        let r = o.rect
+        let m = NSMutableAttributedString(attributedString: o.attributedText())
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        m.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: m.length))
+        let inset = max(6, o.width + 4)
+        let w = max(20, r.width - 2 * inset)
+        let h = ceil(m.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height)
+        m.draw(with: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h), options: [.usesLineFragmentOrigin])
     }
 
     /// Hand-drawn version of an arrow, line, rectangle or oval (fills stay clean underneath the strokes).

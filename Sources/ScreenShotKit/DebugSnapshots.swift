@@ -70,10 +70,42 @@ import AppKit
                 ed.shotView.needsDisplay = true
                 return editor
             }),
+            ("editor-shapes", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                let w = CGFloat(ed.doc.image.width), h = CGFloat(ed.doc.image.height)
+                ed.shotView.debugMeasure(nil, at: .zero)
+                ed.doc.objects.removeAll()
+                var st = ToolStyle()
+                st.color = NSColor(hex: 0xFF3B30)
+                st.width = 6
+                var a = Annotation(kind: .rect, p1: CGPoint(x: w * 0.08, y: h * 0.12), p2: CGPoint(x: w * 0.4, y: h * 0.32), style: st)
+                a.setText(from: NSAttributedString(string: "Step 1: sign in", attributes: [.font: NSFont.systemFont(ofSize: 56, weight: .bold),
+                                                                                          .foregroundColor: NSColor(hex: 0xFF3B30)]), scale: 1)
+                st.fill = .opaque
+                st.color = NSColor(hex: 0x007AFF)
+                var b = Annotation(kind: .oval, p1: CGPoint(x: w * 0.08, y: h * 0.42), p2: CGPoint(x: w * 0.4, y: h * 0.62), style: st)
+                b.setText(from: NSAttributedString(string: "Then this", attributes: [.font: NSFont.systemFont(ofSize: 56, weight: .bold),
+                                                                                    .foregroundColor: NSColor.white]), scale: 1)
+                st.color = NSColor(hex: 0x34C759)
+                // Past the left edge: the canvas grows to keep it.
+                let c = Annotation(kind: .rect, p1: CGPoint(x: -w * 0.18, y: h * 0.7), p2: CGPoint(x: w * 0.12, y: h * 0.88), style: st)
+                ed.doc.objects = [a, b, c]
+                ed.documentChanged(resized: true)
+                let x = a.bounds.minX
+                ed.shotView.debugShowGuides([SmartGuides.Guide(vertical: true, position: x, from: a.bounds.minY, to: b.bounds.maxY)], select: [a.id, b.id])
+                return editor
+            }),
+            ("panel-arrange", {
+                guard let ed = editor?.windowController as? EditorWindowController, let content = editor?.contentView else { return nil }
+                let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+                ed.showArrangePanel(from: content)
+                return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) }
+            }),
             ("editor-cutout", {
                 guard let ed = editor?.windowController as? EditorWindowController else { return nil }
                 let h = CGFloat(ed.doc.image.height)
                 ed.shotView.debugMeasure(nil, at: .zero)
+                ed.shotView.debugShowGuides([], select: [])
                 ed.shotView.debugShowCutStrip(.init(rows: true, range: (h * 0.42).rounded()...(h * 0.58).rounded()))
                 return editor
             }),

@@ -20,10 +20,27 @@ import UniformTypeIdentifiers
             kCGImagePropertyDPIWidth: 72 * scale,
             kCGImagePropertyDPIHeight: 72 * scale,
         ]
-        if type == .jpeg { props[kCGImageDestinationLossyCompressionQuality] = 0.88 }
+        var img = img
+        if type == .jpeg {
+            props[kCGImageDestinationLossyCompressionQuality] = 0.88
+            // JPEG has no transparency: areas outside the screenshot (objects past its edges) go white, not black.
+            img = flattened(img) ?? img
+        }
         CGImageDestinationAddImage(dest, img, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return data as Data
+    }
+
+    nonisolated static func flattened(_ img: CGImage) -> CGImage? {
+        guard let ctx = CGContext(data: nil, width: img.width, height: img.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: img.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        let r = CGRect(x: 0, y: 0, width: img.width, height: img.height)
+        ctx.setFillColor(.white)
+        ctx.fill(r)
+        ctx.draw(img, in: r)
+        return ctx.makeImage()
     }
 
     /// "Automatic" format: photos/gradients → JPEG, flat UI/text → PNG (heuristic: color variety on a downsample).

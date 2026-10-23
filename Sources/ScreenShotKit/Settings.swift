@@ -108,6 +108,11 @@ enum Settings {
         set { d.set(newValue.rgbaHex, forKey: Keys.windowBackgroundColor) }
     }
     static var urlSchemeEnabled: Bool { d.bool(forKey: Keys.urlScheme) }
+    /// Smart guides: snap shapes to the edges and centers of other objects and of the image (⌘ while dragging skips it).
+    static var snapToGuides: Bool {
+        get { d.object(forKey: "snapToGuides") as? Bool ?? true }
+        set { d.set(newValue, forKey: "snapToGuides") }
+    }
 
     /// App-only appearance: "system" follows macOS, "light" / "dark" override it for ScreenShot's windows.
     static var appearance: String { d.string(forKey: "appearance") ?? "system" }

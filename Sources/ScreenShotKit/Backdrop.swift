@@ -144,19 +144,26 @@ struct BackdropLayout {
     let canvas: CGSize
     /// The screenshot's top-left corner.
     let imageOrigin: CGPoint
-    /// The screenshot plus the inset frame.
+    /// Everything shown (the screenshot and objects past its edges) plus the inset frame.
     let content: CGRect
+    /// Width of the inset frame, in canvas pixels.
+    let inset: CGFloat
     let innerRadius: CGFloat
     let outerRadius: CGFloat
     let shadowBlur: CGFloat
     /// How far `offset` can move the content on each axis (half of the free space).
     let travel: CGSize
 
-    init(_ b: Backdrop, imageSize s: CGSize) {
+    /// `contentRect` is what must be visible, in image coordinates: the image, grown to include objects drawn past its
+    /// edges (so it can start at negative coordinates).
+    init(_ b: Backdrop, imageSize: CGSize, contentRect: CGRect? = nil) {
+        let area = contentRect ?? CGRect(origin: .zero, size: imageSize)
+        let s = area.size
         guard b.isOn else {
             canvas = s
-            imageOrigin = .zero
+            imageOrigin = CGPoint(x: -area.minX, y: -area.minY)
             content = CGRect(origin: .zero, size: s)
+            inset = 0
             innerRadius = 0
             outerRadius = 0
             shadowBlur = 0
@@ -176,7 +183,8 @@ struct BackdropLayout {
         let o = CGPoint(x: (travel.width * (1 + max(-1, min(1, b.offset.x)))).rounded(),
                         y: (travel.height * (1 + max(-1, min(1, b.offset.y)))).rounded())
         content = CGRect(origin: o, size: contentSize)
-        imageOrigin = CGPoint(x: o.x + ins, y: o.y + ins)
+        inset = ins
+        imageOrigin = CGPoint(x: o.x + ins - area.minX, y: o.y + ins - area.minY)
         innerRadius = b.innerRadius * long
         outerRadius = b.outerRadius * min(size.width, size.height)
         shadowBlur = max(pad, long * 0.04) * 0.5

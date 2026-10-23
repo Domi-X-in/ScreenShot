@@ -37,7 +37,7 @@ import AppKit
         let selfTests: [() -> Bool] = [
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
-            AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested,
+            AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested, ShapesSelfTest.runIfRequested,
         ]
         if selfTests.contains(where: { $0() }) { return }
         if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
@@ -181,6 +181,7 @@ import AppKit
             .separator(),
             mi("Recognize Text or QR", "recognizeText:", "o"),
         ])
+        submenu("Arrange", ArrangeMenu.items(includeSnap: true))
         submenu("View", [
             mi("Zoom In", "zoomIn:", "="),
             mi("Zoom Out", "zoomOut:", "-"),

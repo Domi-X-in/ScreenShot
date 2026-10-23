@@ -267,8 +267,9 @@ final class TextIndex: @unchecked Sendable {
                                      kCGImageSourceCreateThumbnailWithTransform: true]
         guard let img = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
         let req = VNRecognizeTextRequest()
-        req.recognitionLevel = .fast
-        req.usesLanguageCorrection = false
+        // Accurate, not fast: it runs in the background once per file, and search is only as good as what it reads.
+        req.recognitionLevel = .accurate
+        req.usesLanguageCorrection = true
         VisionGate.perform([req], on: img)
         return (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
     }

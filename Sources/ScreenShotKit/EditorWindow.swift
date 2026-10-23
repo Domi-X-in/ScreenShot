@@ -87,6 +87,7 @@ import UniformTypeIdentifiers
         options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
         options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
         options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
+        options.onArrangePanel = { [weak self] anchor in self?.showArrangePanel(from: anchor) }
         options.onCutOutMode = { [weak self] on in
             self?.shotView.cutOutMode = on
             self?.window?.makeFirstResponder(self?.shotView)
@@ -173,7 +174,8 @@ import UniformTypeIdentifiers
     func syncToolbar() {
         toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
         cropButton.isOn = shotView.tool == .crop
-        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.style, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.style, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
+                       selectionCount: shotView.selection.count)
         updateInfo()
     }
 
@@ -218,6 +220,11 @@ import UniformTypeIdentifiers
     func showBackdropPanel(from anchor: NSView) {
         let panel = BackdropPanelView(backdrop: doc.backdrop) { [weak self] b in self?.shotView.setBackdrop(b) }
         backdropPanel = panel
+        present(panel, from: anchor)
+    }
+
+    func showArrangePanel(from anchor: NSView) {
+        let panel = ArrangePanelView(selectionCount: shotView.selection.count) { [weak self] action in self?.shotView.arrange(action) }
         present(panel, from: anchor)
     }
 
@@ -679,6 +686,9 @@ final class OptionsBar: NSView, NSMenuDelegate {
     var onCutOutMode: ((Bool) -> Void)?
     var onAutoadjust: (() -> Void)?
     var onImprint: (() -> Void)?
+    var onArrangePanel: ((NSView) -> Void)?
+    private lazy var arrangeButton = Self.smallButton("Arrange", symbol: "square.3.layers.3d", tooltip: "Align, distribute and order the selection",
+                                                      target: self, action: #selector(arrangeClicked))
     private lazy var autoadjustButton = Self.smallButton("Autoadjust", symbol: "viewfinder", tooltip: "Shrink the selection to the content (F)",
                                                          target: self, action: #selector(autoadjustClicked))
     private lazy var imprintButton = Self.smallButton("Imprint Size", symbol: "ruler", tooltip: "Stamp the selection's size on the image (I)",
@@ -793,7 +803,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
             c.refusesFirstResponder = true
         }
         wireDefaults()
-        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, calloutControl, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl,
+        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, arrangeButton, calloutControl, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl,
                                        unitControl, lensShapeControl, lensZoomControl, hint])
         left.spacing = 12
         left.alignment = .centerY
@@ -929,7 +939,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         }
     }
 
-    func update(tool: Tool, style s: ToolStyle, backdrop: Backdrop, cutOut: Bool = false) {
+    func update(tool: Tool, style s: ToolStyle, backdrop: Backdrop, cutOut: Bool = false, selectionCount: Int = 0) {
         style = s
         colorButton.image = Self.swatch(s.color, size: 24)
         widthSlider.doubleValue = Double(s.width)
@@ -951,6 +961,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         cropModeControl.isHidden = tool != .crop
         autoadjustButton.isHidden = tool != .crop || cutOut
         imprintButton.isHidden = tool != .crop || cutOut
+        arrangeButton.isHidden = selectionCount == 0
         arrowControl.isHidden = tool != .arrow
         dashControl.isHidden = ![.rect, .oval, .line].contains(tool) || s.sketch
         sketchControl.isHidden = ![.arrow, .rect, .oval, .line].contains(tool)
@@ -994,6 +1005,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
     @objc private func autoadjustClicked() { onAutoadjust?() }
     @objc private func imprintClicked() { onImprint?() }
+    @objc private func arrangeClicked() { onArrangePanel?(arrangeButton) }
 
     @objc private func cropModeChanged() {
         onCutOutMode?(cropModeControl.selectedSegment == 1)

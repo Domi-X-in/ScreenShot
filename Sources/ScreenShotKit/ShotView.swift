@@ -1,7 +1,7 @@
 import AppKit
 
 /// Editor canvas (Shottr's ShotView): draws the document and turns mouse/keyboard input into annotations.
-final class ShotView: NSView, NSTextFieldDelegate {
+final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     private enum Drag {
         case none
         case create
@@ -72,6 +72,10 @@ final class ShotView: NSView, NSTextFieldDelegate {
         }
     }
     private var cutStrip: CutOut.Strip?
+    /// Smart guides for the drag in progress: what can be snapped to, and the lines shown right now.
+    private var snapper: SmartGuides?
+    private(set) var guides: [SmartGuides.Guide] = []
+    private var snapDisabled = false
     /// Holding 1 or 2 measures the area under the pointer; a quick tap picks the Ruler tool instead.
     private var measuring: Measure.Mode?
     private var measureKeyDown = Date.distantPast
@@ -212,7 +216,8 @@ final class ShotView: NSView, NSTextFieldDelegate {
         ctx.addPath(sheetPath)
         ctx.fillPath()
         ctx.restoreGState()
-        if doc.hasAlpha && !doc.backdrop.isOn {
+        // Transparent pixels (window captures, or the area around objects drawn past the screenshot) show a checkerboard.
+        if (doc.hasAlpha || doc.contentRect != doc.imageRect) && !doc.backdrop.isOn {
             // Transparent pixels show a checkerboard, like other image editors.
             let cell: CGFloat = 8
             ctx.saveGState()
@@ -234,9 +239,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
         ctx.interpolationQuality = z >= 1 ? .none : .high
         // While typing, plain text is hidden (the field shows it); a callout keeps its bubble and hides only its text.
         let editingKind = editingID.flatMap { id in doc.objects.first { $0.id == id }?.kind }
-        Renderer.render(doc, in: ctx, extra: live, hiddenID: editingKind == .callout ? nil : editingID, selectedIDs: selection,
+        let keepsBody = editingKind == .callout || editingKind == .rect || editingKind == .oval
+        Renderer.render(doc, in: ctx, extra: live, hiddenID: keepsBody ? nil : editingID, selectedIDs: selection,
                         cropRect: tool == .crop ? cropRect : nil, cutStrip: tool == .crop ? cutStrip : nil, hairline: 1 / z, interactive: true,
-                        textHiddenID: editingKind == .callout ? editingID : nil)
+                        textHiddenID: keepsBody ? editingID : nil)
+        drawGuides(ctx)
         if let mode = measuring, let hp = hoverPixel, let span = Measure.span(at: Int(hp.x), Int(hp.y), in: doc.pixels) {
             let io = Renderer.imageOrigin(doc)
             ctx.saveGState()
@@ -477,6 +484,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
         let wasEditing = textField != nil
         dragMoved = false
         commitText()
+        // The canvas keeps its size during the drag; it grows or shrinks to the content when the mouse comes up.
+        doc.frozenContentRect = doc.contentRect
+        guides = []
+        snapDisabled = event.modifierFlags.contains(.command) || !Settings.snapToGuides
+        snapper = nil
         window?.makeFirstResponder(self)
         let p = toImage(convert(event.locationInWindow, from: nil))
 
@@ -554,6 +566,10 @@ final class ShotView: NSView, NSTextFieldDelegate {
                 beginTextEdit(id: o.id)
                 return
             }
+            if o.holdsTextInShape, event.clickCount == 2 {
+                beginTextEdit(id: o.id)
+                return
+            }
             pushUndo()
             drag = .move(start: p, original: o, index: i)
             needsDisplay = true
@@ -591,10 +607,119 @@ final class ShotView: NSView, NSTextFieldDelegate {
             // Selected right away so typing digits renumbers it.
             selectedID = a.id
         default:
-            live = Annotation(kind: tool, p1: p, p2: p, points: [p], style: style)
+            // Shapes start on a guide when the press is close to one.
+            let start = tool == .freehand ? p : snapPoint(p, excluding: [])
+            live = Annotation(kind: tool, p1: start, p2: start, points: [start], style: style)
             drag = .create
         }
         needsDisplay = true
+    }
+
+    // MARK: Smart guides
+
+    private func makeSnapper(excluding ids: Set<UUID>) -> SmartGuides {
+        SmartGuides(targets: [doc.imageRect] + doc.objects.filter { !ids.contains($0.id) && $0.kind != .crop }.map(\.bounds))
+    }
+
+    /// Snap distance: a few screen points, whatever the zoom.
+    private var snapThreshold: CGFloat { 6 / zoom }
+
+    private func snapPoint(_ p: CGPoint, excluding ids: Set<UUID>) -> CGPoint {
+        guard !snapDisabled else { guides = []; return p }
+        if snapper == nil { snapper = makeSnapper(excluding: ids) }
+        let (q, g) = snapper!.snap(point: p, threshold: snapThreshold)
+        guides = g
+        return q
+    }
+
+    /// The drag offset for objects whose bounds start at `box`, nudged so an edge or center lines up with a guide.
+    private func snapDelta(_ d: CGVector, box: CGRect, excluding ids: Set<UUID>) -> CGVector {
+        guard !snapDisabled else { guides = []; return d }
+        if snapper == nil { snapper = makeSnapper(excluding: ids) }
+        let (off, g) = snapper!.snap(rect: box.offsetBy(dx: d.dx, dy: d.dy), threshold: snapThreshold)
+        guides = g
+        return CGVector(dx: d.dx + off.dx, dy: d.dy + off.dy)
+    }
+
+    private func drawGuides(_ ctx: CGContext) {
+        guard !guides.isEmpty else { return }
+        let z = zoom, io = Renderer.imageOrigin(doc)
+        ctx.saveGState()
+        ctx.translateBy(x: io.x, y: io.y)
+        ctx.setStrokeColor(NSColor(hex: 0xFF2D95).cgColor)
+        ctx.setLineWidth(1 / z)
+        for g in guides {
+            if g.vertical {
+                ctx.move(to: CGPoint(x: g.position, y: g.from - 8 / z)); ctx.addLine(to: CGPoint(x: g.position, y: g.to + 8 / z))
+            } else {
+                ctx.move(to: CGPoint(x: g.from - 8 / z, y: g.position)); ctx.addLine(to: CGPoint(x: g.to + 8 / z, y: g.position))
+            }
+        }
+        ctx.strokePath()
+        ctx.restoreGState()
+    }
+
+    // MARK: Arrange
+
+    /// Align, distribute or restack the selection (one object aligns to the image).
+    func arrange(_ action: ArrangeAction) {
+        commitText()
+        guard selection.count >= action.minimumSelection else { NSSound.beep(); return }
+        let before = doc.objects
+        let after = Arrange.apply(action, to: before, selected: selection, reference: doc.imageRect)
+        guard after.map(\.id) != before.map(\.id) || zip(after, before).contains(where: { $0.p1 != $1.p1 || $0.p2 != $1.p2 }) else { return }
+        pushUndo()
+        doc.objects = after
+        controller?.documentChanged(resized: true)
+        scanTextRegions()
+        needsDisplay = true
+    }
+
+    @objc func arrangeFromMenu(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let a = ArrangeAction(rawValue: raw) else { return }
+        arrange(a)
+    }
+
+    /// Right-click on an object: edit its text, arrange, align, duplicate or delete (PowerPoint's shape menu).
+    override func menu(for event: NSEvent) -> NSMenu? {
+        commitText()
+        let p = toImage(convert(event.locationInWindow, from: nil))
+        guard let i = hitIndex(p) else { return nil }
+        let id = doc.objects[i].id
+        if !selection.contains(id) { setSelection([id], primary: id) }
+        let m = NSMenu()
+        let o = doc.objects[i]
+        if selection.count == 1, o.holdsTextInShape || o.kind == .text || o.kind == .callout {
+            let edit = NSMenuItem(title: o.text.isEmpty ? "Add Text" : "Edit Text", action: #selector(editSelectedText(_:)), keyEquivalent: "\r")
+            edit.keyEquivalentModifierMask = []
+            m.addItem(edit)
+            m.addItem(.separator())
+        }
+        ArrangeMenu.items(includeSnap: false).forEach { m.addItem($0) }
+        m.addItem(.separator())
+        m.addItem(NSMenuItem(title: "Duplicate", action: #selector(duplicate(_:)), keyEquivalent: "d"))
+        m.addItem(NSMenuItem(title: "Delete", action: #selector(delete(_:)), keyEquivalent: ""))
+        for item in m.items { item.target = self; item.submenu?.items.forEach { $0.target = self } }
+        return m
+    }
+
+    @objc func editSelectedText(_ sender: Any?) {
+        if let id = selectedID { beginTextEdit(id: id) }
+    }
+
+    @objc func toggleSnapToGuides(_ sender: Any?) {
+        Settings.snapToGuides.toggle()
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(arrangeFromMenu(_:)), let raw = item.representedObject as? String, let a = ArrangeAction(rawValue: raw) {
+            return selection.count >= a.minimumSelection
+        }
+        if item.action == #selector(toggleSnapToGuides(_:)) {
+            item.state = Settings.snapToGuides ? .on : .off
+            return true
+        }
+        return true
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -609,11 +734,13 @@ final class ShotView: NSView, NSTextFieldDelegate {
             if l.kind == .freehand {
                 l.points.append(raw)
             } else {
-                l.p2 = constrained(l.p1, raw, l.kind, shift)
+                // Shift constrains angles and squares; otherwise the corner snaps to guides.
+                l.p2 = shift ? constrained(l.p1, raw, l.kind, shift) : snapPoint(raw, excluding: [])
             }
             live = l
         case let .move(start, original, index):
             guard index < doc.objects.count else { return }
+            let raw = start + snapDelta(raw - start, box: original.bounds, excluding: [original.id])
             var o = original
             if o.kind == .callout {
                 // Moving the bubble keeps its pointer on the same target.
@@ -649,9 +776,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
             controller?.updateInfo()
         case let .resize(handle, original, index):
             guard index < doc.objects.count else { return }
-            doc.objects[index] = resized(original, handle: handle, to: raw, shift: shift)
+            let p = shift ? raw : snapPoint(raw, excluding: [original.id])
+            doc.objects[index] = resized(original, handle: handle, to: p, shift: shift)
         case let .moveMany(start, originals, _):
-            let d = raw - start
+            let box = originals.dropFirst().reduce(originals.first?.1.bounds ?? .zero) { $0.union($1.1.bounds) }
+            let d = snapDelta(raw - start, box: box, excluding: Set(originals.map(\.1.id)))
             for (i, o) in originals where i < doc.objects.count {
                 var m = o
                 m.offset(by: d)
@@ -682,6 +811,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        defer {
+            refitContent()
+            guides = []
+            snapper = nil
+        }
         defer {
             // Drags edit after their undo point was recorded, so their end is the moment to save.
             switch drag {
@@ -745,6 +879,13 @@ final class ShotView: NSView, NSTextFieldDelegate {
         needsDisplay = true
     }
 
+    /// Lets the canvas follow the content again after a drag; refits the view if its size changed.
+    private func refitContent() {
+        guard let frozen = doc.frozenContentRect else { return }
+        doc.frozenContentRect = nil
+        if doc.contentRect != frozen { controller?.documentChanged(resized: true) }
+    }
+
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {
@@ -765,7 +906,12 @@ final class ShotView: NSView, NSTextFieldDelegate {
             else { controller?.escape() }
             return
         case 36, 76: // Return
-            if tool == .crop { cutOutMode ? applyCutOut() : applyCrop() }
+            if tool == .crop { cutOutMode ? applyCutOut() : applyCrop(); return }
+            // Return on one selected rectangle, oval, text or callout starts typing in it (like PowerPoint).
+            if selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }),
+               o.holdsTextInShape || o.kind == .text || o.kind == .callout {
+                beginTextEdit(id: id)
+            }
             return
         case 51, 117: // Delete
             if Int(event.keyCode) == 51, eraseCounterDigit() { return }
@@ -1203,6 +1349,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
     }
 
     #if SCREENSHOT_SELFTESTS
+    func debugShowGuides(_ g: [SmartGuides.Guide], select ids: Set<UUID>) {
+        guides = g
+        setSelection(ids, primary: ids.first)
+    }
+
     func debugMeasure(_ mode: Measure.Mode?, at p: CGPoint) {
         measuring = mode
         hoverPixel = p
@@ -1243,9 +1394,12 @@ final class ShotView: NSView, NSTextFieldDelegate {
         tf.focusRingType = .none
         // Rich field: letters selected with Shift+arrows can get their own color, size and font.
         tf.allowsEditingTextAttributes = true
-        tf.font = o.font.font(size: o.fontSize * zoom)
+        let fontSize = o.holdsTextInShape ? o.shapeFontSize : o.fontSize
+        tf.font = o.font.font(size: fontSize * zoom)
         tf.textColor = o.baseTextColor
-        if o.kind == .callout { tf.drawsBackground = false } // the bubble drawn underneath is the background
+        // The bubble or shape drawn underneath is the background.
+        if o.kind == .callout || o.holdsTextInShape { tf.drawsBackground = false }
+        if o.holdsTextInShape { tf.alignment = .center }
         if !o.text.isEmpty { tf.attributedStringValue = o.attributedText(scale: zoom) }
         tf.delegate = self
         tf.cell?.wraps = false
@@ -1260,7 +1414,7 @@ final class ShotView: NSView, NSTextFieldDelegate {
         }
         window?.makeFirstResponder(tf)
         if let editor = tf.currentEditor() as? NSTextView {
-            editor.typingAttributes = [.font: o.font.font(size: o.fontSize * zoom), .foregroundColor: o.baseTextColor]
+            editor.typingAttributes = [.font: o.font.font(size: fontSize * zoom), .foregroundColor: o.baseTextColor]
         }
         needsDisplay = true
     }
@@ -1277,6 +1431,14 @@ final class ShotView: NSView, NSTextFieldDelegate {
         // Size from the styled content; setting the field's font here would wipe per-letter styles.
         let content = editingContent() ?? NSAttributedString()
         let size = content.length > 0 ? content.size() : .zero
+        if o.holdsTextInShape {
+            // Centered on the shape, growing both ways as you type.
+            let lineHeight = max(size.height, o.shapeFontSize * zoom * 1.2)
+            let c = fromImage(CGPoint(x: o.rect.midX, y: o.rect.midY))
+            let w = max(60, size.width + 30)
+            tf.frame = CGRect(x: c.x - w / 2, y: c.y - lineHeight * 0.54, width: w, height: ceil(lineHeight * 1.08))
+            return
+        }
         let lineHeight = max(size.height, o.fontSize * zoom * 1.2)
         let p = fromImage(o.textOrigin)
         tf.frame = CGRect(x: p.x - 2, y: p.y, width: max(80, size.width + 30), height: ceil(lineHeight * 1.08))
@@ -1304,7 +1466,8 @@ final class ShotView: NSView, NSTextFieldDelegate {
             editor.didChangeText()
         }
         editor.typingAttributes = editor.typingAttributes.merging(attrs) { $1 }
-        if selected.length == 0 {
+        // A shape's outline keeps its own color and width while its text is styled.
+        if selected.length == 0, !doc.objects[i].holdsTextInShape {
             doc.objects[i].color = s.color
             doc.objects[i].width = s.width
             doc.objects[i].font = s.font
@@ -1333,7 +1496,13 @@ final class ShotView: NSView, NSTextFieldDelegate {
         tf.removeFromSuperview()
         if let i = doc.objects.firstIndex(where: { $0.id == id }) {
             if content.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                doc.objects.remove(at: i)
+                // Emptying a shape's text leaves the shape; an empty text or callout is removed.
+                if doc.objects[i].holdsTextInShape {
+                    doc.objects[i].text = ""
+                    doc.objects[i].runs = nil
+                } else {
+                    doc.objects.remove(at: i)
+                }
             } else {
                 doc.objects[i].setText(from: content, scale: z)
             }
