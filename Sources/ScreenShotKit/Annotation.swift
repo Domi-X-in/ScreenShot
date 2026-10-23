@@ -595,14 +595,16 @@ struct Annotation {
         }
     }
 
-    func hit(_ p: CGPoint) -> Bool {
+    /// Whether a press at `p` grabs this object. `solid` lets a filled shape, or one with text, be grabbed anywhere
+    /// inside (the Select tool); drawing tools only grab edges, so you can draw on top of a box.
+    func hit(_ p: CGPoint, solid: Bool = true) -> Bool {
         let tol = max(8, width)
         switch kind {
         case .arrow, .line, .ruler:
             return p.distance(toSegment: p1, p2) <= tol
         case .rect, .oval:
             // A filled shape, or one with text in it, is solid to clicks; an empty outline only on its edge.
-            if fill != .none || !text.isEmpty {
+            if solid, fill != .none || !text.isEmpty {
                 return kind == .rect ? rect.insetBy(dx: -tol, dy: -tol).contains(p) : CGPath(ellipseIn: rect.insetBy(dx: -tol, dy: -tol), transform: nil).contains(p)
             }
             let outer = rect.insetBy(dx: -tol, dy: -tol), inner = rect.insetBy(dx: tol, dy: tol)
@@ -620,6 +622,15 @@ struct Annotation {
 
     func hitLens(_ p: CGPoint) -> Bool {
         kind == .magnifier && lensShape.path(lensRect.insetBy(dx: -width, dy: -width)).contains(p)
+    }
+
+    /// The shape's own geometry, without the stroke: what alignment and smart guides line up (PowerPoint aligns shapes,
+    /// not their outlines).
+    var frame: CGRect {
+        switch kind {
+        case .rect, .oval, .blur, .highlighter, .spotlight, .image, .magnifier, .crop, .arrow, .line, .ruler: rect
+        default: bounds
+        }
     }
 
     /// The area an object paints (`bounds` already includes the stroke); nil for effects tied to the image's own pixels.

@@ -72,6 +72,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
     }
     private var cutStrip: CutOut.Strip?
+    /// The rectangle or oval drawn last, until anything else happens (Return types in it).
+    private var justDrawnID: UUID?
     /// Smart guides for the drag in progress: what can be snapped to, and the lines shown right now.
     private var snapper: SmartGuides?
     private(set) var guides: [SmartGuides.Guide] = []
@@ -477,13 +479,14 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     }
 
     private func hitIndex(_ p: CGPoint) -> Int? {
-        doc.objects.indices.reversed().first { doc.objects[$0].hit(p) }
+        doc.objects.indices.reversed().first { doc.objects[$0].hit(p, solid: tool == .select) }
     }
 
     override func mouseDown(with event: NSEvent) {
         let wasEditing = textField != nil
         dragMoved = false
         commitText()
+        justDrawnID = nil
         // The canvas keeps its size during the drag; it grows or shrinks to the content when the mouse comes up.
         doc.frozenContentRect = doc.contentRect
         guides = []
@@ -618,7 +621,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     // MARK: Smart guides
 
     private func makeSnapper(excluding ids: Set<UUID>) -> SmartGuides {
-        SmartGuides(targets: [doc.imageRect] + doc.objects.filter { !ids.contains($0.id) && $0.kind != .crop }.map(\.bounds))
+        SmartGuides(targets: [doc.imageRect] + doc.objects.filter { !ids.contains($0.id) && $0.kind != .crop }.map(\.frame))
     }
 
     /// Snap distance: a few screen points, whatever the zoom.
@@ -740,7 +743,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             live = l
         case let .move(start, original, index):
             guard index < doc.objects.count else { return }
-            let raw = start + snapDelta(raw - start, box: original.bounds, excluding: [original.id])
+            let raw = start + snapDelta(raw - start, box: original.frame, excluding: [original.id])
             var o = original
             if o.kind == .callout {
                 // Moving the bubble keeps its pointer on the same target.
@@ -779,7 +782,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             let p = shift ? raw : snapPoint(raw, excluding: [original.id])
             doc.objects[index] = resized(original, handle: handle, to: p, shift: shift)
         case let .moveMany(start, originals, _):
-            let box = originals.dropFirst().reduce(originals.first?.1.bounds ?? .zero) { $0.union($1.1.bounds) }
+            let box = originals.dropFirst().reduce(originals.first?.1.frame ?? .zero) { $0.union($1.1.frame) }
             let d = snapDelta(raw - start, box: box, excluding: Set(originals.map(\.1.id)))
             for (i, o) in originals where i < doc.objects.count {
                 var m = o
@@ -850,9 +853,12 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
                 if o.kind == .magnifier {
                     let size = CGSize(width: o.rect.width * o.factor, height: o.rect.height * o.factor)
                     o.lensCenter = Annotation.defaultLensCenter(source: o.rect, lensSize: size, bounds: doc.imageRect)
-                    selectedID = o.id
                 }
                 doc.objects.append(o)
+                if o.kind == .magnifier { selectedID = o.id }
+                // Return right after drawing a rectangle or oval types in it. It isn't selected, so picking another
+                // color for the next shape doesn't recolor this one.
+                justDrawnID = o.holdsTextInShape ? o.id : nil
             }
             needsDisplay = true
         }
@@ -907,11 +913,13 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             return
         case 36, 76: // Return
             if tool == .crop { cutOutMode ? applyCutOut() : applyCrop(); return }
-            // Return on one selected rectangle, oval, text or callout starts typing in it (like PowerPoint).
-            if selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }),
-               o.holdsTextInShape || o.kind == .text || o.kind == .callout {
+            // Return on one selected rectangle, oval, text or callout, or on the shape just drawn, types in it.
+            let target = selection.count == 1 ? selectedID : (selection.isEmpty ? justDrawnID : nil)
+            if let id = target, let o = doc.objects.first(where: { $0.id == id }), o.holdsTextInShape || o.kind == .text || o.kind == .callout {
+                selectedID = id
                 beginTextEdit(id: id)
             }
+            justDrawnID = nil
             return
         case 51, 117: // Delete
             if Int(event.keyCode) == 51, eraseCounterDigit() { return }
@@ -1290,6 +1298,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
               let cropped = doc.image.cropping(to: r) else { return }
         pushUndo()
         doc.image = cropped
+        // Objects entirely outside the kept area go; the rest move with it.
+        doc.objects.removeAll { o in (o.visualBounds ?? o.bounds).intersection(r).isNull }
         let d = CGVector(dx: -r.minX, dy: -r.minY)
         for i in doc.objects.indices { doc.objects[i].offset(by: d) }
         cropRect = nil
@@ -1508,7 +1518,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             }
             markChanged()
         }
-        if window?.firstResponder == nil || window?.firstResponder is NSText { window?.makeFirstResponder(self) }
+        // Keyboard shortcuts work again right away (focus can be left on the window when the field goes away).
+        let fr = window?.firstResponder
+        if fr == nil || fr is NSText || fr === window || fr === tf { window?.makeFirstResponder(self) }
         needsDisplay = true
     }
 

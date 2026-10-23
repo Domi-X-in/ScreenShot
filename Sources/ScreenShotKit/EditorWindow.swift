@@ -223,6 +223,11 @@ import UniformTypeIdentifiers
         present(panel, from: anchor)
     }
 
+    #if SCREENSHOT_SELFTESTS
+    var debugInfo: InfoCellsView { info }
+    var debugRecent: RecentStrip { recent }
+    #endif
+
     func showArrangePanel(from anchor: NSView) {
         let panel = ArrangePanelView(selectionCount: shotView.selection.count) { [weak self] action in self?.shotView.arrange(action) }
         present(panel, from: anchor)

@@ -99,7 +99,7 @@ enum Arrange {
         var out = objects
         let idx = objects.indices.filter { selected.contains(objects[$0].id) }
         guard idx.count >= action.minimumSelection else { return objects }
-        let boxes = idx.map { objects[$0].bounds }
+        let boxes = idx.map { objects[$0].frame }
         let target = idx.count == 1 ? reference : boxes.dropFirst().reduce(boxes[0]) { $0.union($1) }
 
         func move(_ i: Int, dx: CGFloat = 0, dy: CGFloat = 0) {
