@@ -26,7 +26,7 @@ run_suite() { # name, env var
     if [ "$fail" -gt 0 ] || [ "$pass" -eq 0 ]; then FAILED=1; fi
 }
 
-for s in SELECT TEXT TEXTSTYLE CALLOUT INFO APPEARANCE DEFAULTS PHASE3; do run_suite "$s" "SCREENSHOT_SELFTEST_$s"; done
+for s in SELECT TEXT TEXTSTYLE CALLOUT INFO APPEARANCE DEFAULTS PHASE3 ONBOARDING; do run_suite "$s" "SCREENSHOT_SELFTEST_$s"; done
 
 # Auto-save and same-window switching work on two files in the save folder.
 mkdir -p "$WORK/AUTOSAVE"; cp "$IMG" "$WORK/AUTOSAVE/a.png"; sleep 1; cp "$IMG" "$WORK/AUTOSAVE/b.png"

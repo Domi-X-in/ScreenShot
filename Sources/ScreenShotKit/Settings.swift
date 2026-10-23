@@ -25,6 +25,8 @@ enum Keys {
     static let windowBackground = "windowBackground"
     static let windowBackgroundColor = "windowBackgroundColor"
     static let urlScheme = "urlSchemeEnabled"
+    static let onboardingDone = "onboardingDone"
+    static let onboardingPage = "onboardingPage"
 }
 
 enum Settings {

@@ -70,7 +70,7 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 - [ ] **Orden de capas**: Traer al frente / Enviar al fondo; alinear y distribuir varios objetos.
 - [ ] **Auto-censura**: un clic desenfoca todos los emails, teléfonos y números de tarjeta que encuentre el OCR.
 - [ ] **Menú Compartir** (Mail, Mensajes, AirDrop) junto a Copiar / Guardar / Fijar.
-- [ ] **Guía de primer uso**: permisos y atajos.
+- [x] **Guía de primer uso**: ventana animada de 6 pasos (bienvenida, demo animada de captura y anotación, permiso de Grabación de pantalla con estado en vivo, carpeta y qué hacer tras cada captura, atajos como teclas, confeti y "Take My First Screenshot"). Se reanuda en su paso si macOS reinicia la app; se reabre desde el menú (Welcome Guide…).
 - [ ] **Interfaz en español** (localización completa, con el inglés como alternativa).
 
 ## Fase 5 — Distribución 🟢

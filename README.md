@@ -6,6 +6,10 @@ A recreation of [Shottr](https://shottr.cc) 1.9.3 (`cc.ffitch.shottr`) for macOS
 
 Download `ScreenShot-<version>.zip` (versions are dates: `261023.1` is the first release of 23 Oct 2026) from [Releases](https://github.com/Domi-X-in/ScreenShot/releases/latest), unzip it and move **ScreenShot** to Applications. The app is not notarized yet, so the first launch is blocked with *"ScreenShot.app" Not Opened*: click **Done** (not Move to Trash), then open **System Settings › Privacy & Security** and click **Open Anyway** (it shows for about an hour after the blocked launch). Right-click › Open no longer skips this check on macOS 15 and later. In Terminal, `xattr -dr com.apple.quarantine /Applications/ScreenShot.app` does the same. After that, new versions install themselves: the app checks GitHub once a day, and **Check for Updates…** is in the menu bar icon and in Preferences › Advanced.
 
+## First launch
+
+A welcome guide opens the first time: what the app does (with a live demo of a capture being marked up), Screen Recording permission with a status that turns green when it's granted, the Screenshots folder and what happens after each capture, the shortcuts, and a button to take the first screenshot. If macOS quits the app to apply the permission, the guide resumes where it was. **Welcome Guide…** in the menu bar menu opens it again.
+
 ## Build and run
 
 ```bash

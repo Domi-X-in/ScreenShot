@@ -37,7 +37,7 @@ import AppKit
         let selfTests: [() -> Bool] = [
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
-            AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested,
+            AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested,
         ]
         if selfTests.contains(where: { $0() }) { return }
         if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
@@ -45,7 +45,12 @@ import AppKit
             return
         }
         #endif
-        Capturer.requestPermissionOnFirstLaunch()
+        // First launch: the welcome guide explains and asks for Screen Recording itself.
+        if OnboardingWindowController.isDone {
+            Capturer.requestPermissionOnFirstLaunch()
+        } else {
+            OnboardingWindowController.show()
+        }
         Updates.shared.start()
     }
 
@@ -89,6 +94,7 @@ import AppKit
         library.keyEquivalent = "l"
         menu.addItem(library)
         menu.addItem(.separator())
+        menu.addItem(item("Welcome Guide…", #selector(showWelcome)))
         let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
         update.target = Updates.shared
         menu.addItem(update)
@@ -114,6 +120,7 @@ import AppKit
     @objc private func loadClipboard() { AppLogic.shared.loadFromClipboard() }
     @objc private func openImage() { AppLogic.shared.chooseFile() }
     @objc func showLibrary() { LibraryWindowController.show() }
+    @objc func showWelcome() { OnboardingWindowController.show(from: 0) }
 
     @objc func showPreferences() {
         if prefs == nil { prefs = PreferencesWindowController() }
