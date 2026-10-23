@@ -8,7 +8,7 @@ final class RecentStrip: NSView {
     var currentURL: URL? { didSet { highlight() } }
     /// Thumbnail click: the editor shows that file in the same window.
     var onSelect: ((URL) -> Void)?
-    /// Folder button: pick an older file to show in the same window.
+    /// Folder button: opens the Library with every screenshot.
     var onBrowse: (() -> Void)?
     private let row = NSStackView()
     private let empty = NSTextField(labelWithString: "Every screenshot you save appears here.")
@@ -270,7 +270,7 @@ private final class RecentTile: NSView {
     @objc private func reveal() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 }
 
-/// "Older…" tile at the end of the strip: a dashed card that opens the folder picker.
+/// "Library" tile at the end of the strip: a dashed card that opens the Library.
 private final class BrowseTile: NSView {
     private let action: () -> Void
     private let dash = CAShapeLayer()
@@ -284,14 +284,14 @@ private final class BrowseTile: NSView {
         dash.lineWidth = 1.2
         dash.lineDashPattern = [4, 3]
         layer?.addSublayer(dash)
-        toolTip = "Open an older screenshot from the Screenshots folder"
+        toolTip = "Library: every screenshot, with search"
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Open an older screenshot")
-        let icon = NSImageView(image: NSImage(systemSymbolName: "folder", accessibilityDescription: "Open folder")!
+        setAccessibilityLabel("Open the Library")
+        let icon = NSImageView(image: NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: "Library")!
             .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))!)
         icon.contentTintColor = .secondaryLabelColor
-        let label = NSTextField(labelWithString: "Older…")
+        let label = NSTextField(labelWithString: "Library")
         label.font = .systemFont(ofSize: 10, weight: .medium)
         label.textColor = .tertiaryLabelColor
         for v in [icon, label] as [NSView] {

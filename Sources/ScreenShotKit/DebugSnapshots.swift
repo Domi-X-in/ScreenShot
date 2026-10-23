@@ -82,6 +82,11 @@ import AppKit
                 ed.showBackdropPanel(from: pill)
                 return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) }
             }),
+            ("library", {
+                for i in 0..<5 { try? FileManager.default.copyItem(atPath: imagePath, toPath: scratch.appendingPathComponent("sample \(i).png").path) }
+                LibraryWindowController.show()
+                return LibraryWindowController.shared?.window
+            }),
             ("prefs-general", { openPrefs(pane: 0) }),
             ("prefs-hotkeys", { openPrefs(pane: 1) }),
             ("prefs-advanced", { openPrefs(pane: 2) }),

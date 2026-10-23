@@ -83,7 +83,7 @@ import UniformTypeIdentifiers
 
         options.onChange = { [weak self] style in self?.shotView.setStyle(style) }
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
-        recent.onBrowse = { [weak self] in self?.browseFolder() }
+        recent.onBrowse = { LibraryWindowController.show() }
         options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
         options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
         options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
@@ -405,16 +405,6 @@ import UniformTypeIdentifiers
         syncToolbar()
         updateInfo()
         window?.makeFirstResponder(shotView)
-    }
-
-    private func browseFolder() {
-        guard let win = window else { return }
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.directoryURL = doc.fileURL?.deletingLastPathComponent() ?? Settings.saveFolder
-        panel.beginSheetModal(for: win) { [weak self] resp in
-            if resp == .OK, let url = panel.url { self?.switchTo(url) }
-        }
     }
 
     func scheduleAutosave() {

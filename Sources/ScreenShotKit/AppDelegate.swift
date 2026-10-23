@@ -84,6 +84,9 @@ import AppKit
         menu.addItem(.separator())
         menu.addItem(item("Load From Clipboard", #selector(loadClipboard)))
         menu.addItem(item("Open Image…", #selector(openImage)))
+        let library = item("Library…", #selector(showLibrary))
+        library.keyEquivalent = "l"
+        menu.addItem(library)
         menu.addItem(.separator())
         let prefs = item("Preferences…", #selector(showPreferences))
         prefs.keyEquivalent = ","
@@ -106,6 +109,7 @@ import AppKit
 
     @objc private func loadClipboard() { AppLogic.shared.loadFromClipboard() }
     @objc private func openImage() { AppLogic.shared.chooseFile() }
+    @objc func showLibrary() { LibraryWindowController.show() }
 
     @objc func showPreferences() {
         if prefs == nil { prefs = PreferencesWindowController() }
@@ -135,7 +139,11 @@ import AppKit
         let prefs = NSMenuItem(title: "Preferences…", action: #selector(showPreferences), keyEquivalent: ",")
         prefs.target = self
         submenu("ScreenShot", [prefs, .separator(), mi("Hide ScreenShot", "hide:", "h"), .separator(), mi("Quit ScreenShot", "terminate:", "q")])
+        let library = NSMenuItem(title: "Library…", action: #selector(showLibrary), keyEquivalent: "l")
+        library.target = self
         submenu("File", [
+            library,
+            .separator(),
             mi("Save", "saveDocument:", "s"),
             mi("Save As…", "saveDocumentAs:", "s", [.command, .shift]),
             mi("Pin", "pinImage:", "p"),
