@@ -180,6 +180,8 @@ struct ToolStyle: Equatable {
     var width: CGFloat = 4
     var arrow: ArrowStyle = .tapered
     var dashed = false
+    /// Hand-drawn strokes for arrows, lines and shapes.
+    var sketch = false
     var fill: FillStyle = .none
     var blur: BlurMode = .blur
     var font: TextFont = .sans
@@ -198,6 +200,7 @@ struct ToolStyle: Equatable {
         if let v = d["width"] as? Double { s.width = CGFloat(v) }
         if let v = d["arrow"] as? Int, let x = ArrowStyle(rawValue: v) { s.arrow = x }
         if let v = d["dashed"] as? Bool { s.dashed = v }
+        if let v = d["sketch"] as? Bool { s.sketch = v }
         if let v = d["fill"] as? Int, let x = FillStyle(rawValue: v) { s.fill = x }
         if let v = d["blur"] as? Int, let x = BlurMode(rawValue: v) { s.blur = x }
         if let v = d["font"] as? Int, let x = TextFont(rawValue: v) { s.font = x }
@@ -211,7 +214,7 @@ struct ToolStyle: Equatable {
 
     func saveAsDefaults() {
         UserDefaults.standard.set([
-            "color": color.rgbaHex, "width": Double(width), "arrow": arrow.rawValue, "dashed": dashed, "fill": fill.rawValue,
+            "color": color.rgbaHex, "width": Double(width), "arrow": arrow.rawValue, "dashed": dashed, "sketch": sketch, "fill": fill.rawValue,
             "blur": blur.rawValue, "font": font.rawValue, "counterShape": counterShape.rawValue, "rulerInPoints": rulerInPoints,
             "lensShape": lensShape.rawValue, "magnification": Double(magnification), "callout": callout.rawValue,
         ] as [String: Any], forKey: Self.defaultsKey)
@@ -309,6 +312,7 @@ struct Annotation {
     var tailAngle: CGFloat = 3 * .pi / 4
     var arrowStyle: ArrowStyle = .tapered
     var dashed = false
+    var sketch = false
     var fill: FillStyle = .none
     var blurMode: BlurMode = .blur
     var font: TextFont = .sans
@@ -347,6 +351,7 @@ struct Annotation {
         width = s.width
         arrowStyle = s.arrow
         dashed = s.dashed
+        sketch = s.sketch
         fill = s.fill
         blurMode = s.blur
         font = s.font
@@ -742,7 +747,7 @@ extension Annotation {
 
 extension Annotation: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, kind, p1, p2, points, color, width, text, number, shape, tailAngle, arrowStyle, dashed, fill, blurMode, font
+        case id, kind, p1, p2, points, color, width, text, number, shape, tailAngle, arrowStyle, dashed, sketch, fill, blurMode, font
         case rulerInPoints, factor, lensShape, lensCenter, textRects, imageData, runs, calloutStyle, pointer
     }
 
@@ -762,6 +767,7 @@ extension Annotation: Codable {
         tailAngle = try c.decodeIfPresent(CGFloat.self, forKey: .tailAngle) ?? 3 * .pi / 4
         arrowStyle = try c.decodeIfPresent(ArrowStyle.self, forKey: .arrowStyle) ?? .tapered
         dashed = try c.decodeIfPresent(Bool.self, forKey: .dashed) ?? false
+        sketch = try c.decodeIfPresent(Bool.self, forKey: .sketch) ?? false
         fill = try c.decodeIfPresent(FillStyle.self, forKey: .fill) ?? .none
         blurMode = try c.decodeIfPresent(BlurMode.self, forKey: .blurMode) ?? .blur
         font = try c.decodeIfPresent(TextFont.self, forKey: .font) ?? .sans
@@ -793,6 +799,7 @@ extension Annotation: Codable {
         }
         try c.encode(arrowStyle, forKey: .arrowStyle)
         try c.encode(dashed, forKey: .dashed)
+        if sketch { try c.encode(sketch, forKey: .sketch) }
         try c.encode(fill, forKey: .fill)
         try c.encode(blurMode, forKey: .blurMode)
         try c.encode(font, forKey: .font)
@@ -1192,6 +1199,11 @@ enum Renderer {
             ctx.setLineDash(phase: 0, lengths: [o.width * 2.5, o.width * 1.6])
         }
 
+        if o.sketch, [.arrow, .line, .rect, .oval].contains(o.kind) {
+            drawSketch(o, ctx: ctx)
+            return
+        }
+
         switch o.kind {
         case .arrow:
             drawArrow(o, ctx: ctx)
@@ -1264,6 +1276,32 @@ enum Renderer {
         default:
             break
         }
+    }
+
+    /// Hand-drawn version of an arrow, line, rectangle or oval (fills stay clean underneath the strokes).
+    private static func drawSketch(_ o: Annotation, ctx: CGContext) {
+        let r = o.rect
+        if o.fill != .none, o.kind == .rect || o.kind == .oval {
+            ctx.addPath(o.kind == .rect ? CGPath(rect: r, transform: nil) : CGPath(ellipseIn: r, transform: nil))
+            ctx.setFillColor(o.color.withAlphaComponent(o.fill == .opaque ? 1 : 0.3).cgColor)
+            ctx.fillPath()
+        }
+        let path: CGPath
+        switch o.kind {
+        case .oval:
+            path = Sketch.ellipse(in: r, width: o.width, id: o.id)
+        case .rect:
+            let c = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY)]
+            path = Sketch.strokes([(c[0], c[1]), (c[1], c[2]), (c[2], c[3]), (c[3], c[0])], width: o.width, id: o.id)
+        case .arrow:
+            path = Sketch.strokes([(o.p1, o.p2)] + Sketch.arrowHead(from: o.p1, to: o.p2, width: o.width), width: o.width, id: o.id)
+        default:
+            path = Sketch.strokes([(o.p1, o.p2)], width: o.width, id: o.id)
+        }
+        // Each pass is a little thinner than the pen, so the doubled stroke reads as one marker line.
+        ctx.setLineWidth(max(1, o.width * 0.8))
+        ctx.addPath(path)
+        ctx.strokePath()
     }
 
     private static func drawArrow(_ o: Annotation, ctx: CGContext) {

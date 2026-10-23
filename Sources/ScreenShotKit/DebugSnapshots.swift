@@ -55,6 +55,21 @@ import AppKit
                 ed.shotView.debugMeasure(.box, at: CGPoint(x: CGFloat(ed.doc.image.width) * 0.3, y: CGFloat(ed.doc.image.height) * 0.2))
                 return editor
             }),
+            ("editor-sketch", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                let w = CGFloat(ed.doc.image.width), h = CGFloat(ed.doc.image.height)
+                ed.shotView.debugMeasure(nil, at: .zero)
+                var st = ed.shotView.style
+                st.sketch = true
+                st.width = 5
+                st.color = NSColor(hex: 0xFF3B30)
+                ed.doc.objects.append(Annotation(kind: .oval, p1: CGPoint(x: w * 0.55, y: h * 0.55), p2: CGPoint(x: w * 0.9, y: h * 0.9), style: st))
+                ed.doc.objects.append(Annotation(kind: .arrow, p1: CGPoint(x: w * 0.95, y: h * 0.4), p2: CGPoint(x: w * 0.8, y: h * 0.58), style: st))
+                st.color = NSColor(hex: 0x34C759)
+                ed.doc.objects.append(Annotation(kind: .rect, p1: CGPoint(x: w * 0.05, y: h * 0.55), p2: CGPoint(x: w * 0.45, y: h * 0.9), style: st))
+                ed.shotView.needsDisplay = true
+                return editor
+            }),
             ("editor-cutout", {
                 guard let ed = editor?.windowController as? EditorWindowController else { return nil }
                 let h = CGFloat(ed.doc.image.height)

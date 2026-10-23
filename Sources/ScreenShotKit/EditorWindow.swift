@@ -665,6 +665,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
     private let widthSlider = NSSlider(value: 4, minValue: 1, maxValue: 20, target: nil, action: nil)
     private let arrowControl = DefaultableSegmentedControl()
     private let dashControl = DefaultableSegmentedControl()
+    private let sketchControl = DefaultableSegmentedControl()
     private let fillControl = DefaultableSegmentedControl()
     private let blurControl = DefaultableSegmentedControl(labels: BlurMode.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
     private let fontControl = DefaultableSegmentedControl(labels: TextFont.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
@@ -681,6 +682,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         (calloutControl, { $0.callout = CalloutStyle(rawValue: $1) ?? .box }, { $0.callout.rawValue }),
         (arrowControl, { $0.arrow = ArrowStyle(rawValue: $1) ?? .tapered }, { $0.arrow.rawValue }),
         (dashControl, { $0.dashed = $1 == 1 }, { $0.dashed ? 1 : 0 }),
+        (sketchControl, { $0.sketch = $1 == 1 }, { $0.sketch ? 1 : 0 }),
         (fillControl, { $0.fill = FillStyle(rawValue: $1) ?? .none }, { $0.fill.rawValue }),
         (blurControl, { $0.blur = BlurMode(rawValue: $1) ?? .blur }, { $0.blur.rawValue }),
         (fontControl, { $0.font = TextFont(rawValue: $1) ?? .sans }, { $0.font.rawValue }),
@@ -724,6 +726,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
         Self.images(arrowControl, ArrowStyle.allCases.map { ($0.symbol, $0.title) })
         Self.images(dashControl, [("line.diagonal", "Solid Line"), ("line.horizontal.3.decrease", "Dashed Line")])
+        Self.images(sketchControl, [("pencil.line", "Clean Strokes"), ("scribble", "Hand-Drawn Strokes")])
         Self.images(fillControl, FillStyle.allCases.map { ($0.symbol, $0.title) })
         Self.images(shapeControl, CounterShape.allCases.map { ($0.symbol, $0.title) })
         Self.images(lensShapeControl, LensShape.allCases.map { ($0.symbol, $0.title) })
@@ -732,7 +735,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         blurControl.toolTip = "Blur or Erase (fills with the surrounding color)"
         unitControl.toolTip = "One logical point is equal two physical pixels on Retina displays."
         fontControl.toolTip = "Font"
-        for c in [arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl, unitControl, lensShapeControl, lensZoomControl,
+        for c in [arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl, unitControl, lensShapeControl, lensZoomControl,
                   calloutControl] {
             c.controlSize = .small
             c.target = self
@@ -760,12 +763,12 @@ final class OptionsBar: NSView, NSMenuDelegate {
         hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         // Clicking these must never take keyboard focus away from a text box being typed in.
-        for c in [colorButton, widthSlider, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl, unitControl,
+        for c in [colorButton, widthSlider, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl, unitControl,
                   lensShapeControl, lensZoomControl, calloutControl, cropModeControl] as [NSControl] {
             c.refusesFirstResponder = true
         }
         wireDefaults()
-        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, calloutControl, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl,
+        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, calloutControl, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl,
                                        unitControl, lensShapeControl, lensZoomControl, hint])
         left.spacing = 12
         left.alignment = .centerY
@@ -908,6 +911,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         sizeReadout.stringValue = "\(Int(s.width))"
         arrowControl.selectedSegment = s.arrow.rawValue
         dashControl.selectedSegment = s.dashed ? 1 : 0
+        sketchControl.selectedSegment = s.sketch ? 1 : 0
         fillControl.selectedSegment = s.fill.rawValue
         blurControl.selectedSegment = s.blur.rawValue
         fontControl.selectedSegment = s.font.rawValue
@@ -923,7 +927,8 @@ final class OptionsBar: NSView, NSMenuDelegate {
         autoadjustButton.isHidden = tool != .crop || cutOut
         imprintButton.isHidden = tool != .crop || cutOut
         arrowControl.isHidden = tool != .arrow
-        dashControl.isHidden = ![.rect, .oval, .line].contains(tool)
+        dashControl.isHidden = ![.rect, .oval, .line].contains(tool) || s.sketch
+        sketchControl.isHidden = ![.arrow, .rect, .oval, .line].contains(tool)
         fillControl.isHidden = ![.rect, .oval].contains(tool)
         blurControl.isHidden = tool != .blur
         fontControl.isHidden = tool != .text && tool != .callout
@@ -980,6 +985,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         switch sender {
         case arrowControl: style.arrow = ArrowStyle(rawValue: i) ?? .tapered
         case dashControl: style.dashed = i == 1
+        case sketchControl: style.sketch = i == 1
         case fillControl: style.fill = FillStyle(rawValue: i) ?? .none
         case blurControl: style.blur = BlurMode(rawValue: i) ?? .blur
         case fontControl: style.font = TextFont(rawValue: i) ?? .sans
