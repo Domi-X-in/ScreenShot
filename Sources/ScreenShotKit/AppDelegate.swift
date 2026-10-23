@@ -34,6 +34,8 @@ import AppKit
                                                      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
         #if SCREENSHOT_SELFTESTS
         // Debug builds only: a self-test or UI snapshot run, chosen by environment variable, drives the app and quits.
+        // The user's settings and clipboard are put back when it exits.
+        if SelfTestSandbox.isTestRun { SelfTestSandbox.begin() }
         let selfTests: [() -> Bool] = [
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,

@@ -11,8 +11,11 @@ import ScreenCaptureKit
         guard env["SCREENSHOT_SELFTEST_ONBOARDING"] != nil || env["SCREENSHOT_ONBOARDING_SHOTS"] != nil else { return false }
         let shots = env["SCREENSHOT_ONBOARDING_SHOTS"].map(URL.init(fileURLWithPath:))
         let d = UserDefaults.standard
-        let saved = [Keys.onboardingDone, Keys.onboardingPage, Keys.saveFolder, "askedScreenRecording", "appearance"].map { ($0, d.object(forKey: $0)) }
-        func restore() { for (k, v) in saved { d.set(v, forKey: k) } }
+        // SelfTestSandbox puts every setting back on exit; this only resets what the rest of this run sees.
+        let saved = [Keys.onboardingDone, Keys.onboardingPage, "askedScreenRecording", "appearance"].map {
+            ($0, d.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?[$0])
+        }
+        func restore() { for (k, v) in saved { if let v { d.set(v, forKey: k) } else { d.removeObject(forKey: k) } } }
         var failures = 0
         func check(_ ok: Bool, _ what: String) {
             print(ok ? "PASS" : "FAIL", what)

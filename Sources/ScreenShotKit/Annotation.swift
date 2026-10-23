@@ -659,7 +659,8 @@ extension Annotation {
     var baseTextColor: NSColor {
         switch kind {
         case .callout where calloutStyle.filled: color.contrasting
-        case .rect, .oval where fill == .opaque: color.contrasting
+        // (A `where` applies only to the pattern right before it, so each shape needs its own.)
+        case .rect where fill == .opaque, .oval where fill == .opaque: color.contrasting
         default: color
         }
     }

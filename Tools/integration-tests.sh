@@ -28,6 +28,17 @@ run_suite() { # name, env var
 
 for s in SELECT TEXT TEXTSTYLE CALLOUT INFO APPEARANCE DEFAULTS PHASE3 ONBOARDING SHAPES; do run_suite "$s" "SCREENSHOT_SELFTEST_$s"; done
 
+# Real-usage flows across features (about a minute).
+mkdir -p "$WORK/FLOWS"
+SCREENSHOT_SELFTEST_FLOWS=1 "$BIN" -saveFolder "$WORK/FLOWS" > "$WORK/FLOWS/out.log" 2>&1 &
+FPID=$!
+for _ in $(seq 1 300); do sleep 0.5; kill -0 $FPID 2>/dev/null || break; done
+kill $FPID 2>/dev/null
+pass=$(grep -c '^PASS' "$WORK/FLOWS/out.log"); fail=$(grep -c '^FAIL' "$WORK/FLOWS/out.log")
+printf "%-12s %3d passed  %d failed\n" "FLOWS" "$pass" "$fail"
+grep '^FAIL' "$WORK/FLOWS/out.log"
+if [ "$fail" -gt 0 ] || [ "$pass" -eq 0 ]; then FAILED=1; fi
+
 # Auto-save and same-window switching work on two files in the save folder.
 mkdir -p "$WORK/AUTOSAVE"; cp "$IMG" "$WORK/AUTOSAVE/a.png"; sleep 1; cp "$IMG" "$WORK/AUTOSAVE/b.png"
 SCREENSHOT_SELFTEST_DIR="$WORK/AUTOSAVE" "$BIN" -saveFolder "$WORK/AUTOSAVE" > "$WORK/AUTOSAVE/out.log" 2>&1 &

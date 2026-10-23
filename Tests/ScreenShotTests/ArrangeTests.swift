@@ -124,6 +124,17 @@ struct EditorContentTests {
         #expect(c.color.hexString == "#FFCC00" || c.runs?.first?.color.hasPrefix("#FFCC00") == true)
     }
 
+    @Test("text in a shape is the shape's color, or a contrasting one when the shape is filled", arguments: [Tool.rect, .oval])
+    func shapeTextColor(_ kind: Tool) {
+        var s = ToolStyle()
+        s.color = NSColor(hex: 0xFF3B30)
+        let outline = Annotation(kind: kind, p1: .zero, p2: CGPoint(x: 10, y: 10), style: s)
+        #expect(outline.baseTextColor.hexString == "#FF3B30")
+        s.fill = .opaque
+        let filled = Annotation(kind: kind, p1: .zero, p2: CGPoint(x: 10, y: 10), style: s)
+        #expect(filled.baseTextColor.hexString == NSColor(hex: 0xFF3B30).contrasting.hexString)
+    }
+
     @Test("text in a rectangle leaves the outline's color and width alone, and is drawn centered")
     func shapeText() throws {
         var s = ToolStyle()

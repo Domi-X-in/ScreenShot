@@ -210,6 +210,7 @@ final class ResizePanelView: NSView, NSTextFieldDelegate {
     }
 
     @objc private func presetClicked(_ sender: NSSegmentedControl) {
+        guard Self.presets.indices.contains(sender.selectedSegment) else { return }
         let factor = Self.presets[sender.selectedSegment].1
         fill(factor: factor)
         if factor != 1 { onResize(factor) }

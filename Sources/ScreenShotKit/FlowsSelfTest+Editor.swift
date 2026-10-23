@@ -22,6 +22,9 @@ extension FlowsSelfTest {
         type("Sales")
         v.commitText()
         check(v.doc.objects.first { $0.id == rectID }?.text == "Sales", "Return then typing puts text in the new rectangle")
+        let salesColor = v.doc.objects.first { $0.id == rectID }?.attributedText().attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        check(salesColor?.hexString == v.doc.objects.first { $0.id == rectID }?.color.hexString,
+              "the text in an unfilled shape is the shape's color (\(salesColor?.hexString ?? "nil"))")
         tool("o", .oval); st = v.style; st.sketch = true; v.setStyle(st); drag(ed, CGPoint(x: 800, y: 130), CGPoint(x: 1100, y: 340))
         st.sketch = false; v.setStyle(st)
         tool("h", .highlighter); drag(ed, CGPoint(x: 85, y: 420), CGPoint(x: 300, y: 480))

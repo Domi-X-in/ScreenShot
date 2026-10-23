@@ -24,27 +24,11 @@ import AppKit
 
     // MARK: Setup and helpers
 
-    private var savedDefaults: [String: Any]?
-    private var savedPasteboard: [(NSPasteboard.PasteboardType, Data)] = []
     let folder = Settings.saveFolder
 
-    private func preserve() {
-        savedDefaults = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "local.screenshot.app")
-        savedPasteboard = (NSPasteboard.general.pasteboardItems?.first?.types ?? []).compactMap { t in
-            NSPasteboard.general.data(forType: t).map { (t, $0) }
-        }
-    }
-
-    private func restore() {
-        if let d = savedDefaults { UserDefaults.standard.setPersistentDomain(d, forName: Bundle.main.bundleIdentifier ?? "local.screenshot.app") }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        if !savedPasteboard.isEmpty {
-            let item = NSPasteboardItem()
-            for (t, d) in savedPasteboard { item.setData(d, forType: t) }
-            pb.writeObjects([item])
-        }
-    }
+    // Settings and clipboard are saved at launch and put back at exit by SelfTestSandbox.
+    private func preserve() {}
+    private func restore() { SelfTestSandbox.restore() }
 
     func sleep(_ s: Double) async { try? await Task.sleep(for: .seconds(s)) }
 
@@ -227,8 +211,14 @@ import AppKit
             ("switch-files", switchFilesFlow),
             ("capture-settings", captureSettingsFlow),
             ("color-zoom-info", colorZoomInfoFlow),
+            ("panels", panelsFlow),
+            ("windows", windowsFlow),
+            ("library", libraryFlow),
+            ("preferences", preferencesFlow),
         ]
-        for (name, f) in flows where only == nil || only == name {
+        // SCREENSHOT_SELFTEST_FLOWS=<flow name> runs one flow; any other value runs them all.
+        let pick = flows.contains { $0.0 == only } ? only : nil
+        for (name, f) in flows where pick == nil || pick == name {
             flow = name
             await f()
             await closeAllEditors()

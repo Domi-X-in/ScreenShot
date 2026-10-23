@@ -1406,10 +1406,11 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         tf.allowsEditingTextAttributes = true
         let fontSize = o.holdsTextInShape ? o.shapeFontSize : o.fontSize
         tf.font = o.font.font(size: fontSize * zoom)
-        tf.textColor = o.baseTextColor
+        // Alignment and background first: changing them afterwards resets the field's text color to the system's.
+        if o.holdsTextInShape { tf.alignment = .center }
         // The bubble or shape drawn underneath is the background.
         if o.kind == .callout || o.holdsTextInShape { tf.drawsBackground = false }
-        if o.holdsTextInShape { tf.alignment = .center }
+        tf.textColor = o.baseTextColor
         if !o.text.isEmpty { tf.attributedStringValue = o.attributedText(scale: zoom) }
         tf.delegate = self
         tf.cell?.wraps = false
@@ -1424,7 +1425,13 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         window?.makeFirstResponder(tf)
         if let editor = tf.currentEditor() as? NSTextView {
-            editor.typingAttributes = [.font: o.font.font(size: fontSize * zoom), .foregroundColor: o.baseTextColor]
+            var attrs: [NSAttributedString.Key: Any] = [.font: o.font.font(size: fontSize * zoom), .foregroundColor: o.baseTextColor]
+            if o.holdsTextInShape {
+                let para = NSMutableParagraphStyle()
+                para.alignment = .center
+                attrs[.paragraphStyle] = para
+            }
+            editor.typingAttributes = attrs
         }
         needsDisplay = true
     }

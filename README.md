@@ -128,7 +128,7 @@ Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: fact
 
 ```
 Tools/test.sh                      # unit tests (swift test)
-Tools/integration-tests.sh         # in-app self-tests on the debug build
+Tools/integration-tests.sh         # in-app self-tests on the debug build, plus FLOWS: real-usage flows across features
 Tools/integration-tests.sh --live  # also real captures (needs Screen Recording and an unlocked screen)
 ```
 
@@ -145,6 +145,8 @@ Tools/update-e2e-test.sh --tampered  # an update with a wrong signature is refus
 - Updates use [Sparkle](https://sparkle-project.org) 2.10. Each release zip is signed with an EdDSA key, and the app only installs updates whose signature matches `SUPublicEDKey` in `Resources/Info.plist`. The private key is in the login Keychain (account `local.screenshot.app`) and in `~/.screenshot-release/sparkle_ed25519.key`. Keep a copy somewhere safe: without it, installed copies can't be updated.
 - `appcast.xml` is attached to every release, and the app reads it from `releases/latest/download/appcast.xml`.
 - Notarization, once you have an Apple Developer account: `DEVELOPER_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<profile> Tools/release.sh`. This signs with the hardened runtime, notarizes and staples. Create the profile once with `xcrun notarytool store-credentials`.
+
+The debug build shares the app's settings, so every self-test run copies your saved settings and clipboard when it starts and puts them back when it quits.
 
 ## Not reproduced
 
