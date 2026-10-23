@@ -94,13 +94,27 @@ import ServiceManagement
         form.row("After Area Crop, show", DefaultsRadio.group(key: Keys.afterAreaShow, options: [("Thumbnail", "thumbnail"), ("Editor", "editor")]))
         form.row("Autostart", [LoginCheckbox()])
         form.row("Appearance", DefaultsRadio.group(key: "appearance", options: [("System", "system"), ("Light", "light"), ("Dark", "dark")]))
+        form.row("Menu bar", [DefaultsCheckbox("Hide the menu bar icon", key: Keys.hideMenuBarIcon)])
         form.separator()
         form.row("Screenshots folder", [FolderButton()])
         form.row("Save format", DefaultsRadio.group(key: Keys.saveFormat, options: [("PNG", "png"), ("Auto (PNG/JPEG)", "auto")]))
+        form.row("Retina screenshots", [DefaultsCheckbox("Save at 1× (half the pixels)", key: Keys.saveRetinaAt1x)])
+        form.row("Mouse pointer", DefaultsRadio.group(key: Keys.captureCursor, options: [("Auto", "auto"), ("Include", "include"), ("Exclude", "exclude")]))
         form.separator()
         form.row("Scrolling screenshot speed", [DefaultsSlider(key: Keys.scrollSpeed)])
         form.separator()
-        form.row("Window Screenshot Background", DefaultsRadio.boolGroup(key: Keys.windowShadow, options: [("Transparent", true), ("Trim shadow", false)]))
+        form.row("Window screenshots", DefaultsRadio.boolGroup(key: Keys.windowShadow, options: [("Transparent", true), ("Trim shadow", false)]))
+        let bgColor = NSColorWell(style: .minimal)
+        bgColor.color = Settings.windowBackgroundColor
+        bgColor.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        bgColor.toolTip = "Background color for window screenshots"
+        bgColor.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        let colorTarget = ColorWellTarget { Settings.windowBackgroundColor = $0 }
+        bgColor.target = colorTarget
+        bgColor.action = #selector(ColorWellTarget.changed(_:))
+        objc_setAssociatedObject(bgColor, &ColorWellTarget.key, colorTarget, .OBJC_ASSOCIATION_RETAIN)
+        form.row("Window background", DefaultsRadio.group(key: Keys.windowBackground, options: [("None", "none"), ("Desktop", "wallpaper"),
+                                                                                              ("Color", "color")]) + [bgColor])
         return form.finish()
     }
 
@@ -138,9 +152,12 @@ import ServiceManagement
             DefaultsCheckbox("Save Image", key: Keys.escSave),
         ])
         form.row("Scrolling capture", [DefaultsCheckbox("Reverse scroll direction", key: Keys.reverseAutoscroll)])
+        form.row("Scrolling capture height", [DefaultsPopup(key: Keys.scrollMaxHeight, options: [5000, 10000, 20000, 30000, 50000].map {
+            ("\($0)", "Up to \($0.formatted()) px")
+        })])
         form.row("Zoom with mouse wheel", [DefaultsCheckbox("Scroll zooms the editor", key: "wheelZooms")])
         form.row("Default zoom level", [DefaultsCheckbox("Prefer 100%", key: "prefer100")])
-        form.row("URL Scheme API", [NSTextField(labelWithString: "screenshot://grab/area, grab/fullscreen, …")])
+        form.row("URL Scheme API", [DefaultsCheckbox("Allow screenshot://grab/area, …", key: Keys.urlScheme)])
         return form.finish()
     }
 }
@@ -157,6 +174,8 @@ import ServiceManagement
     func row(_ label: String, _ controls: [NSView]) {
         let l = NSTextField(labelWithString: label.isEmpty ? "" : label + ":")
         l.alignment = .right
+        // Labels never wrap letter by letter; a row that is too long shows it instead of squeezing a title.
+        for c in controls where c is NSButton { c.setContentCompressionResistancePriority(.required, for: .horizontal) }
         let stack = NSStackView(views: controls)
         stack.spacing = 14
         stack.alignment = .centerY
@@ -274,7 +293,9 @@ final class DefaultsPopup: NSPopUpButton {
         values = options.map(\.value)
         super.init(frame: .zero, pullsDown: false)
         addItems(withTitles: options.map(\.title))
-        selectItem(at: values.firstIndex(of: UserDefaults.standard.string(forKey: key) ?? "") ?? 0)
+        // Numbers and strings both match by their text, so numeric settings can use the popup too.
+        let current = UserDefaults.standard.object(forKey: key).map { "\($0)" } ?? ""
+        selectItem(at: values.firstIndex(of: current) ?? 0)
         target = self
         action = #selector(changed)
     }
@@ -282,6 +303,14 @@ final class DefaultsPopup: NSPopUpButton {
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func changed() { UserDefaults.standard.set(values[indexOfSelectedItem], forKey: key) }
+}
+
+/// Keeps a color well's handler alive (color wells hold their target weakly).
+final class ColorWellTarget: NSObject {
+    nonisolated(unsafe) static var key = 0
+    private let onChange: (NSColor) -> Void
+    init(_ onChange: @escaping (NSColor) -> Void) { self.onChange = onChange }
+    @objc func changed(_ sender: NSColorWell) { onChange(sender.color) }
 }
 
 final class DefaultsSlider: NSSlider {

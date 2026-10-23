@@ -57,7 +57,7 @@ import ScreenCaptureKit
                 }
                 let screen = NSScreen.containingMouse()
                 let content = try await Capturer.content()
-                let img = try await Capturer.captureScreen(screen, content: content)
+                let img = try await Capturer.captureScreen(screen, content: content, cursor: Settings.showsCursor(fullscreen: true))
                 handleCapture(img, scale: screen.backingScaleFactor)
             } catch {
                 report(error, "Can't take a screenshot")
@@ -73,7 +73,7 @@ import ScreenCaptureKit
                 let windows = Capturer.windowList()
                 var shots: [(NSScreen, CGImage)] = []
                 for s in NSScreen.screens {
-                    shots.append((s, try await Capturer.captureScreen(s, content: content)))
+                    shots.append((s, try await Capturer.captureScreen(s, content: content, cursor: Settings.showsCursor(fullscreen: false))))
                 }
                 let c = CurtainController(shots: shots, windowList: windows, mode: mode) { result in
                     self.curtainFinished(result, mode: mode, manualScroll: manualScroll, content: content)
@@ -136,7 +136,8 @@ import ScreenCaptureKit
         Task {
             do {
                 let content = try await Capturer.content()
-                let img = try await Capturer.captureScreen(screen, content: content, sourceRect: last.rect)
+                let img = try await Capturer.captureScreen(screen, content: content, sourceRect: last.rect,
+                                                           cursor: Settings.showsCursor(fullscreen: false))
                 handleCapture(img, scale: screen.backingScaleFactor)
             } catch {
                 report(error, "Area capture failed")
@@ -224,6 +225,10 @@ import ScreenCaptureKit
 
     /// screenshot://grab/area, grab/fullscreen, grab/window, grab/window/active, grab/scrolling, grab/repeat, grab/delayed, ocr, load/clipboard
     func handleDeepLink(_ url: URL) {
+        guard Settings.urlSchemeEnabled else {
+            Toast.show("screenshot:// links are turned off in Preferences › Advanced")
+            return
+        }
         let path = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/").lowercased()
         switch path {
         case "grab/area": run(.area)

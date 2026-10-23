@@ -40,7 +40,8 @@ struct WindowInfo {
     }
 
     /// Captures a display (or a display-local `sourceRect` in points, top-left origin), excluding this app's windows.
-    static func captureScreen(_ screen: NSScreen, content: SCShareableContent, sourceRect: CGRect? = nil) async throws -> CGImage {
+    static func captureScreen(_ screen: NSScreen, content: SCShareableContent, sourceRect: CGRect? = nil,
+                              cursor: Bool = false) async throws -> CGImage {
         guard let display = content.displays.first(where: { $0.displayID == screen.displayID }) else {
             throw CaptureError.noDisplay
         }
@@ -52,13 +53,23 @@ struct WindowInfo {
         if sourceRect != nil { cfg.sourceRect = r }
         cfg.width = Int((r.width * scale).rounded())
         cfg.height = Int((r.height * scale).rounded())
-        cfg.showsCursor = false
+        cfg.showsCursor = cursor
         cfg.captureResolution = .best
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
     }
 
-    /// Captures a single window with transparency (and optionally its shadow), like Shottr's window capture.
+    /// Captures a single window with transparency (and optionally its shadow), like Shottr's window capture,
+    /// then puts it on the wallpaper or a color when the preference asks for a background.
     static func captureWindow(id: CGWindowID, content: SCShareableContent) async throws -> CGImage {
+        let img = try await captureWindowOnly(id: id, content: content)
+        guard let w = content.windows.first(where: { $0.windowID == id }) else { return img }
+        let center = CGPoint(x: w.frame.midX, y: w.frame.midY)
+        let screen = NSScreen.screens.first { CGRect(origin: $0.cgOrigin, size: $0.frame.size).contains(center) } ?? NSScreen.containingMouse()
+        guard let fill = WindowBackground.current(for: screen) else { return img }
+        return WindowBackground.compose(img, on: fill) ?? img
+    }
+
+    private static func captureWindowOnly(id: CGWindowID, content: SCShareableContent) async throws -> CGImage {
         guard let w = content.windows.first(where: { $0.windowID == id }) else { throw CaptureError.noWindow }
         if Settings.windowShadow, let shadowed = try await captureWindowWithShadow(w, content: content) { return shadowed }
         let filter = SCContentFilter(desktopIndependentWindow: w)

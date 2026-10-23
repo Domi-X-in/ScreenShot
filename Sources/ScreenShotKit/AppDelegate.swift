@@ -5,6 +5,7 @@ import AppKit
     private var prefs: PreferencesWindowController?
 
     private var appearanceObserver: NSKeyValueObservation?
+    private var menuIconObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
@@ -20,6 +21,11 @@ import AppKit
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
+        // With the icon hidden, opening the app again (Finder, Spotlight) brings up Preferences.
+        statusItem.isVisible = !Settings.hideMenuBarIcon
+        menuIconObserver = UserDefaults.standard.observe(\.hideMenuBarIcon, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.statusItem.isVisible = !Settings.hideMenuBarIcon } }
+        }
 
         HotKeyCenter.shared.handler = { AppLogic.shared.run($0) }
         HotKeyCenter.shared.reload()
@@ -161,4 +167,5 @@ import AppKit
 extension UserDefaults {
     /// KVO-observable mirror of the "appearance" key (the property name must match the key for KVO).
     @objc dynamic var appearance: String? { string(forKey: "appearance") }
+    @objc dynamic var hideMenuBarIcon: Bool { bool(forKey: Keys.hideMenuBarIcon) }
 }

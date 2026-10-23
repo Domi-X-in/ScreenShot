@@ -18,6 +18,13 @@ enum Keys {
     static let counterShape = "counterShape"
     static let toolCustomColor = "toolCustomColor"
     static let afterAreaShow = "afterAreaShow"
+    static let hideMenuBarIcon = "hideMenuBarIcon"
+    static let captureCursor = "captureCursor"
+    static let saveRetinaAt1x = "saveRetinaAt1x"
+    static let scrollMaxHeight = "scrollMaxHeight"
+    static let windowBackground = "windowBackground"
+    static let windowBackgroundColor = "windowBackgroundColor"
+    static let urlScheme = "urlSchemeEnabled"
 }
 
 enum Settings {
@@ -44,6 +51,13 @@ enum Settings {
             Keys.toolColor: 0,
             Keys.toolWidth: 4.0,
             Keys.afterAreaShow: "editor",
+            Keys.hideMenuBarIcon: false,
+            Keys.captureCursor: "auto",
+            Keys.saveRetinaAt1x: false,
+            Keys.scrollMaxHeight: 30000,
+            Keys.windowBackground: "none",
+            Keys.windowBackgroundColor: "#3B82F6",
+            Keys.urlScheme: true,
             "appearance": "system",
         ])
     }
@@ -72,6 +86,26 @@ enum Settings {
     static var prefer100: Bool { d.bool(forKey: "prefer100") }
     /// Shottr's "After Area Crop, show: Thumbnail / Editor".
     static var showThumbnail: Bool { d.string(forKey: Keys.afterAreaShow) == "thumbnail" }
+
+    static var hideMenuBarIcon: Bool { d.bool(forKey: Keys.hideMenuBarIcon) }
+    /// "auto" shows the pointer in fullscreen and delayed screenshots only; "include" / "exclude" always / never.
+    static func showsCursor(fullscreen: Bool) -> Bool {
+        switch d.string(forKey: Keys.captureCursor) {
+        case "include": true
+        case "exclude": false
+        default: fullscreen
+        }
+    }
+    static var saveRetinaAt1x: Bool { d.bool(forKey: Keys.saveRetinaAt1x) }
+    /// Longest scrolling capture, in pixels.
+    static var scrollMaxHeight: Int { max(1000, d.integer(forKey: Keys.scrollMaxHeight)) }
+    /// "none" (transparent), "wallpaper" or "color".
+    static var windowBackground: String { d.string(forKey: Keys.windowBackground) ?? "none" }
+    static var windowBackgroundColor: NSColor {
+        get { NSColor(rgbaHex: d.string(forKey: Keys.windowBackgroundColor) ?? "") ?? NSColor(hex: 0x3B82F6) }
+        set { d.set(newValue.rgbaHex, forKey: Keys.windowBackgroundColor) }
+    }
+    static var urlSchemeEnabled: Bool { d.bool(forKey: Keys.urlScheme) }
 
     /// App-only appearance: "system" follows macOS, "light" / "dark" override it for ScreenShot's windows.
     static var appearance: String { d.string(forKey: "appearance") ?? "system" }

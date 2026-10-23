@@ -15,7 +15,7 @@ import ApplicationServices
     private var panel: NSPanel?
     private let statusLabel = NSTextField(labelWithString: "Starting…")
     private var monitors: [Any] = []
-    private let maxHeight = 30000
+    private let maxHeight = Settings.scrollMaxHeight
 
     static func start(screen: NSScreen, rect: CGRect, auto: Bool) {
         guard current == nil else { return }
@@ -153,9 +153,11 @@ import ApplicationServices
                     continue
                 }
                 still = 0
-                if let strip = cur.cropping(to: CGRect(x: 0, y: cur.height - off, width: cur.width, height: off)) {
+                // The last strip is cut short so the capture stops exactly at the maximum height.
+                let take = min(off, maxHeight - total)
+                if take > 0, let strip = cur.cropping(to: CGRect(x: 0, y: cur.height - off, width: cur.width, height: take)) {
                     strips.append(strip)
-                    total += off
+                    total += take
                 }
                 prev = cur
                 statusLabel.stringValue = "\(total) px captured"

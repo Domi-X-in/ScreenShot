@@ -56,6 +56,23 @@ import UniformTypeIdentifiers
         }
     }
 
+    /// "Save Retina screenshots at 1×": halves (or thirds) a Retina image before it is written.
+    nonisolated static func forSaving(_ img: CGImage, scale: CGFloat) -> (CGImage, CGFloat) {
+        guard Settings.saveRetinaAt1x, scale > 1, let small = downscale(img, by: scale) else { return (img, scale) }
+        return (small, 1)
+    }
+
+    nonisolated static func downscale(_ img: CGImage, by scale: CGFloat) -> CGImage? {
+        let w = max(1, Int((CGFloat(img.width) / scale).rounded())), h = max(1, Int((CGFloat(img.height) / scale).rounded()))
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: img.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()
+    }
+
     @discardableResult
     static func save(_ img: CGImage, scale: CGFloat, quiet: Bool = false) -> URL? {
         let folder = Settings.saveFolder
@@ -63,7 +80,8 @@ import UniformTypeIdentifiers
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let type = chosenType(img)
             let url = folder.appendingPathComponent(fileName(ext: type.preferredFilenameExtension ?? "png"))
-            guard let data = encode(img, scale: scale, type: type) else { throw CocoaError(.fileWriteUnknown) }
+            let (out, outScale) = forSaving(img, scale: scale)
+            guard let data = encode(out, scale: outScale, type: type) else { throw CocoaError(.fileWriteUnknown) }
             try data.write(to: url, options: .atomic)
             if !quiet { Toast.show("Saved to \(folder.lastPathComponent)") }
             NotificationCenter.default.post(name: .screenshotSaved, object: url)
@@ -89,7 +107,9 @@ import UniformTypeIdentifiers
                 type = chosenType(rendered)
                 url = folder.appendingPathComponent(fileName(ext: type.preferredFilenameExtension ?? "png"))
             }
-            guard let data = encode(rendered, scale: doc.scale, type: type) else { throw CocoaError(.fileWriteUnknown) }
+            // Only the visible image is reduced; the editable copy inside keeps every pixel.
+            let (out, outScale) = forSaving(rendered, scale: doc.scale)
+            guard let data = encode(out, scale: outScale, type: type) else { throw CocoaError(.fileWriteUnknown) }
             let state = EditState(scale: doc.scale, backdrop: doc.backdrop, objects: doc.objects)
             try EditableFile.write(rendered: data, type: type, state: state, base: doc.image, to: url)
             doc.fileURL = url
