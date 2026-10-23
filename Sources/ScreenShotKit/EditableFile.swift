@@ -35,7 +35,7 @@ enum EditableFile {
             if let created { try? FileManager.default.setAttributes([.creationDate: created], ofItemAtPath: url.path) }
         }
         let sidecar = sidecarURL(for: url)
-        guard var state, !state.objects.isEmpty || state.backdrop != .none else {
+        guard var state, !state.objects.isEmpty || state.backdrop.isOn else {
             try rendered.write(to: url, options: .atomic)
             try? FileManager.default.removeItem(at: sidecar)
             return

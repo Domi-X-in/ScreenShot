@@ -14,6 +14,8 @@ final class ShotView: NSView, NSTextFieldDelegate {
         case marquee(start: CGPoint, base: Set<UUID>)
         case calloutCreate(start: CGPoint)
         case calloutTip(index: Int)
+        /// Moving the screenshot around inside its backdrop (canvas pixels).
+        case backdrop(start: CGPoint, original: CGPoint)
     }
 
     /// Selection handles: corners/edges of box-like objects, endpoints of line-like ones.
@@ -59,7 +61,8 @@ final class ShotView: NSView, NSTextFieldDelegate {
     private var cropRect: CGRect?
     private var textField: NSTextField?
     private var editingID: UUID?
-    private var lastBackdrop: Backdrop = .ocean
+    /// When the backdrop last changed, so a slider drag becomes one undo step.
+    private var lastBackdropEdit = Date.distantPast
     /// User zoom (canvas points per image pixel); nil fits the image to the view.
     private var zoomOverride: CGFloat?
     private var pan = CGPoint.zero
@@ -161,13 +164,13 @@ final class ShotView: NSView, NSTextFieldDelegate {
     }
 
     private func toImage(_ p: CGPoint) -> CGPoint {
-        let z = zoom, o = origin, pad = Renderer.padding(doc)
-        return CGPoint(x: (p.x - o.x) / z - pad, y: (p.y - o.y) / z - pad)
+        let z = zoom, o = origin, io = Renderer.imageOrigin(doc)
+        return CGPoint(x: (p.x - o.x) / z - io.x, y: (p.y - o.y) / z - io.y)
     }
 
     private func fromImage(_ p: CGPoint) -> CGPoint {
-        let z = zoom, o = origin, pad = Renderer.padding(doc)
-        return CGPoint(x: (p.x + pad) * z + o.x, y: (p.y + pad) * z + o.y)
+        let z = zoom, o = origin, io = Renderer.imageOrigin(doc)
+        return CGPoint(x: (p.x + io.x) * z + o.x, y: (p.y + io.y) * z + o.y)
     }
 
     // MARK: Drawing
@@ -179,12 +182,16 @@ final class ShotView: NSView, NSTextFieldDelegate {
         // The screenshot floats on the canvas like a sheet of paper.
         let sheet = CGRect(origin: o, size: CGSize(width: Renderer.canvasSize(doc).width * z, height: Renderer.canvasSize(doc).height * z))
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        // A backdrop with rounded outer corners is its own sheet: no paper behind it, so the corners stay see-through.
+        let sheetRadius = doc.layout.outerRadius * z
+        let sheetPath = CGPath(roundedRect: sheet, cornerWidth: sheetRadius, cornerHeight: sheetRadius, transform: nil)
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 34, color: NSColor.black.withAlphaComponent(dark ? 0.55 : 0.22).cgColor)
         ctx.setFillColor(Theme.canvas.cgColor)
-        ctx.fill(sheet)
+        ctx.addPath(sheetPath)
+        ctx.fillPath()
         ctx.restoreGState()
-        if doc.hasAlpha && doc.backdrop == .none {
+        if doc.hasAlpha && !doc.backdrop.isOn {
             // Transparent pixels show a checkerboard, like other image editors.
             let cell: CGFloat = 8
             ctx.saveGState()
@@ -211,17 +218,23 @@ final class ShotView: NSView, NSTextFieldDelegate {
                         textHiddenID: editingKind == .callout ? editingID : nil)
         if let m = marqueeRect {
             ctx.setFillColor(Palette.accent.withAlphaComponent(0.08).cgColor)
-            ctx.fill(m.offsetBy(dx: Renderer.padding(doc), dy: Renderer.padding(doc)))
+            let io = Renderer.imageOrigin(doc)
+            ctx.fill(m.offsetBy(dx: io.x, dy: io.y))
             ctx.setStrokeColor(Palette.accent.cgColor)
             ctx.setLineWidth(1 / z)
             ctx.setLineDash(phase: 0, lengths: [4 / z, 3 / z])
-            ctx.stroke(m.offsetBy(dx: Renderer.padding(doc), dy: Renderer.padding(doc)))
+            ctx.stroke(m.offsetBy(dx: io.x, dy: io.y))
         }
         ctx.restoreGState()
         // Hairline edge keeps light screenshots distinct from a light canvas.
         ctx.setStrokeColor((dark ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.1)).cgColor)
         ctx.setLineWidth(1)
-        ctx.stroke(sheet.insetBy(dx: -0.5, dy: -0.5))
+        if sheetRadius > 0 {
+            ctx.addPath(CGPath(roundedRect: sheet.insetBy(dx: -0.5, dy: -0.5), cornerWidth: sheetRadius, cornerHeight: sheetRadius, transform: nil))
+            ctx.strokePath()
+        } else {
+            ctx.stroke(sheet.insetBy(dx: -0.5, dy: -0.5))
+        }
         drawHandles(ctx)
     }
 
@@ -519,6 +532,11 @@ final class ShotView: NSView, NSTextFieldDelegate {
         if wasEditing && tool == .text { needsDisplay = true; return }
 
         switch tool {
+        case .select where doc.backdrop.isOn && !doc.imageRect.contains(p):
+            // Dragging the backdrop around the screenshot moves the screenshot inside it.
+            pushUndo()
+            let io = Renderer.imageOrigin(doc)
+            drag = .backdrop(start: CGPoint(x: p.x + io.x, y: p.y + io.y), original: doc.backdrop.offset)
         case .select:
             // Drag on empty space selects everything the rectangle touches (Shift keeps the current selection).
             drag = .marquee(start: p, base: mods.contains(.shift) ? selection : [])
@@ -612,6 +630,14 @@ final class ShotView: NSView, NSTextFieldDelegate {
             marqueeRect = r
             let hits = doc.objects.filter { $0.bounds.intersects(r) }.map(\.id)
             setSelection(base.union(hits), primary: hits.last ?? selectedID)
+        case let .backdrop(start, original):
+            let io = Renderer.imageOrigin(doc), t = doc.layout.travel
+            let d = CGPoint(x: raw.x + io.x, y: raw.y + io.y) - start
+            var b = doc.backdrop
+            b.offset = CGPoint(x: t.width > 0 ? max(-1, min(1, original.x + d.dx / t.width)) : 0,
+                               y: t.height > 0 ? max(-1, min(1, original.y + d.dy / t.height)) : 0)
+            doc.backdrop = b
+            controller?.backdropChanged()
         case let .tail(index):
             guard index < doc.objects.count else { return }
             let c = doc.objects[index].p1
@@ -630,7 +656,7 @@ final class ShotView: NSView, NSTextFieldDelegate {
                 // Plain click on one object of a multi-selection: select just that one (nothing moved; drop the undo point).
                 doc.undoStack.removeLast()
                 setSelection([clicked], primary: clicked)
-            case .move, .lens, .tail, .resize, .moveMany, .calloutTip: markChanged()
+            case .move, .lens, .tail, .resize, .moveMany, .calloutTip, .backdrop: markChanged()
             case let .calloutCreate(start):
                 guard var o = live else { break }
                 live = nil
@@ -1034,15 +1060,24 @@ final class ShotView: NSView, NSTextFieldDelegate {
     func setBackdrop(_ b: Backdrop) {
         guard b != doc.backdrop else { return }
         commitText()
-        pushUndo()
-        if b != .none { lastBackdrop = b }
+        // Quick successive changes (dragging a slider) undo together.
+        if Date().timeIntervalSince(lastBackdropEdit) > 0.8 { pushUndo() } else { markChanged() }
+        lastBackdropEdit = Date()
+        if b.isOn { Backdrop.lastUsed = b }
         doc.backdrop = b
         controller?.documentChanged(resized: true)
         needsDisplay = true
     }
 
     func toggleBackdrop() {
-        setBackdrop(doc.backdrop == .none ? lastBackdrop : .none)
+        if doc.backdrop.isOn {
+            var b = doc.backdrop
+            b.isOn = false
+            setBackdrop(b)
+        } else {
+            setBackdrop(Backdrop.lastUsed)
+        }
+        lastBackdropEdit = .distantPast
     }
 
     private func applyCrop() {

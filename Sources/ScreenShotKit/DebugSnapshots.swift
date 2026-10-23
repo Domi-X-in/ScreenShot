@@ -14,6 +14,10 @@ import AppKit
             NSApp.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
         }
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        // Edits made for the snapshots auto-save; keep them out of the user's Screenshots folder.
+        let scratch = out.appendingPathComponent("saved")
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        UserDefaults.standard.setVolatileDomain([Keys.saveFolder: scratch.path], forName: UserDefaults.argumentDomain)
 
         AppLogic.shared.openEditor(img, scale: 2)
         let editor = NSApp.windows.first { $0.windowController is EditorWindowController }
@@ -41,6 +45,25 @@ import AppKit
             ("panel-color", { openPanel(editor, 0) }),
             ("panel-resize", { openPanel(editor, 1) }),
             ("panel-zoom", { openPanel(editor, 2) }),
+            ("editor-backdrop", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                var b = Backdrop()
+                b.isOn = true
+                b.fill = .mesh
+                b.colors = ["#F857A6", "#FF5858"]
+                b.aspect = .r16x9
+                b.inset = 0.02
+                b.outerRadius = 0.03
+                ed.shotView.setBackdrop(b)
+                return editor
+            }),
+            ("panel-backdrop", {
+                guard let ed = editor?.windowController as? EditorWindowController, let content = editor?.contentView,
+                      let pill = findView(PillButton.self, in: content, where: { $0.accessibilityLabel() == "Backdrop" }) else { return nil }
+                let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+                ed.showBackdropPanel(from: pill)
+                return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) }
+            }),
             ("prefs-general", { openPrefs(pane: 0) }),
             ("prefs-hotkeys", { openPrefs(pane: 1) }),
             ("prefs-advanced", { openPrefs(pane: 2) }),
@@ -99,6 +122,12 @@ import AppKit
         default: ed.showZoomPanel(from: anchor)
         }
         return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) } ?? NSApp.windows.last
+    }
+
+    private static func findView<T: NSView>(_ t: T.Type, in v: NSView, where ok: (T) -> Bool) -> T? {
+        if let x = v as? T, ok(x) { return x }
+        for s in v.subviews { if let f = findView(t, in: s, where: ok) { return f } }
+        return nil
     }
 
     private static func findInfo(in v: NSView) -> InfoCellsView? {

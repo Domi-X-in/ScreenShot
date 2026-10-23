@@ -84,10 +84,7 @@ import UniformTypeIdentifiers
         options.onChange = { [weak self] style in self?.shotView.setStyle(style) }
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { [weak self] in self?.browseFolder() }
-        options.onBackdrop = { [weak self] b in
-            self?.shotView.setBackdrop(b)
-            self?.window?.makeFirstResponder(self?.shotView)
-        }
+        options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
     }
 
     private func buildLayout() {
@@ -176,6 +173,13 @@ import UniformTypeIdentifiers
 
     func documentChanged(resized: Bool) {
         syncToolbar()
+        backdropPanel?.show(doc.backdrop)
+        shotView.needsDisplay = true
+    }
+
+    /// The screenshot was dragged inside its backdrop: redraw without the full toolbar sync.
+    func backdropChanged() {
+        backdropPanel?.show(doc.backdrop)
         shotView.needsDisplay = true
     }
 
@@ -201,6 +205,14 @@ import UniformTypeIdentifiers
         p.contentViewController = vc
         p.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
         panelPopover = p
+    }
+
+    private weak var backdropPanel: BackdropPanelView?
+
+    func showBackdropPanel(from anchor: NSView) {
+        let panel = BackdropPanelView(backdrop: doc.backdrop) { [weak self] b in self?.shotView.setBackdrop(b) }
+        backdropPanel = panel
+        present(panel, from: anchor)
     }
 
     func showColorPanel(from anchor: NSView) {
@@ -637,7 +649,7 @@ final class DragOutView: NSView, NSDraggingSource {
 /// Shottr's contextual options row: color, size, then controls for the current tool.
 final class OptionsBar: NSView, NSMenuDelegate {
     var onChange: ((ToolStyle) -> Void)?
-    var onBackdrop: ((Backdrop) -> Void)?
+    var onBackdropPanel: ((NSView) -> Void)?
     private var style = ToolStyle()
 
     private let colorButton = NSButton()
@@ -668,7 +680,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         (lensShapeControl, { $0.lensShape = LensShape(rawValue: $1) ?? .oval }, { $0.lensShape.rawValue }),
         (lensZoomControl, { $0.magnification = Self.zoomSteps[$1] }, { s in Self.zoomSteps.firstIndex { abs($0 - s.magnification) < 0.01 } ?? -1 }),
     ]
-    private let backdropPopup = NSPopUpButton()
+    private var backdropButton: PillButton!
     private let hint = NSTextField(labelWithString: "")
     private let sizeReadout = NSTextField(labelWithString: "4")
     private var popover: NSPopover?
@@ -718,11 +730,12 @@ final class OptionsBar: NSView, NSMenuDelegate {
             c.action = #selector(optionChanged(_:))
         }
 
-        backdropPopup.addItems(withTitles: Backdrop.allCases.map(\.title))
-        backdropPopup.controlSize = .small
-        backdropPopup.target = self
-        backdropPopup.action = #selector(backdropChanged)
-        backdropPopup.toolTip = "Backdrop (K)"
+
+        backdropButton = PillButton(title: "Backdrop", symbol: "rectangle.inset.filled",
+                                    tooltip: "Backdrop: background, aspect ratio, padding, shadow (K toggles)") { [weak self] in
+            guard let self else { return }
+            self.onBackdropPanel?(self.backdropButton)
+        }
 
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = InfoCellsView.infoColor
@@ -731,7 +744,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
         // Clicking these must never take keyboard focus away from a text box being typed in.
         for c in [colorButton, widthSlider, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl, unitControl,
-                  lensShapeControl, lensZoomControl, calloutControl, backdropPopup] as [NSControl] {
+                  lensShapeControl, lensZoomControl, calloutControl] as [NSControl] {
             c.refusesFirstResponder = true
         }
         wireDefaults()
@@ -746,7 +759,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([divider.widthAnchor.constraint(equalToConstant: 1), divider.heightAnchor.constraint(equalToConstant: 26)])
-        let row = NSStackView(views: [left, divider, info, backdropPopup])
+        let row = NSStackView(views: [left, divider, info, backdropButton])
         row.spacing = 14
         row.distribution = .fill
         row.alignment = .centerY
@@ -886,7 +899,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
         lensShapeControl.selectedSegment = s.lensShape.rawValue
         calloutControl.selectedSegment = s.callout.rawValue
         lensZoomControl.selectedSegment = Self.zoomSteps.firstIndex { abs($0 - s.magnification) < 0.01 } ?? -1
-        backdropPopup.selectItem(at: backdrop.rawValue)
+        backdropButton.isOn = backdrop.isOn
 
         arrowControl.isHidden = tool != .arrow
         dashControl.isHidden = ![.rect, .oval, .line].contains(tool)
@@ -938,10 +951,6 @@ final class OptionsBar: NSView, NSMenuDelegate {
         default: break
         }
         onChange?(style)
-    }
-
-    @objc private func backdropChanged() {
-        onBackdrop?(Backdrop(rawValue: backdropPopup.indexOfSelectedItem) ?? .none)
     }
 
     // MARK: Color popover

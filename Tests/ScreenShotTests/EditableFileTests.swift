@@ -36,11 +36,17 @@ struct EditableFileTests {
     @Test("PNG keeps every object, the original image and the backdrop", arguments: [UTType.png, UTType.jpeg])
     func roundTrip(type: UTType) throws {
         let url = tempDir().appendingPathComponent(type == .png ? "a.png" : "a.jpg")
-        let state = EditState(scale: 2, backdrop: .sunset, objects: objects())
+        var sunset = Backdrop()
+        sunset.isOn = true
+        sunset.colors = ["#FA709A", "#FEE140"]
+        sunset.fill = .mesh
+        sunset.aspect = .r16x9
+        sunset.offset = CGPoint(x: 0.5, y: -1)
+        let state = EditState(scale: 2, backdrop: sunset, objects: objects())
         try EditableFile.write(rendered: encode(base, type), type: type, state: state, base: base, to: url)
         let loaded = try #require(EditableFile.load(url))
         let back = try #require(loaded.state)
-        #expect(back.backdrop == .sunset && loaded.scale == 2)
+        #expect(back.backdrop == sunset && loaded.scale == 2)
         #expect(back.objects.map(\.id) == state.objects.map(\.id))
         #expect(back.objects[0].runs == state.objects[0].runs && back.objects[0].text == "Hola")
         #expect(back.objects[1].calloutStyle == .shout && back.objects[1].pointer == CGPoint(x: 30, y: 250))

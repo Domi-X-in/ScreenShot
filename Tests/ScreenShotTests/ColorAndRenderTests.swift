@@ -57,7 +57,7 @@ struct RenderTests {
     @Test("a backdrop pads the canvas and keeps the image inside")
     func backdrop() {
         let doc = EditorDocument(image: solid(200, 100, 0x000000), scale: 1)
-        doc.backdrop = .ocean
+        doc.backdrop.isOn = true
         let size = Renderer.canvasSize(doc)
         #expect(size.width > 200 && size.height > 100)
         let out = doc.render()!

@@ -284,34 +284,6 @@ enum CalloutStyle: Int, CaseIterable, Codable {
     var filled: Bool { self == .box || self == .shout }
 }
 
-enum Backdrop: Int, CaseIterable, Codable {
-    case none, ocean, sunset, mint, grape, graphite, paper
-
-    var title: String {
-        switch self {
-        case .none: "No Backdrop"
-        case .ocean: "Ocean"
-        case .sunset: "Sunset"
-        case .mint: "Mint"
-        case .grape: "Grape"
-        case .graphite: "Graphite"
-        case .paper: "Paper"
-        }
-    }
-
-    var colors: [NSColor] {
-        switch self {
-        case .none: []
-        case .ocean: [NSColor(hex: 0x4FACFE), NSColor(hex: 0x00F2FE)]
-        case .sunset: [NSColor(hex: 0xFA709A), NSColor(hex: 0xFEE140)]
-        case .mint: [NSColor(hex: 0x43E97B), NSColor(hex: 0x38F9D7)]
-        case .grape: [NSColor(hex: 0x7F00FF), NSColor(hex: 0xE100FF)]
-        case .graphite: [NSColor(hex: 0x434343), NSColor(hex: 0x000000)]
-        case .paper: [NSColor(hex: 0xFDFBFB), NSColor(hex: 0xEBEDEE)]
-        }
-    }
-}
-
 /// A styled range inside a text annotation (color, size in image pixels, font), from selecting letters while typing.
 struct TextRun: Codable, Equatable {
     var location: Int
@@ -844,7 +816,16 @@ final class EditorDocument {
     var image: CGImage { didSet { concealCache.removeAll(); pixelCache = nil } }
     let scale: CGFloat
     var objects: [Annotation] = []
-    var backdrop: Backdrop = .none
+    var backdrop = Backdrop.none { didSet { if backdrop.fill != .blurredImage { blurredCache = nil } } }
+    var layout: BackdropLayout { BackdropLayout(backdrop, imageSize: image.size) }
+    /// The blurred screenshot behind a "Blurred Screenshot" backdrop, made once per image.
+    private var blurredCache: (image: CGImage, blurred: CGImage?)?
+    var blurredBackdrop: CGImage? {
+        if let c = blurredCache, c.image === image { return c.blurred }
+        let b = BackdropPainter.blurred(image)
+        blurredCache = (image, b)
+        return b
+    }
     /// File this document was opened from or last saved to; Save and auto-save write back to it.
     var fileURL: URL?
 
@@ -1019,21 +1000,17 @@ final class EditorDocument {
 }
 
 enum Renderer {
-    static func padding(_ doc: EditorDocument) -> CGFloat {
-        doc.backdrop == .none ? 0 : (CGFloat(max(doc.image.width, doc.image.height)) * 0.07).rounded()
-    }
+    /// The screenshot's top-left corner on the canvas (moved in by the backdrop).
+    static func imageOrigin(_ doc: EditorDocument) -> CGPoint { doc.layout.imageOrigin }
 
-    static func canvasSize(_ doc: EditorDocument) -> CGSize {
-        let p = padding(doc)
-        return CGSize(width: CGFloat(doc.image.width) + 2 * p, height: CGFloat(doc.image.height) + 2 * p)
-    }
+    static func canvasSize(_ doc: EditorDocument) -> CGSize { doc.layout.canvas }
 
     /// Renders into a flipped context whose units are canvas pixels.
     static func render(_ doc: EditorDocument, in ctx: CGContext, extra: Annotation? = nil, hiddenID: UUID? = nil,
                        selectedIDs: Set<UUID> = [], cropRect: CGRect? = nil, hairline: CGFloat = 1, interactive: Bool = false,
                        textHiddenID: UUID? = nil) {
-        let pad = padding(doc)
-        let size = canvasSize(doc)
+        let lay = doc.layout
+        let size = lay.canvas
         let imgRect = doc.imageRect
 
         ctx.saveGState()
@@ -1044,27 +1021,50 @@ enum Renderer {
             ctx.restoreGState()
         }
 
-        if doc.backdrop != .none {
-            let colors = doc.backdrop.colors.map(\.cgColor) as CFArray
-            if let grad = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors, locations: nil) {
-                ctx.drawLinearGradient(grad, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+        let b = doc.backdrop
+        if b.isOn {
+            if lay.outerRadius > 0 {
+                ctx.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: size), cornerWidth: lay.outerRadius, cornerHeight: lay.outerRadius,
+                                   transform: nil))
+                ctx.clip()
             }
-            ctx.translateBy(x: pad, y: pad)
-            let radius = max(6, CGFloat(max(doc.image.width, doc.image.height)) * 0.012)
-            let path = CGPath(roundedRect: imgRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
-            let shadowColor = NSColor.black.withAlphaComponent(0.45).cgColor
-            ctx.saveGState()
-            ctx.setShadow(offset: CGSize(width: 0, height: -pad * 0.12), blur: pad * 0.5, color: shadowColor)
-            if doc.hasAlpha {
-                // Window captures keep their own transparent corners and shadow; let the shadow follow the alpha.
-                ctx.drawFlipped(doc.image, in: imgRect)
-            } else {
-                ctx.addPath(path)
-                ctx.setFillColor(NSColor.black.cgColor)
+            BackdropPainter.paintFill(b, size: size, image: doc.image, blurred: { doc.blurredBackdrop }, in: ctx)
+            let shadowColor = NSColor.black.withAlphaComponent(max(0, min(1, b.shadow))).cgColor
+            let shadowOffset = CGSize(width: 0, height: -lay.shadowBlur * 0.24)
+            let framed = lay.content.size != imgRect.size
+            if framed {
+                // Inset: a frosted frame around the screenshot, carrying the shadow.
+                let ins = lay.imageOrigin.x - lay.content.minX
+                let r = lay.innerRadius + ins
+                let frame = CGPath(roundedRect: lay.content, cornerWidth: r, cornerHeight: r, transform: nil)
+                ctx.saveGState()
+                if b.shadow > 0 { ctx.setShadow(offset: shadowOffset, blur: lay.shadowBlur, color: shadowColor) }
+                ctx.addPath(frame)
+                ctx.setFillColor(NSColor.white.withAlphaComponent(0.32).cgColor)
                 ctx.fillPath()
+                ctx.restoreGState()
+                ctx.addPath(frame)
+                ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.5).cgColor)
+                ctx.setLineWidth(max(1, ins * 0.04))
+                ctx.strokePath()
             }
-            ctx.restoreGState()
-            if !doc.hasAlpha {
+            ctx.translateBy(x: lay.imageOrigin.x, y: lay.imageOrigin.y)
+            let radius = lay.innerRadius
+            let path = CGPath(roundedRect: imgRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+            if !framed && b.shadow > 0 {
+                ctx.saveGState()
+                ctx.setShadow(offset: shadowOffset, blur: lay.shadowBlur, color: shadowColor)
+                if doc.hasAlpha {
+                    // Window captures keep their own transparent corners and shadow; let the shadow follow the alpha.
+                    ctx.drawFlipped(doc.image, in: imgRect)
+                } else {
+                    ctx.addPath(path)
+                    ctx.setFillColor(NSColor.black.cgColor)
+                    ctx.fillPath()
+                }
+                ctx.restoreGState()
+            }
+            if !doc.hasAlpha && radius > 0 {
                 ctx.addPath(path)
                 ctx.clip()
             }
