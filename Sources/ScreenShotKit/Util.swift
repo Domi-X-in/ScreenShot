@@ -131,4 +131,11 @@ final class PixelReader {
         return NSColor(srgbRed: min(1, CGFloat(data[i]) / 255 / a), green: min(1, CGFloat(data[i + 1]) / 255 / a),
                        blue: min(1, CGFloat(data[i + 2]) / 255 / a), alpha: a)
     }
+
+    /// Whether two pixels match within `tolerance` (0–255) on every channel; fast enough for edge scans.
+    func same(_ x1: Int, _ y1: Int, _ x2: Int, _ y2: Int, tolerance: Int) -> Bool {
+        let i = (y1 * width + x1) * 4, j = (y2 * width + x2) * 4
+        for k in 0..<4 where abs(Int(data[i + k]) - Int(data[j + k])) > tolerance { return false }
+        return true
+    }
 }

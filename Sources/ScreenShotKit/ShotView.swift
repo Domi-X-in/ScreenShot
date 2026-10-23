@@ -72,6 +72,9 @@ final class ShotView: NSView, NSTextFieldDelegate {
         }
     }
     private var cutStrip: CutOut.Strip?
+    /// Holding 1 or 2 measures the area under the pointer; a quick tap picks the Ruler tool instead.
+    private var measuring: Measure.Mode?
+    private var measureKeyDown = Date.distantPast
     /// The area selected with the Crop tool, if any (for OCR of just that part).
     var cropSelection: CGRect? {
         guard tool == .crop, !cutOutMode, let r = cropRect?.integral.intersection(doc.imageRect), r.width >= 2, r.height >= 2 else { return nil }
@@ -234,6 +237,14 @@ final class ShotView: NSView, NSTextFieldDelegate {
         Renderer.render(doc, in: ctx, extra: live, hiddenID: editingKind == .callout ? nil : editingID, selectedIDs: selection,
                         cropRect: tool == .crop ? cropRect : nil, cutStrip: tool == .crop ? cutStrip : nil, hairline: 1 / z, interactive: true,
                         textHiddenID: editingKind == .callout ? editingID : nil)
+        if let mode = measuring, let hp = hoverPixel, let span = Measure.span(at: Int(hp.x), Int(hp.y), in: doc.pixels) {
+            let io = Renderer.imageOrigin(doc)
+            ctx.saveGState()
+            ctx.translateBy(x: io.x, y: io.y)
+            Measure.draw(span, mode: mode, at: hp, hairline: 1 / z, unit: Settings.showPoints ? doc.scale : 1,
+                         unitName: Settings.showPoints ? "pt" : "px", ctx: ctx)
+            ctx.restoreGState()
+        }
         if let m = marqueeRect {
             ctx.setFillColor(Palette.accent.withAlphaComponent(0.08).cgColor)
             let io = Renderer.imageOrigin(doc)
@@ -721,6 +732,16 @@ final class ShotView: NSView, NSTextFieldDelegate {
         hoverColor = inside ? px.color(x, y) : nil
         hoverPixel = inside ? CGPoint(x: x, y: y) : nil
         controller?.updateHoverColor(hoverColor)
+        if measuring != nil { needsDisplay = true }
+    }
+
+    override func keyUp(with event: NSEvent) {
+        let c = event.charactersIgnoringModifiers ?? ""
+        guard measuring != nil, c == "1" || c == "2" else { super.keyUp(with: event); return }
+        let tapped = Date().timeIntervalSince(measureKeyDown) < 0.25
+        measuring = nil
+        if tapped { tool = .ruler }
+        needsDisplay = true
     }
 
     // MARK: Keyboard
@@ -761,6 +782,16 @@ final class ShotView: NSView, NSTextFieldDelegate {
             return
         }
         if c.count == 1, c.first?.isNumber == true, c.first?.isASCII == true, typeCounterDigit(c) { return }
+        if c == "1" || c == "2" {
+            if !event.isARepeat {
+                measuring = c == "1" ? .lines : .box
+                measureKeyDown = Date()
+                needsDisplay = true
+            }
+            return
+        }
+        if tool == .crop, !cutOutMode, c == "f" { autoadjustSelection(); return }
+        if c == "i" { imprintSelectionSize(); return }
         if c == "=" || c == "+", changeMagnifierFactor(by: 1.25, at: nil) { return }
         if c == "-", changeMagnifierFactor(by: 1 / 1.25, at: nil) { return }
         if c == "k" { toggleBackdrop(); return }
@@ -1119,6 +1150,47 @@ final class ShotView: NSView, NSTextFieldDelegate {
         controller?.documentChanged(resized: true)
     }
 
+    /// Shottr's Autoadjust: the crop selection (or the whole image) shrinks to the content inside it.
+    func autoadjustSelection() {
+        if tool != .crop { tool = .crop }
+        cutOutMode = false
+        let start = cropRect ?? doc.imageRect
+        let fitted = Autoadjust.fit(start, in: doc.pixels)
+        if fitted == start {
+            Toast.show("Nothing to trim: the edges aren't a single flat color")
+            return
+        }
+        cropRect = fitted
+        controller?.updateInfo()
+        needsDisplay = true
+    }
+
+    /// Shottr's Imprint Selection Size: stamps "W × H" and an outline of the crop selection onto the screenshot.
+    func imprintSelectionSize() {
+        guard let r = cropSelection else {
+            Toast.show("Select an area with Crop (X), then press I to imprint its size")
+            return
+        }
+        let k = Settings.showPoints ? doc.scale : 1, unit = Settings.showPoints ? "pt" : "px"
+        pushUndo()
+        var frame = style
+        frame.dashed = true
+        frame.fill = .none
+        frame.width = max(1, min(4, min(r.width, r.height) / 80))
+        doc.objects.append(Annotation(kind: .rect, p1: CGPoint(x: r.minX, y: r.minY), p2: CGPoint(x: r.maxX, y: r.maxY), style: frame))
+        var labelStyle = style
+        let fontSize = max(12, min(48, min(r.width, r.height) * 0.08))
+        labelStyle.width = fontSize / 6
+        let y = r.minY - fontSize * 1.5 >= 0 ? r.minY - fontSize * 1.5 : r.minY + fontSize * 0.3
+        var label = Annotation(kind: .text, p1: CGPoint(x: r.minX, y: y), p2: CGPoint(x: r.minX, y: y), style: labelStyle)
+        label.text = "\(Int((r.width / k).rounded())) × \(Int((r.height / k).rounded())) \(unit)"
+        doc.objects.append(label)
+        cropRect = nil
+        tool = .select
+        setSelection([label.id], primary: label.id)
+        controller?.documentChanged(resized: false)
+    }
+
     private func applyCutOut() {
         guard let strip = cutStrip, let img = CutOut.apply(strip, to: doc.image) else { return }
         pushUndo()
@@ -1130,6 +1202,12 @@ final class ShotView: NSView, NSTextFieldDelegate {
     }
 
     #if SCREENSHOT_SELFTESTS
+    func debugMeasure(_ mode: Measure.Mode?, at p: CGPoint) {
+        measuring = mode
+        hoverPixel = p
+        needsDisplay = true
+    }
+
     func debugShowCutStrip(_ strip: CutOut.Strip) {
         cutOutMode = true
         tool = .crop

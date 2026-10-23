@@ -45,9 +45,20 @@ import AppKit
             ("panel-color", { openPanel(editor, 0) }),
             ("panel-resize", { openPanel(editor, 1) }),
             ("panel-zoom", { openPanel(editor, 2) }),
+            ("editor-measure", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                ed.shotView.debugMeasure(.lines, at: CGPoint(x: CGFloat(ed.doc.image.width) * 0.3, y: CGFloat(ed.doc.image.height) * 0.2))
+                return editor
+            }),
+            ("editor-measure-box", {
+                guard let ed = editor?.windowController as? EditorWindowController else { return nil }
+                ed.shotView.debugMeasure(.box, at: CGPoint(x: CGFloat(ed.doc.image.width) * 0.3, y: CGFloat(ed.doc.image.height) * 0.2))
+                return editor
+            }),
             ("editor-cutout", {
                 guard let ed = editor?.windowController as? EditorWindowController else { return nil }
                 let h = CGFloat(ed.doc.image.height)
+                ed.shotView.debugMeasure(nil, at: .zero)
                 ed.shotView.debugShowCutStrip(.init(rows: true, range: (h * 0.42).rounded()...(h * 0.58).rounded()))
                 return editor
             }),

@@ -73,7 +73,7 @@ enum Tool: String, CaseIterable, Codable {
     }
 
     static func forKey(_ c: String) -> Tool? {
-        if c == "2" || c == "u" { return .ruler }
+        if c == "u" { return .ruler }
         return allCases.first { !$0.key.isEmpty && $0.key.lowercased() == c }
     }
 }

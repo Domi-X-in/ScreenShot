@@ -85,6 +85,8 @@ import UniformTypeIdentifiers
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { [weak self] in self?.browseFolder() }
         options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
+        options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
+        options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
         options.onCutOutMode = { [weak self] on in
             self?.shotView.cutOutMode = on
             self?.window?.makeFirstResponder(self?.shotView)
@@ -660,6 +662,12 @@ final class OptionsBar: NSView, NSMenuDelegate {
     var onChange: ((ToolStyle) -> Void)?
     var onBackdropPanel: ((NSView) -> Void)?
     var onCutOutMode: ((Bool) -> Void)?
+    var onAutoadjust: (() -> Void)?
+    var onImprint: (() -> Void)?
+    private lazy var autoadjustButton = Self.smallButton("Autoadjust", symbol: "viewfinder", tooltip: "Shrink the selection to the content (F)",
+                                                         target: self, action: #selector(autoadjustClicked))
+    private lazy var imprintButton = Self.smallButton("Imprint Size", symbol: "ruler", tooltip: "Stamp the selection's size on the image (I)",
+                                                      target: self, action: #selector(imprintClicked))
     private let cropModeControl = NSSegmentedControl(labels: ["Crop", "Cut Out"], trackingMode: .selectOne, target: nil, action: nil)
     private var style = ToolStyle()
 
@@ -767,7 +775,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
             c.refusesFirstResponder = true
         }
         wireDefaults()
-        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, calloutControl, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl,
+        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, calloutControl, arrowControl, dashControl, fillControl, blurControl, fontControl, shapeControl,
                                        unitControl, lensShapeControl, lensZoomControl, hint])
         left.spacing = 12
         left.alignment = .centerY
@@ -922,6 +930,8 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
         cropModeControl.selectedSegment = cutOut ? 1 : 0
         cropModeControl.isHidden = tool != .crop
+        autoadjustButton.isHidden = tool != .crop || cutOut
+        imprintButton.isHidden = tool != .crop || cutOut
         arrowControl.isHidden = tool != .arrow
         dashControl.isHidden = ![.rect, .oval, .line].contains(tool)
         fillControl.isHidden = ![.rect, .oval].contains(tool)
@@ -941,9 +951,9 @@ final class OptionsBar: NSView, NSMenuDelegate {
         case .counter: hint.stringValue = "Type digits to renumber · drag the bubble tip to point it"
         case .crop where cutOut: hint.stringValue = "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
         case .crop: hint.stringValue = "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
+        case .ruler: hint.stringValue = "Drag to measure · Shift snaps to 45° · hold 1 or 2 anywhere to measure what's under the pointer"
         case .select: hint.stringValue = "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
         case .text: hint.stringValue = "Click to type · double-click text to edit"
-        case .ruler: hint.stringValue = "Drag to measure · Shift snaps to 45°"
         case .spotlight: hint.stringValue = "Everything outside the spotlights gets dimmed"
         case .callout: hint.stringValue = "Press on the target, drag to place the bubble, type · drag the tip to re-aim"
         case .image: hint.stringValue = "Drag to move · pinch or scroll over it to resize"
@@ -951,6 +961,19 @@ final class OptionsBar: NSView, NSMenuDelegate {
         default: hint.stringValue = "Shift constrains · Tab copies the color under the cursor"
         }
     }
+
+    static func smallButton(_ title: String, symbol: String, tooltip: String, target: AnyObject, action: Selector) -> NSButton {
+        let b = NSButton(title: title, image: NSImage(systemSymbolName: symbol, accessibilityDescription: title)!, target: target, action: action)
+        b.controlSize = .small
+        b.bezelStyle = .rounded
+        b.imagePosition = .imageLeading
+        b.toolTip = tooltip
+        b.refusesFirstResponder = true
+        return b
+    }
+
+    @objc private func autoadjustClicked() { onAutoadjust?() }
+    @objc private func imprintClicked() { onImprint?() }
 
     @objc private func cropModeChanged() {
         onCutOutMode?(cropModeControl.selectedSegment == 1)
