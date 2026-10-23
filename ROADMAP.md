@@ -39,27 +39,30 @@ Autotest de captura en vivo (`Tools/live-capture-test.sh`): la app se lanza con 
   - [ ] Pendiente: el PNG visible se sigue recodificando entero en cada autoguardado (~230 ms). Aceptable porque se hace fuera del tecleo; revisar si molesta.
 - [x] **Accesibilidad**: VoiceOver nombra y permite pulsar los botones de la barra, paletas, píldoras, tira de recientes, casillas de color/tamaño/zoom y el botón de arrastrar; el lienzo se anuncia como imagen con su tamaño y sus anotaciones.
 
-## Fase 3 — Paridad con Shottr 🟠
+## Fase 3 — Paridad con Shottr 🟠 ✅
 
-- [ ] **Panel de fondo (Backdrop) completo**:
-  - [ ] Proporciones: 1:1, 4:3, 3:2, 16:9, Twitter, Facebook, YouTube, LinkedIn, Pinterest
-  - [ ] Margen (padding), sombra, inset, radio exterior e interior, recentrar
-  - [ ] Fondos: color sólido, mezcla de colores, gradientes (malla, vertical, diagonal, radial) e imagen con desenfoque
-- [ ] **Cut Out (tijeras)**: quitar una franja horizontal o vertical y unir el resto.
-- [ ] **OCR sobre un área seleccionada** y ajuste **"Idioma principal de OCR"**.
-- [ ] **Biblioteca de capturas**: ventana con búsqueda, tamaños de miniatura y lista de todas las capturas (no solo las 10 últimas).
-- [ ] **Estilos dibujados a mano** para flechas y formas.
-- [ ] **Medir manteniendo 1 o 2**: distancia bajo el cursor mientras se mantiene la tecla.
-- [ ] **Imprint Selection Size**: estampar el tamaño de la selección en la imagen.
-- [ ] **Autoadjust**: ajuste automático de la selección al contenido.
-- [ ] **Ajustes que faltan**:
-  - [ ] Ocultar el icono de la barra de menús
-  - [ ] Capturar el cursor del ratón (auto / incluir / excluir)
-  - [ ] Reducir capturas Retina a 1× al guardar
-  - [ ] Altura máxima de la captura con desplazamiento
-  - [ ] Fondo de capturas de ventana: fondo de escritorio o color sólido
-  - [ ] Activar o desactivar los enlaces `screenshot://`
-- [ ] **Superposición GIF**: animación de dos fotogramas (superposición y captura).
+- [x] **Panel de fondo (Backdrop) completo**:
+  - [x] Proporciones: 1:1, 4:3, 3:2, 16:9, Twitter, Facebook, YouTube, LinkedIn, Pinterest
+  - [x] Margen (padding), sombra, inset, radio exterior e interior, recentrar (y arrastrar la captura con la herramienta Seleccionar)
+  - [x] Fondos: color sólido, mezcla de colores, gradientes (malla, vertical, diagonal, radial) y la propia captura desenfocada
+  - [ ] Pendiente: elegir una imagen propia como fondo (ahora solo la captura desenfocada).
+- [x] **Cut Out (tijeras)**: ⇧X o el selector Recortar / Cut Out; quita una franja horizontal o vertical y une el resto.
+- [x] **OCR sobre un área seleccionada** (⌘O con una selección de Recortar) y ajuste **"Idioma principal de OCR"**.
+- [x] **Biblioteca de capturas**: ventana (⌘L) con búsqueda por nombre, fecha y **texto dentro de la captura**, tamaño de miniatura y todas las capturas.
+- [x] **Estilos dibujados a mano** para flechas, líneas, rectángulos y óvalos.
+- [x] **Medir manteniendo 1 o 2**: distancias (1) o caja (2) del área bajo el cursor; un toque rápido sigue eligiendo la Regla.
+- [x] **Imprint Selection Size** (I): estampa el contorno y "An × Al px".
+- [x] **Autoadjust** (F): ajusta la selección al contenido.
+- [x] **Ajustes que faltan**:
+  - [x] Ocultar el icono de la barra de menús
+  - [x] Capturar el cursor del ratón (auto / incluir / excluir)
+  - [x] Reducir capturas Retina a 1× al guardar
+  - [x] Altura máxima de la captura con desplazamiento
+  - [x] Fondo de capturas de ventana: fondo de escritorio o color sólido
+  - [x] Activar o desactivar los enlaces `screenshot://`
+- [x] **Superposición GIF**: Archivo › Save Blinking GIF (⇧⌘G), dos fotogramas en bucle (sin y con anotaciones).
+
+Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHASE3, 14 comprobaciones) y la prueba en vivo con 22 comprobaciones (nuevas: fondo de ventana en color y escritorio, cursor incluido/excluido).
 
 ## Fase 4 — Mejoras propias 🟢
 
@@ -81,6 +84,6 @@ Autotest de captura en vivo (`Tools/live-capture-test.sh`): la app se lanza con 
 ## Cómo se verifica cada punto
 
 - Compilación limpia con `./build.sh`.
-- Autotests existentes (79 comprobaciones) más los nuevos de cada función.
+- `Tools/test.sh` (54 tests) y `Tools/integration-tests.sh` (93 comprobaciones en 9 suites) más los nuevos de cada función.
 - Capturas de la interfaz en modo claro y oscuro (`SCREENSHOT_SNAPSHOT_DIR`).
 - Las funciones de captura en vivo, con el autotest de la Fase 1.

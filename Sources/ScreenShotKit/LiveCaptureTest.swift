@@ -136,6 +136,9 @@ import ScreenCaptureKit
         }
         check(true, "Screen Recording permission is granted to this app")
         Settings.d.set(true, forKey: Keys.afterShow) // the hook intercepts before any editor opens
+        // Known capture settings for this run only (argument domain: not saved), whatever the user chose.
+        override(Keys.captureCursor, "exclude")
+        override(Keys.windowBackground, "none")
 
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
         let scale = screen.backingScaleFactor
@@ -149,6 +152,8 @@ import ScreenCaptureKit
         await areaThroughOverlay(screen, scale: scale, patternLocal: patternLocal)
         await delayed(screen, scale: scale)
         await window(pattern, scale: scale)
+        await windowBackground(pattern)
+        await cursor(screen)
         await otherAppsWindows()
         await ocrAndQR(screen, scale: scale, patternLocal: patternLocal)
         pattern.orderOut(nil)
@@ -262,6 +267,62 @@ import ScreenCaptureKit
     }
 
     /// The Active/Any Window paths list other apps' windows and can capture them.
+    /// Sets a preference for this process only, keeping the launch arguments (such as -saveFolder).
+    private static func override(_ key: String, _ value: Any) {
+        var args = Settings.d.volatileDomain(forName: UserDefaults.argumentDomain)
+        args[key] = value
+        Settings.d.setVolatileDomain(args, forName: UserDefaults.argumentDomain)
+    }
+
+    private static func windowBackground(_ pattern: NSWindow) async {
+        do {
+            let content = try await Capturer.content()
+            let id = CGWindowID(pattern.windowNumber)
+            let bare = try await Capturer.captureWindow(id: id, content: content)
+            override(Keys.windowBackground, "color")
+            override(Keys.windowBackgroundColor, "#FF00FFFF")
+            let onColor = try await Capturer.captureWindow(id: id, content: content)
+            dump(onColor, "window-on-color")
+            let corner = color(onColor, 3, 3)
+            check(onColor.width > bare.width + 40 && corner.map { dist($0, NSColor(hex: 0xFF00FF)) < 0.1 } == true,
+                  "window background Color puts the window on that color (\(onColor.width)×\(onColor.height), corner \(corner?.hexString ?? "nil"))")
+            override(Keys.windowBackground, "wallpaper")
+            let onWallpaper = try await Capturer.captureWindow(id: id, content: content)
+            dump(onWallpaper, "window-on-wallpaper")
+            check(onWallpaper.width == onColor.width && (color(onWallpaper, 3, 3)?.alphaComponent ?? 0) > 0.99,
+                  "window background Desktop puts the window on the (opaque) wallpaper")
+        } catch {
+            check(false, "window background capture works (\(error.localizedDescription))")
+        }
+        override(Keys.windowBackground, "none")
+    }
+
+    /// With the pointer parked over a flat area, "Include" must change pixels there and "Exclude" must not.
+    private static func cursor(_ screen: NSScreen) async {
+        do {
+            let content = try await Capturer.content()
+            let spot = CGRect(x: 200, y: 200, width: 80, height: 80) // display-local points, top-left origin
+            CGWarpMouseCursorPosition(CGPoint(x: screen.cgOrigin.x + spot.midX, y: screen.cgOrigin.y + spot.midY))
+            await sleep(0.4)
+            let without = try await Capturer.captureScreen(screen, content: content, sourceRect: spot, cursor: false)
+            let with = try await Capturer.captureScreen(screen, content: content, sourceRect: spot, cursor: true)
+            let a = PixelReader(without), b = PixelReader(with)
+            var changed = 0
+            for y in 0..<min(a.height, b.height) {
+                for x in 0..<min(a.width, b.width) {
+                    let ca = a.color(x, y), cb = b.color(x, y)
+                    if let ca, let cb, dist(ca, cb) > 0.15 { changed += 1 }
+                }
+            }
+            check(changed > 30, "Include shows the mouse pointer in the capture (\(changed) px differ from Exclude)")
+            override(Keys.captureCursor, "auto")
+            check(Settings.showsCursor(fullscreen: true) && !Settings.showsCursor(fullscreen: false), "Auto: pointer in fullscreen shots only")
+            override(Keys.captureCursor, "exclude")
+        } catch {
+            check(false, "pointer capture works (\(error.localizedDescription))")
+        }
+    }
+
     private static func otherAppsWindows() async {
         let list = Capturer.windowList()
         guard let first = list.first else { skip("no other app windows on screen to capture"); return }

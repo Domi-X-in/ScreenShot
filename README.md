@@ -52,7 +52,8 @@ To check the UI without Screen Recording permission, run the binary with `SCREEN
 
 - **Saving keeps annotations editable.** ⌘S, Save As and Esc-to-save store the original image and every object (text, arrows, counters, blur, magnifier, pasted images, backdrop) with the file. For PNG it goes in a private `scED` chunk inside the file, which other apps ignore and drop if they modify the image. For JPEG it goes in a hidden `.<name>.screenshot-edit` file next to it, which is ignored if the JPEG changes elsewhere. Reopening the file restores the objects, and ⌘S updates the same file.
 - **Auto-save.** Every change (adding, moving, restyling or deleting an object, typing, crop, undo) is written to the file about a second later, with objects kept editable. Switching files or closing the window saves right away. A new capture gets a file in the Screenshots folder on its first edit; with "After screenshot: Save" on, the editor works on that saved file instead of making a second copy.
-- **Recent strip** at the bottom of the editor: the 10 newest images in the Screenshots folder, by creation date (kept across auto-saves, so tiles don't jump around). A pencil badge marks editable ones. Clicking a thumbnail switches the same editor window to that file, and each file keeps its undo history while the window is open. Right-click offers Edit Here, Open in New Window, Copy Image and Show in Finder. The folder button picks an older file to edit in the same window.
+- **Recent strip** at the bottom of the editor: the 10 newest images in the Screenshots folder, by creation date (kept across auto-saves, so tiles don't jump around). A pencil badge marks editable ones. Clicking a thumbnail switches the same editor window to that file, and each file keeps its undo history while the window is open. Right-click offers Edit Here, Open in New Window, Copy Image and Show in Finder. The last tile opens the Library.
+- **Library** (that tile, ⌘L, or the menu bar icon): every image in the Screenshots folder, newest first, with a thumbnail-size slider. Search matches file names, dates ("2026-10-21", "october") and the **text inside each screenshot**, which is recognized in the background and cached in `~/Library/Application Support/ScreenShot/text-index.json`. Click a screenshot to edit it.
 - **Copy/paste between editors.** ⌘C with an object selected copies the object, and ⌘V pastes it into any editor window. ⌘C with nothing selected copies the image, and ⌘V in another editor adds it as a movable image overlay; pinch or scroll over it to resize.
 
 ## Color, size and zoom (Shottr's info boxes)
@@ -69,11 +70,23 @@ The bottom bar shows three cells that stay visible on any screen width. Each ope
 - **Canvas:** a dot grid that adapts to light and dark mode. The screenshot floats on a soft shadow, and transparent pixels show a checkerboard.
 - **Toolbar:** custom palettes (`Theme.swift`) with tools grouped as select · draw · text · shapes · effects · counter/ruler. The active tool gets a glowing red-orange pill (built around Shottr's #FF0C01), and other buttons highlight on hover and press. Crop is a pill button.
 - **Options card:** floats over the bottom of the canvas, with a ringed color swatch, a live size readout and the color/size/zoom cells.
-- **Recent strip:** shadowed tiles that lift on hover, "2m ago" captions, the current file outlined in the accent, and a dashed "Older…" tile.
+- **Recent strip:** shadowed tiles that lift on hover, "2m ago" captions, the current file outlined in the accent, and a dashed "Library" tile.
 - **Capture overlay:** accent selection with white corner brackets, a frosted size pill, a double-line crosshair, and a circular loupe with a pixel grid and a color readout.
 - **Toasts:** a ✓ / ⚠ / working icon picked from the message, in a frosted capsule that springs in.
 - **Preferences:** an app header with the icon and version.
 - **Appearance** (Preferences › General): System follows macOS; Light or Dark sets ScreenShot's windows only, takes effect immediately, and is remembered.
+
+## Backdrop, Cut Out and other Shottr tools
+
+- **Backdrop** (button at the right of the options card, `K` toggles): 10 color presets; Solid, Color Blend, Vertical, Diagonal, Radial or Mesh gradient, or the screenshot itself blurred; aspect ratio Auto, 1:1, 4:3, 3:2, 16:9, Twitter/X, Facebook, YouTube, LinkedIn or Pinterest; sliders for padding, shadow, inset (a frosted frame), outer and inner corner radius. With the Select tool, drag the background to move the screenshot inside it; **Recenter** puts it back. **Set as Default** makes `K` use that look everywhere. Files saved with the old backdrop presets still open.
+- **Cut Out** (`⇧X`, or the Crop / Cut Out switch): drag up or down over rows, or sideways over columns, then Enter. The strip is removed, the two sides join, and annotations past it move with the image.
+- **Autoadjust** (Crop, `F`): shrinks the selection (or the whole image) to the content, dropping edges that are one flat color.
+- **Imprint Size** (Crop, `I`): stamps a dashed outline and "W × H px" on the image.
+- **Measure:** hold `1` for the distances across the area under the pointer, or `2` for its bounding box; a quick tap picks the Ruler.
+- **OCR of an area:** with a Crop selection, ⌘O reads only that part. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
+- **Hand-drawn style** for arrows, lines, rectangles and ovals (Clean / Hand-Drawn switch in the options bar).
+- **Blinking GIF** (File › Save Blinking GIF, `⇧⌘G`): a looping two-frame GIF that shows the screenshot with and without the annotations.
+- **Capture settings:** hide the menu bar icon (open the app again to get Preferences); mouse pointer Auto (fullscreen only) / Include / Exclude; save Retina screenshots at 1×; window background None / Desktop wallpaper / Color; maximum scrolling capture height; turn `screenshot://` links on or off.
 
 ## Option defaults
 
@@ -81,7 +94,7 @@ New annotations start from **defaults**. The built-in ones include **Professiona
 
 ## Editor shortcuts
 
-`A` arrow · `R` rectangle · `O` oval · `L` line · `D` freehand · `T` text · `H` highlighter · `B` blur · `C` counter · `S` spotlight · `M` magnifier · `1`/`2` ruler · `X` crop (Enter applies it) · `V` select · `K` backdrop
+`A` arrow · `R` rectangle · `O` oval · `L` line · `D` freehand · `T` text · `H` highlighter · `B` blur · `C` counter · `S` spotlight · `M` magnifier · `1`/`2` ruler (tap) or measure (hold) · `X` crop (Enter applies it) · `⇧X` cut out · `F` autoadjust · `I` imprint size · `V` select · `K` backdrop
 Select (`V`, first button in the tool strip): click to select, Shift-click to add/remove, drag on empty space to select several, ⌘A selects all. Drag to move the selection, ⌥-drag duplicates it, arrow keys nudge (Shift ×10), Delete removes it, ⌘D duplicates, ⌘C/⌘V copy and paste it. A single selected box (rectangle, oval, blur, highlight, spotlight, magnifier, image) gets 8 resize handles, and Shift on a corner keeps proportions (always for images). Arrows, lines and rulers get endpoint handles. Options-bar changes apply to every selected object.
 Callout (`E`, after Text in the tool strip): press on what you want to point at and drag to where the bubble goes, then type. A plain click places the bubble up and to the right. Drag the white tip dot to re-aim the pointer anywhere. Dragging the bubble moves it while the tip stays on its target. Double-click to edit the text, which supports per-letter color, size and font like Text. Designs in the options bar: **Professional · Box** (solid, tapered pointer, shadow), **Professional · Card** (white card with colored border), **Informal · Speech** (rounded bubble with a swooping tail), **Fun · Thought** (cloud with a bubble trail), **Fun · Shout** (comic starburst whose spike reaches the target).
 Blur (`B`): Shottr's four conceal types from the options bar. **Blur** is an averaging mosaic over the area, **Blur Text** applies it only to the text lines Vision finds inside the area, **Erase** fills with the dominant surrounding color, and **Erase Text** fills only the text lines. Regions re-conceal what is under them when moved.
@@ -102,4 +115,4 @@ Tools/integration-tests.sh --live  # also real captures (needs Screen Recording 
 
 ## Not reproduced
 
-Paid or service-backed features: license/payments, S3 and cloud upload, telemetry, auto-updater, the screenshot Library, GIF overlay, Autoadjust, Imprint Selection Size, Cut Out, hand-drawn styles, the full backdrop panel (aspect presets, mesh gradients, image backdrops).
+Paid or service-backed features: license/payments, S3 and cloud upload, telemetry and the auto-updater. Backdrop image uploads (Shottr lets you pick any picture; here the image fill is the blurred screenshot).
