@@ -162,6 +162,14 @@ import AppKit
             Thumbnail.show(img, scale: 2)
             return NSApp.windows.last { $0.frame.width == 267 }
         }))
+        steps.append(("icons", {
+            let sheet = IconSheetView()
+            let w = NSWindow(contentRect: CGRect(origin: .zero, size: sheet.frame.size), styleMask: [.titled], backing: .buffered, defer: false)
+            w.title = "Icon family"
+            w.contentView = sheet
+            w.orderFront(nil)
+            return w
+        }))
 
         func next(_ i: Int) {
             guard i < steps.count else { NSApp.terminate(nil); return }
@@ -216,6 +224,37 @@ import AppKit
         guard let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else { return }
         frameView.cacheDisplay(in: frameView.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+}
+
+/// Every icon of the family at 24 pt in the resting ink, with its name: the visual check for R1's icon port.
+final class IconSheetView: NSView {
+    private static let columns = 12, cell = CGSize(width: 78, height: 68)
+    override var isFlipped: Bool { true }
+
+    init() {
+        let rows = (IconName.allCases.count + Self.columns - 1) / Self.columns
+        super.init(frame: CGRect(x: 0, y: 0, width: CGFloat(Self.columns) * Self.cell.width + 32, height: CGFloat(rows) * Self.cell.height + 32))
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        DesignTokens.color(.chrome).setFill()
+        bounds.fill()
+        let label: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: DesignTokens.color(.ink3)]
+        for (i, name) in IconName.allCases.enumerated() {
+            let origin = CGPoint(x: 16 + CGFloat(i % Self.columns) * Self.cell.width, y: 16 + CGFloat(i / Self.columns) * Self.cell.height)
+            let active = [IconName.arrow, .gShapes].contains(name)
+            if active {
+                DesignTokens.color(.accent).setFill()
+                NSBezierPath(roundedRect: CGRect(x: origin.x + Self.cell.width / 2 - 18, y: origin.y + 4, width: 36, height: 36), xRadius: 6, yRadius: 6).fill()
+            }
+            let icon = Icons.image(name, size: 24, color: active ? .white : DesignTokens.color(.ink2))
+            icon.draw(in: CGRect(x: origin.x + Self.cell.width / 2 - 12, y: origin.y + 10, width: 24, height: 24))
+            let text = name.rawValue as NSString
+            let size = text.size(withAttributes: label)
+            text.draw(at: CGPoint(x: origin.x + (Self.cell.width - size.width) / 2, y: origin.y + 46), withAttributes: label)
+        }
     }
 }
 
