@@ -1,6 +1,6 @@
 #!/bin/bash
 # Runs the in-app self-tests (real windows, mouse and keyboard events) against the debug build.
-#   Tools/integration-tests.sh          → editor, selection, text, callouts, info panels, appearance, defaults, auto-save
+#   Tools/integration-tests.sh          → editor, selection, text, callouts, info panels, appearance, defaults, auto-save, ribbon
 #   Tools/integration-tests.sh --live   → also real screen captures (needs Screen Recording allowed for ScreenShot)
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -26,7 +26,7 @@ run_suite() { # name, env var
     if [ "$fail" -gt 0 ] || [ "$pass" -eq 0 ]; then FAILED=1; fi
 }
 
-for s in SELECT TEXT TEXTSTYLE CALLOUT INFO APPEARANCE DEFAULTS PHASE3 ONBOARDING SHAPES; do run_suite "$s" "SCREENSHOT_SELFTEST_$s"; done
+for s in SELECT TEXT TEXTSTYLE CALLOUT INFO APPEARANCE DEFAULTS PHASE3 ONBOARDING SHAPES RIBBON; do run_suite "$s" "SCREENSHOT_SELFTEST_$s"; done
 
 # Real-usage flows across features (about a minute).
 mkdir -p "$WORK/FLOWS"

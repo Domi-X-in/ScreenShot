@@ -162,6 +162,23 @@ import AppKit
             Thumbnail.show(img, scale: 2)
             return NSApp.windows.last { $0.frame.width == 267 }
         }))
+        // R2's ribbon at the widths where groups fold, and the Shapes flyout open on the narrow one.
+        for width in [1280, 1020, 860, 620] as [CGFloat] {
+            steps.append(("ribbon-\(Int(width))", {
+                let (w, _) = RibbonDemo.window(width: width)
+                w.orderFront(nil)
+                return w
+            }))
+        }
+        steps.append(("ribbon-flyout", {
+            let (w, ribbon) = RibbonDemo.window(width: 620)
+            w.orderFront(nil)
+            ribbon.layoutSubtreeIfNeeded()
+            if let shapes = ribbon.groups.first(where: { $0.id == "shapes" }), let button = ribbon.compactButton(for: shapes) {
+                ribbon.toggleFlyout(for: button)
+            }
+            return ribbon.openFlyout
+        }))
         steps.append(("icons", {
             let sheet = IconSheetView()
             let w = NSWindow(contentRect: CGRect(origin: .zero, size: sheet.frame.size), styleMask: [.titled], backing: .buffered, defer: false)

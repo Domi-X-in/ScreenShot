@@ -40,8 +40,10 @@ import AppKit
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
             AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested, ShapesSelfTest.runIfRequested, FlowsSelfTest.runIfRequested,
+            RibbonSelfTest.runIfRequested,
         ]
         if selfTests.contains(where: { $0() }) { return }
+        if RibbonDemo.openIfRequested() { return }
         if ProcessInfo.processInfo.environment["SCREENSHOT_SNAPSHOT_DIR"] != nil {
             DebugSnapshots.runIfRequested()
             return
