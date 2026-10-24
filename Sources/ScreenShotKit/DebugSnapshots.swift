@@ -410,8 +410,8 @@ import AppKit
                     // "a" (Arrow) and "t" (Text) are tool shortcuts on the canvas; in the field they are just letters.
                     key(" ", code: 49); key("a", code: 0); key("t", code: 17)
                     check(typed() == "Hi! at" && v.tool == .text, "tool-shortcut letters type normally (got \(typed() ?? "nil"))")
-                    key("\r", code: 36)
-                    check(ed.doc.objects.contains { $0.kind == .text && $0.text == "Hi! at" }, "Return commits the text as an object")
+                    key("\u{1b}", code: 53) // Return adds a line; Esc finishes
+                    check(ed.doc.objects.contains { $0.kind == .text && $0.text == "Hi! at" }, "Esc commits the text as an object")
                     after(1.5) {
                         let saved = ed.doc.fileURL.flatMap { EditableFile.load($0)?.state?.objects.contains { $0.text == "Hi! at" } } ?? false
                         check(saved, "committed text is auto-saved and editable")
@@ -482,7 +482,7 @@ import AppKit
         check(color(at: 0) == "#FF3B30" && fontName(at: 0)?.contains("Chalkboard") == false, "unselected letters keep their style")
         check(editor != nil, "the text field is still open for typing")
 
-        key("\r", code: 36)
+        key("\u{1b}", code: 53) // Esc finishes typing
         let obj = ed.doc.objects.first { $0.kind == .text }
         check(obj?.text == "Hello" && (obj?.runs?.count ?? 0) >= 2, "committed text keeps per-letter styles (\(obj?.runs?.count ?? 0) runs)")
         let blueRun = obj?.runs?.first { $0.location == 3 }
@@ -625,8 +625,8 @@ import AppKit
         check(win.firstResponder is NSTextView, "typing starts right away")
         for (c, code) in [("L", UInt16(37)), ("o", 31), ("o", 31), ("k", 40)] { key(c, code) }
         check(callouts().first?.text == "Look", "the bubble follows the text while typing")
-        key("\r", 36)
-        check(callouts().first?.text == "Look" && !(win.firstResponder is NSTextView), "Return finishes the text")
+        key("\u{1b}", 53)
+        check(callouts().first?.text == "Look" && !(win.firstResponder is NSTextView), "Esc finishes the text")
 
         let box = callouts()[0].calloutBox
         drag(callouts()[0].calloutPointer, CGPoint(x: 120, y: 120))

@@ -29,6 +29,7 @@ extension FlowsSelfTest {
         st.sketch = false; v.setStyle(st)
         tool("h", .highlighter); drag(ed, CGPoint(x: 85, y: 420), CGPoint(x: 300, y: 480))
         tool("b", .blur); drag(ed, CGPoint(x: 460, y: 150), CGPoint(x: 640, y: 330))
+        tool("b", .blur) // the tool went back to Select after the first blur
         st = v.style; st.blur = .blurText; v.setStyle(st); drag(ed, CGPoint(x: 80, y: 410), CGPoint(x: 700, y: 500))
         st.blur = .blur; v.setStyle(st)
         tool("s", .spotlight); drag(ed, CGPoint(x: 780, y: 120), CGPoint(x: 1120, y: 360))

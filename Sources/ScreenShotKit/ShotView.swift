@@ -485,7 +485,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     override func mouseDown(with event: NSEvent) {
         let wasEditing = textField != nil
         dragMoved = false
-        commitText()
+        if wasEditing { finishTyping() } else { commitText() }
         justDrawnID = nil
         // The canvas keeps its size during the drag; it grows or shrinks to the content when the mouse comes up.
         doc.frozenContentRect = doc.contentRect
@@ -859,6 +859,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
                 // Return right after drawing a rectangle or oval types in it. It isn't selected, so picking another
                 // color for the next shape doesn't recolor this one.
                 justDrawnID = o.holdsTextInShape ? o.id : nil
+                // One shape per pick of a tool, as in PowerPoint (Counter stays on: numbering is a series of clicks).
+                if Settings.returnToSelect, o.kind != .counter { returnToSelectKeepingJustDrawn() }
             }
             needsDisplay = true
         }
@@ -883,6 +885,12 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         measuring = nil
         if tapped { tool = .ruler }
         needsDisplay = true
+    }
+
+    private func returnToSelectKeepingJustDrawn() {
+        let keep = justDrawnID
+        tool = .select
+        justDrawnID = keep
     }
 
     /// Lets the canvas follow the content again after a drag; refits the view if its size changed.
@@ -1413,8 +1421,11 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         tf.textColor = o.baseTextColor
         if !o.text.isEmpty { tf.attributedStringValue = o.attributedText(scale: zoom) }
         tf.delegate = self
+        // Several lines: Return adds a line (see doCommandBy); the field grows with the text instead of scrolling.
+        tf.usesSingleLineMode = false
         tf.cell?.wraps = false
-        tf.cell?.isScrollable = true
+        tf.cell?.isScrollable = false
+        tf.lineBreakMode = .byClipping
         addSubview(tf)
         textField = tf
         repositionTextField()
@@ -1491,6 +1502,27 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         repositionTextField()
         return true
+    }
+
+    /// Return adds a new line (as in PowerPoint and Keynote); Esc finishes typing.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
+            textView.insertNewlineIgnoringFieldEditor(nil)
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            finishTyping()
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Ends typing in a text, callout or shape and, with "back to Select" on, switches to Select.
+    func finishTyping() {
+        let kind = editingID.flatMap { id in doc.objects.first { $0.id == id }?.kind }
+        commitText()
+        if Settings.returnToSelect, kind == .text || kind == .callout, tool == .text || tool == .callout { tool = .select }
     }
 
     func controlTextDidChange(_ obj: Notification) {

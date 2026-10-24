@@ -102,6 +102,8 @@ The bottom bar shows three cells that stay visible on any screen width. Each ope
 
 ## Shapes like in PowerPoint
 
+- **Typing:** in a text box, callout or shape, **Return** starts a new line; **Esc** or a click outside finishes. With **Preferences › Advanced › After drawing: Switch back to Select** (on by default), each drawing tool makes one shape and hands back to Select, as in PowerPoint; finishing a text or callout with a click outside or Esc does the same. Counter stays on, for numbering several in a row.
+- **Custom colors** (the eyedropper button in the color palette) open the color panel next to the editor, and apply to the selected object or, while typing, to the bubble or shape (or to the selected letters).
 - **Text in shapes:** select a rectangle or oval and press **Return** (or double-click it) to type inside; the text is centered and wraps to the shape. Styling the text leaves the outline's color and width alone. A shape with text or fill can be grabbed from anywhere inside it.
 - **Arrange** (menu bar › Arrange, the Arrange button in the options bar, or right-click an object): Align Left / Center / Right / Top / Middle / Bottom, Distribute Horizontally / Vertically (three or more objects, equal gaps), Bring to Front ⇧⌘F, Bring Forward ⌥⇧⌘F, Send Backward ⌥⇧⌘B, Send to Back ⇧⌘B. One selected object aligns to the screenshot.
 - **Smart guides:** when you move, draw or resize a shape, its edges and center snap to the edges and centers of the other objects and of the screenshot, and a pink guide shows what lines up. Hold ⌘ while dragging to place freely; Arrange › Snap to Guides turns it off.

@@ -155,6 +155,7 @@ import ServiceManagement
         form.row("Scrolling capture height", [DefaultsPopup(key: Keys.scrollMaxHeight, options: [5000, 10000, 20000, 30000, 50000].map {
             ("\($0)", "Up to \($0.formatted()) px")
         })])
+        form.row("After drawing", [DefaultsCheckbox("Switch back to Select (Counter stays on)", key: "returnToSelect")])
         form.row("Zoom with mouse wheel", [DefaultsCheckbox("Scroll zooms the editor", key: "wheelZooms")])
         form.row("Default zoom level", [DefaultsCheckbox("Prefer 100%", key: "prefer100")])
         form.row("URL Scheme API", [DefaultsCheckbox("Allow screenshot://grab/area, …", key: Keys.urlScheme)])

@@ -393,6 +393,23 @@ import UniformTypeIdentifiers
 
     func windowDidResize(_ notification: Notification) { updateInfo() }
 
+    /// Annotation text fields get a field editor that ignores the color panel's direct changeColor:. The options bar
+    /// receives the panel's color and applies it properly: to the bubble or shape and the letters, or to the
+    /// selected letters only. Without this, the panel colored only the letters and could hide them on the bubble.
+    private let annotationFieldEditor: AnnotationFieldEditor = {
+        let t = AnnotationFieldEditor()
+        t.isFieldEditor = true
+        return t
+    }()
+
+    func windowWillReturnFieldEditor(_ sender: NSWindow, to client: Any?) -> Any? {
+        (client as? NSTextField)?.superview === shotView ? annotationFieldEditor : nil
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    var debugOptions: OptionsBar { options }
+    #endif
+
     /// Shottr's "Default zoom level: Prefer 100%"; otherwise the image fits the window.
     func applyDefaultZoom() {
         if Settings.prefer100 { shotView.zoomToActualSize() }
@@ -1090,8 +1107,48 @@ final class OptionsBar: NSView, NSMenuDelegate {
         let panel = NSColorPanel.shared
         panel.color = style.color
         panel.setTarget(self)
-        panel.setAction(#selector(colorPanelChanged(_:)))
+        panel.setAction(#selector(colorPanelPicked(_:)))
+        panel.isContinuous = true
+        // The panel stays linked to this editor only while it's open.
+        if let old = panelCloseObserver { NotificationCenter.default.removeObserver(old) }
+        panelCloseObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                NSColorPanel.shared.setTarget(nil)
+                NSColorPanel.shared.setAction(nil)
+                if let o = self?.panelCloseObserver { NotificationCenter.default.removeObserver(o) }
+                self?.panelCloseObserver = nil
+            }
+        }
+        // Open it beside the color swatch, on the editor's screen (macOS reopens it wherever it was last, which can be
+        // another display).
+        if let win = window, let screen = win.screen {
+            let anchor = win.convertToScreen(colorButton.convert(colorButton.bounds, to: nil))
+            let vf = screen.visibleFrame
+            var origin = CGPoint(x: anchor.minX, y: anchor.maxY + 12)
+            origin.x = min(max(origin.x, vf.minX + 8), vf.maxX - panel.frame.width - 8)
+            if origin.y + panel.frame.height > vf.maxY - 8 { origin.y = max(vf.minY + 8, anchor.minY - panel.frame.height - 12) }
+            panel.setFrameOrigin(origin)
+        }
         panel.orderFront(nil)
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    func debugOpenCustomColor() { customColor() }
+    /// What the color panel does when a color is picked: its action reaches the options bar.
+    func debugPickCustomColor(_ c: NSColor) {
+        NSColorPanel.shared.color = c
+        colorPanelChanged(NSColorPanel.shared)
+    }
+    #endif
+
+    private var panelCloseObserver: NSObjectProtocol?
+
+    /// The panel's action: only a color the user picks counts (the panel also fires when something else sets its color).
+    @objc private func colorPanelPicked(_ sender: NSColorPanel) {
+        guard sender.isVisible else { return }
+        if let e = NSApp.currentEvent, e.window != nil, e.window !== sender, e.type != .keyDown { return }
+        colorPanelChanged(sender)
     }
 
     @objc private func colorPanelChanged(_ sender: NSColorPanel) {
@@ -1161,5 +1218,17 @@ extension OptionsBar {
             reset.target = self
             menu.addItem(reset)
         }
+    }
+}
+
+/// Field editor for annotation text. The options bar owns colors: the color panel's changeColor: is ignored here, and
+/// the text never pushes its letters' color into the panel (the panel would announce it as a pick, and the bubble or
+/// shape would take it, e.g. black after deleting all the text).
+final class AnnotationFieldEditor: NSTextView {
+    override func changeColor(_ sender: Any?) {}
+    override func updateFontPanel() {}
+    override var usesFontPanel: Bool {
+        get { false }
+        set {}
     }
 }

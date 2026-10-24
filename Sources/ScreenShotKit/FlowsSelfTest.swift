@@ -211,6 +211,7 @@ import AppKit
             ("switch-files", switchFilesFlow),
             ("capture-settings", captureSettingsFlow),
             ("color-zoom-info", colorZoomInfoFlow),
+            ("callout-editing", calloutEditingFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

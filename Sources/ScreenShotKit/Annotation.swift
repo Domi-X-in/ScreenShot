@@ -551,12 +551,16 @@ struct Annotation {
         if holdsTextInShape {
             // Text inside a rectangle or oval: the outline keeps its own color and width; the text keeps its styles.
             runs = found.isEmpty ? nil : found
+        } else if kind == .callout, found.count <= 1, let only = found.first {
+            // A callout's color is its bubble's, set from the options bar only. The text never recolors it: on
+            // filled designs the text is drawn in a contrasting color, and after deleting everything the field can
+            // fall back to the system text color. A text color picked on purpose stays on the text.
+            font = only.font
+            width = only.size / 6
+            runs = only.color == baseTextColor.rgbaHex ? nil : [only]
         } else if found.count <= 1, let only = found.first {
-            // One style for everything: store it as the object's own style. A callout's text is drawn in a contrasting
-            // color on filled designs; that color must not become the bubble's.
-            if kind != .callout || only.color != baseTextColor.rgbaHex {
-                color = NSColor(rgbaHex: only.color) ?? color
-            }
+            // One style for everything: store it as the object's own style.
+            color = NSColor(rgbaHex: only.color) ?? color
             font = only.font
             width = only.size / 6
             runs = nil

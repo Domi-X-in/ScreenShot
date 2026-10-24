@@ -108,6 +108,12 @@ enum Settings {
         set { d.set(newValue.rgbaHex, forKey: Keys.windowBackgroundColor) }
     }
     static var urlSchemeEnabled: Bool { d.bool(forKey: Keys.urlScheme) }
+    /// PowerPoint-style: after drawing a shape (or finishing a text or callout with a click outside or Esc), the
+    /// tool goes back to Select. Counter stays on, for numbering several in a row.
+    static var returnToSelect: Bool {
+        get { d.object(forKey: "returnToSelect") as? Bool ?? true }
+        set { d.set(newValue, forKey: "returnToSelect") }
+    }
     /// Smart guides: snap shapes to the edges and centers of other objects and of the image (⌘ while dragging skips it).
     static var snapToGuides: Bool {
         get { d.object(forKey: "snapToGuides") as? Bool ?? true }
