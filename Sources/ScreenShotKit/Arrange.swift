@@ -76,6 +76,13 @@ enum ArrangeAction: String, CaseIterable {
         return i
     }
 
+    static func transformItem(_ t: TransformAction) -> NSMenuItem {
+        let i = NSMenuItem(title: t.title, action: #selector(ShotView.transformFromMenu(_:)), keyEquivalent: "")
+        i.representedObject = t.rawValue
+        i.image = NSImage(systemSymbolName: t.symbol, accessibilityDescription: nil)
+        return i
+    }
+
     static func items(includeSnap: Bool) -> [NSMenuItem] {
         var out = ArrangeAction.orders.map(item) + [.separator()]
         let align = NSMenuItem(title: "Align", action: nil, keyEquivalent: "")
@@ -84,7 +91,17 @@ enum ArrangeAction: String, CaseIterable {
         let distribute = NSMenuItem(title: "Distribute", action: nil, keyEquivalent: "")
         distribute.submenu = NSMenu(title: "Distribute")
         ArrangeAction.distributions.forEach { distribute.submenu?.addItem(item($0)) }
-        out += [align, distribute]
+        out += [align, distribute, .separator()]
+        let group = NSMenuItem(title: "Group", action: #selector(ShotView.groupSelection(_:)), keyEquivalent: "g")
+        group.keyEquivalentModifierMask = [.command, .option]
+        group.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: nil)
+        let ungroup = NSMenuItem(title: "Ungroup", action: #selector(ShotView.ungroupSelection(_:)), keyEquivalent: "g")
+        ungroup.keyEquivalentModifierMask = [.command, .option, .shift]
+        ungroup.image = NSImage(systemSymbolName: "square.on.square.dashed", accessibilityDescription: nil)
+        let rotate = NSMenuItem(title: "Rotate", action: nil, keyEquivalent: "")
+        rotate.submenu = NSMenu(title: "Rotate")
+        TransformAction.allCases.forEach { rotate.submenu?.addItem(transformItem($0)) }
+        out += [group, ungroup, rotate]
         if includeSnap {
             out += [.separator(), NSMenuItem(title: "Snap to Guides", action: #selector(ShotView.toggleSnapToGuides(_:)), keyEquivalent: "")]
         }
@@ -93,39 +110,44 @@ enum ArrangeAction: String, CaseIterable {
 }
 
 enum Arrange {
-    /// Applies `action` to the objects whose ids are in `selected`. `reference` is what a single object aligns to.
-    static func apply(_ action: ArrangeAction, to objects: [Annotation], selected: Set<UUID>, reference: CGRect) -> [Annotation] {
+    /// Applies `action` to the objects whose ids are in `selected`. A group moves as one unit. `reference` is the
+    /// image: what a single unit aligns to, and with `toCanvas` (Align to Canvas) what every unit aligns to.
+    static func apply(_ action: ArrangeAction, to objects: [Annotation], selected: Set<UUID>, reference: CGRect,
+                      toCanvas: Bool = false) -> [Annotation] {
         if action.isOrder { return reorder(objects, selected: selected, action) }
         var out = objects
-        let idx = objects.indices.filter { selected.contains(objects[$0].id) }
-        guard idx.count >= action.minimumSelection else { return objects }
-        let boxes = idx.map { objects[$0].frame }
-        let target = idx.count == 1 ? reference : boxes.dropFirst().reduce(boxes[0]) { $0.union($1) }
+        let units = Grouping.units(objects, selected: selected)
+        guard units.count >= action.minimumSelection else { return objects }
+        let boxes = units.map { u in u.dropFirst().reduce(objects[u[0]].frame) { $0.union(objects[$1].frame) } }
+        let target = units.count == 1 || toCanvas ? reference : boxes.dropFirst().reduce(boxes[0]) { $0.union($1) }
 
-        func move(_ i: Int, dx: CGFloat = 0, dy: CGFloat = 0) {
+        func move(_ unit: [Int], dx: CGFloat = 0, dy: CGFloat = 0) {
             guard dx != 0 || dy != 0 else { return }
-            out[i].offset(by: CGVector(dx: dx, dy: dy))
-            if out[i].kind == .blur { out[i].textRects = nil }
+            for i in unit {
+                out[i].offset(by: CGVector(dx: dx, dy: dy))
+                if out[i].kind == .blur { out[i].textRects = nil }
+            }
         }
 
         switch action {
-        case .alignLeft: for (i, b) in zip(idx, boxes) { move(i, dx: target.minX - b.minX) }
-        case .alignCenter: for (i, b) in zip(idx, boxes) { move(i, dx: target.midX - b.midX) }
-        case .alignRight: for (i, b) in zip(idx, boxes) { move(i, dx: target.maxX - b.maxX) }
-        case .alignTop: for (i, b) in zip(idx, boxes) { move(i, dy: target.minY - b.minY) }
-        case .alignMiddle: for (i, b) in zip(idx, boxes) { move(i, dy: target.midY - b.midY) }
-        case .alignBottom: for (i, b) in zip(idx, boxes) { move(i, dy: target.maxY - b.maxY) }
+        case .alignLeft: for (u, b) in zip(units, boxes) { move(u, dx: target.minX - b.minX) }
+        case .alignCenter: for (u, b) in zip(units, boxes) { move(u, dx: target.midX - b.midX) }
+        case .alignRight: for (u, b) in zip(units, boxes) { move(u, dx: target.maxX - b.maxX) }
+        case .alignTop: for (u, b) in zip(units, boxes) { move(u, dy: target.minY - b.minY) }
+        case .alignMiddle: for (u, b) in zip(units, boxes) { move(u, dy: target.midY - b.midY) }
+        case .alignBottom: for (u, b) in zip(units, boxes) { move(u, dy: target.maxY - b.maxY) }
         case .distributeHorizontally, .distributeVertically:
-            // Equal gaps between neighbors; the first and last objects stay where they are.
+            // Equal gaps between neighbors. To the selection, the first and last stay where they are; to the canvas,
+            // they move to its edges (PowerPoint's Align to Slide).
             let horizontal = action == .distributeHorizontally
-            let order = zip(idx, boxes).sorted { horizontal ? $0.1.midX < $1.1.midX : $0.1.midY < $1.1.midY }
-            let start = horizontal ? order.first!.1.minX : order.first!.1.minY
-            let end = horizontal ? order.last!.1.maxX : order.last!.1.maxY
+            let order = zip(units, boxes).sorted { horizontal ? $0.1.midX < $1.1.midX : $0.1.midY < $1.1.midY }
+            let start = toCanvas ? (horizontal ? reference.minX : reference.minY) : (horizontal ? order.first!.1.minX : order.first!.1.minY)
+            let end = toCanvas ? (horizontal ? reference.maxX : reference.maxY) : (horizontal ? order.last!.1.maxX : order.last!.1.maxY)
             let sizes = order.reduce(0) { $0 + (horizontal ? $1.1.width : $1.1.height) }
             let gap = (end - start - sizes) / CGFloat(order.count - 1)
             var cursor = start
-            for (i, b) in order {
-                if horizontal { move(i, dx: cursor - b.minX); cursor += b.width + gap } else { move(i, dy: cursor - b.minY); cursor += b.height + gap }
+            for (u, b) in order {
+                if horizontal { move(u, dx: cursor - b.minX); cursor += b.width + gap } else { move(u, dy: cursor - b.minY); cursor += b.height + gap }
             }
         default: break
         }
@@ -233,64 +255,5 @@ struct SmartGuides {
         let dx = Self.best([p.x], xs, threshold), dy = Self.best([p.y], ys, threshold)
         let q = CGPoint(x: p.x + dx, y: p.y + dy)
         return (q, guides(for: CGRect(origin: q, size: .zero)))
-    }
-}
-
-/// The options bar's Arrange popover: icon buttons in three groups, the ones that need more objects disabled.
-final class ArrangePanelView: NSView {
-    private let onAction: (ArrangeAction) -> Void
-
-    init(selectionCount: Int, onAction: @escaping (ArrangeAction) -> Void) {
-        self.onAction = onAction
-        super.init(frame: .zero)
-        func group(_ title: String, _ actions: [ArrangeAction]) -> NSView {
-            let label = NSTextField(labelWithString: title.uppercased())
-            label.font = .systemFont(ofSize: 10, weight: .semibold)
-            label.textColor = .secondaryLabelColor
-            let buttons = actions.map { a -> NSButton in
-                let b = NSButton(image: NSImage(systemSymbolName: a.symbol, accessibilityDescription: a.title)
-                    ?? NSImage(systemSymbolName: "square", accessibilityDescription: a.title)!, target: self, action: #selector(clicked(_:)))
-                b.bezelStyle = .rounded
-                b.identifier = NSUserInterfaceItemIdentifier(a.rawValue)
-                let keys = a.keyEquivalent.map { k in
-                    (k.1.contains(.option) ? "⌥" : "") + (k.1.contains(.shift) ? "⇧" : "") + "⌘" + k.0.uppercased()
-                }
-                b.toolTip = a.title + (keys.map { "  \($0)" } ?? "")
-                b.isEnabled = selectionCount >= a.minimumSelection
-                b.widthAnchor.constraint(equalToConstant: 36).isActive = true
-                return b
-            }
-            let row = NSStackView(views: buttons)
-            row.spacing = 4
-            let col = NSStackView(views: [label, row])
-            col.orientation = .vertical
-            col.alignment = .leading
-            col.spacing = 6
-            return col
-        }
-        let note = NSTextField(wrappingLabelWithString: selectionCount == 1
-            ? "One object aligns to the screenshot. Select several to align them to each other."
-            : "Distribute needs three or more objects.")
-        note.font = .systemFont(ofSize: 11)
-        note.textColor = .secondaryLabelColor
-        note.preferredMaxLayoutWidth = 250
-        let stack = NSStackView(views: [group("Align", ArrangeAction.alignments), group("Distribute", ArrangeAction.distributions),
-                                        group("Order", ArrangeAction.orders), note])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 12), stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    @objc private func clicked(_ sender: NSButton) {
-        guard let raw = sender.identifier?.rawValue, let a = ArrangeAction(rawValue: raw) else { return }
-        onAction(a)
     }
 }

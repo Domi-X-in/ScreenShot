@@ -37,10 +37,10 @@ extension FlowsSelfTest {
         await sleep(0.15)
         type("Purple")
         let panel = NSColorPanel.shared
-        ed.debugOptions.debugOpenCustomColor()
+        ed.debugTopBar.fill.moreColors()
         check(panel.isVisible && panel.screen == ed.window?.screen && ed.window.map { panel.frame.intersects($0.frame.insetBy(dx: -400, dy: -400)) } == true,
-              "Custom color opens the color panel next to the editor, on its screen")
-        ed.debugOptions.debugPickCustomColor(NSColor(hex: 0x8E44AD))
+              "Shape Fill › More Colors… opens the color panel next to the editor, on its screen")
+        ed.debugTopBar.fill.debugPickCustomColor(NSColor(hex: 0x8E44AD))
         // AppKit also sends changeColor: to the text being edited.
         _ = ed.window?.firstResponder?.tryToPerform(#selector(NSTextView.changeColor(_:)), with: panel)
         key("esc") // Esc finishes typing
@@ -52,8 +52,8 @@ extension FlowsSelfTest {
 
         // Custom color on a selected callout (not typing).
         if let c2 { click(ed, CGPoint(x: c2.calloutShape().body.boundingBox.midX, y: c2.calloutShape().body.boundingBox.midY)) }
-        ed.debugOptions.debugOpenCustomColor()
-        ed.debugOptions.debugPickCustomColor(NSColor(hex: 0x16A085))
+        ed.debugTopBar.fill.moreColors()
+        ed.debugTopBar.fill.debugPickCustomColor(NSColor(hex: 0x16A085))
         check(v.doc.objects.last?.color.hexString == "#16A085", "a custom color recolors a selected callout")
         panel.orderOut(nil)
 

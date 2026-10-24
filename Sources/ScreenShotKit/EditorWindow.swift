@@ -31,11 +31,13 @@ import UniformTypeIdentifiers
     ], mode: .momentary)
     private lazy var cropButton = PillButton(title: "Crop", symbol: "crop", tooltip: "Crop (X) — Enter applies it") { [weak self] in self?.cropClicked() }
     private let info = InfoCellsView()
-    private lazy var options = OptionsBar(info: info)
+    private lazy var statusBar = StatusBar(info: info)
+    private let options = ToolOptions()
     private let recent = RecentStrip()
-    /// The formatting store and its Word-style toolbar.
+    /// The formatting store and the top toolbar (Word's Font and Paragraph, PowerPoint's Shape Styles, Arrange, Align).
     let formatting = FormattingController()
     private lazy var ribbon = FormattingRibbon(controller: formatting)
+    private lazy var topBar = EditorToolbar(ribbon: ribbon, options: options)
 
     private enum Item {
         static let actions = NSToolbarItem.Identifier("actions")
@@ -87,10 +89,10 @@ import UniformTypeIdentifiers
         options.onChange = { [weak self] style in self?.shotView.setStyle(style) }
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { LibraryWindowController.show() }
-        options.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
+        statusBar.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
         options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
         options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
-        options.onArrangePanel = { [weak self] anchor in self?.showArrangePanel(from: anchor) }
+        topBar.shotView = shotView
         options.onCutOutMode = { [weak self] on in
             self?.shotView.cutOutMode = on
             self?.window?.makeFirstResponder(self?.shotView)
@@ -104,25 +106,25 @@ import UniformTypeIdentifiers
         // The canvas paints its dot background over whatever it is asked to redraw; keep that inside it, and keep the
         // toolbar above it (views don't clip to their bounds by default since macOS 14).
         shotView.clipsToBounds = true
-        for v in [shotView, ribbon, options, recent] as [NSView] {
+        for v in [shotView, topBar, statusBar, recent] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
+        shotView.topInset = 10 + EditorToolbar.height
         NSLayoutConstraint.activate([
-            // Text formatting, like Word's ribbon, under the toolbar.
-            ribbon.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
-            ribbon.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            ribbon.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            ribbon.heightAnchor.constraint(equalToConstant: 72),
-            shotView.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
+            // Both cards float over the canvas: the toolbar at the top, hugging its content, the status bar at the bottom.
+            topBar.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor, constant: 8),
+            topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            topBar.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
+            topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
+            shotView.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
             shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
-            // The options card floats over the bottom of the canvas.
-            options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
-            options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
-            options.bottomAnchor.constraint(equalTo: recent.topAnchor, constant: -10),
-            options.heightAnchor.constraint(equalToConstant: 48),
+            statusBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            statusBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
+            statusBar.bottomAnchor.constraint(equalTo: recent.topAnchor, constant: -10),
+            statusBar.heightAnchor.constraint(equalToConstant: ToolbarShell.barHeight),
             recent.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             recent.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             recent.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -170,8 +172,8 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
-        let chrome: CGFloat = 52 + 72 + 68 + 84
-        var w = max(1180, c.width / doc.scale + 32)
+        let chrome: CGFloat = 52 + 18 + EditorToolbar.height + 68 + 84
+        var w = max(1380, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
         h = min(h, screen.height * 0.92)
@@ -185,8 +187,9 @@ import UniformTypeIdentifiers
     func syncToolbar() {
         toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
         cropButton.isOn = shotView.tool == .crop
-        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
-                       selectionCount: shotView.selection.count)
+        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, cutOut: shotView.cutOutMode)
+        statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+        topBar.update()
         // The formatting toolbar follows focus, selection and the caret.
         formatting.attach(shotView.formattingTarget())
         updateInfo()
@@ -240,11 +243,6 @@ import UniformTypeIdentifiers
     var debugInfo: InfoCellsView { info }
     var debugRecent: RecentStrip { recent }
     #endif
-
-    func showArrangePanel(from anchor: NSView) {
-        let panel = ArrangePanelView(selectionCount: shotView.selection.count) { [weak self] action in self?.shotView.arrange(action) }
-        present(panel, from: anchor)
-    }
 
     func showColorPanel(from anchor: NSView) {
         present(ColorHelperView { [weak self] in self?.updateInfo() }, from: anchor)
@@ -421,11 +419,13 @@ import UniformTypeIdentifiers
     }
 
     /// Whether keyboard focus is in the formatting toolbar (its size box), so text being typed stays open.
-    func isFormattingControl(_ responder: NSResponder) -> Bool { ribbon.owns(responder) }
+    func isFormattingControl(_ responder: NSResponder) -> Bool { topBar.owns(responder) }
 
     #if SCREENSHOT_SELFTESTS
     var debugRibbon: FormattingRibbon { ribbon }
-    var debugOptions: OptionsBar { options }
+    var debugOptions: ToolOptions { options }
+    var debugTopBar: EditorToolbar { topBar }
+    var debugStatusBar: StatusBar { statusBar }
     #endif
 
     /// Shottr's "Default zoom level: Prefer 100%"; otherwise the image fits the window.
@@ -717,307 +717,40 @@ final class DragOutView: NSView, NSDraggingSource {
     }
 }
 
-// MARK: - Options bar
+// MARK: - Status bar
 
-/// Shottr's contextual options row: color, size, then controls for the current tool.
-final class OptionsBar: NSView, NSMenuDelegate {
-    var onChange: ((ToolStyle) -> Void)?
+/// The bottom bar: a hint for the tool in hand, Shottr's info cells (color under the pointer · Tab copies it, image
+/// size, zoom) and the Backdrop button. Shape and text controls live in the top toolbar.
+final class StatusBar: ToolbarShell {
     var onBackdropPanel: ((NSView) -> Void)?
-    var onCutOutMode: ((Bool) -> Void)?
-    var onAutoadjust: (() -> Void)?
-    var onImprint: (() -> Void)?
-    var onArrangePanel: ((NSView) -> Void)?
-    private lazy var arrangeButton = Self.smallButton("Arrange", symbol: "square.3.layers.3d", tooltip: "Align, distribute and order the selection",
-                                                      target: self, action: #selector(arrangeClicked))
-    private lazy var autoadjustButton = Self.smallButton("Autoadjust", symbol: "viewfinder", tooltip: "Shrink the selection to the content (F)",
-                                                         target: self, action: #selector(autoadjustClicked))
-    private lazy var imprintButton = Self.smallButton("Imprint Size", symbol: "ruler", tooltip: "Stamp the selection's size on the image (I)",
-                                                      target: self, action: #selector(imprintClicked))
-    private let cropModeControl = NSSegmentedControl(labels: ["Crop", "Cut Out"], trackingMode: .selectOne, target: nil, action: nil)
-    private var style = ToolStyle()
-
-    private let colorButton = NSButton()
-    private let widthSlider = NSSlider(value: 4, minValue: 1, maxValue: 20, target: nil, action: nil)
-    private let arrowControl = DefaultableSegmentedControl()
-    private let dashControl = DefaultableSegmentedControl()
-    private let sketchControl = DefaultableSegmentedControl()
-    private let fillControl = DefaultableSegmentedControl()
-    private let blurControl = DefaultableSegmentedControl(labels: BlurMode.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
-    private let fontControl = DefaultableSegmentedControl(labels: TextFont.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
-    private let shapeControl = DefaultableSegmentedControl()
-    private let unitControl = DefaultableSegmentedControl(labels: ["PX", "PT"], trackingMode: .selectOne, target: nil, action: nil)
-    private let lensShapeControl = DefaultableSegmentedControl()
-    private let calloutControl = DefaultableSegmentedControl()
-    private static let zoomSteps: [CGFloat] = [1.5, 2, 3, 4]
-    private let lensZoomControl = DefaultableSegmentedControl(labels: OptionsBar.zoomSteps.map { "\($0.formatted())×" }, trackingMode: .selectOne,
-                                                              target: nil, action: nil)
-
-    /// Each option control with how it reads and writes a ToolStyle, for right-click → Set as Default.
-    private lazy var defaultables: [(control: DefaultableSegmentedControl, set: (inout ToolStyle, Int) -> Void, get: (ToolStyle) -> Int)] = [
-        (calloutControl, { $0.callout = CalloutStyle(rawValue: $1) ?? .box }, { $0.callout.rawValue }),
-        (arrowControl, { $0.arrow = ArrowStyle(rawValue: $1) ?? .tapered }, { $0.arrow.rawValue }),
-        (dashControl, { $0.dashed = $1 == 1 }, { $0.dashed ? 1 : 0 }),
-        (sketchControl, { $0.sketch = $1 == 1 }, { $0.sketch ? 1 : 0 }),
-        (fillControl, { $0.fill = FillStyle(rawValue: $1) ?? .none }, { $0.fill.rawValue }),
-        (blurControl, { $0.blur = BlurMode(rawValue: $1) ?? .blur }, { $0.blur.rawValue }),
-        (fontControl, { $0.font = TextFont(rawValue: $1) ?? .sans }, { $0.font.rawValue }),
-        (shapeControl, { $0.counterShape = CounterShape(rawValue: $1) ?? .circle }, { $0.counterShape.rawValue }),
-        (unitControl, { $0.rulerInPoints = $1 == 1 }, { $0.rulerInPoints ? 1 : 0 }),
-        (lensShapeControl, { $0.lensShape = LensShape(rawValue: $1) ?? .oval }, { $0.lensShape.rawValue }),
-        (lensZoomControl, { $0.magnification = Self.zoomSteps[$1] }, { s in Self.zoomSteps.firstIndex { abs($0 - s.magnification) < 0.01 } ?? -1 }),
-    ]
     private var backdropButton: PillButton!
-    private let hint = NSTextField(labelWithString: "")
-    private let sizeReadout = NSTextField(labelWithString: "4")
-    private var popover: NSPopover?
+    private let hint = ToolbarShell.label("", size: 11, weight: .regular)
 
     init(info: NSView) {
         super.init(frame: .zero)
-        // Floating card: rounded, bordered, softly shadowed.
-        wantsLayer = true
-        layer?.cornerRadius = 14
-        layer?.borderWidth = 1
-        Theme.cardShadow(self, radius: 16, opacity: 0.22)
-        sizeReadout.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        sizeReadout.textColor = .secondaryLabelColor
-        sizeReadout.alignment = .center
-        sizeReadout.widthAnchor.constraint(equalToConstant: 20).isActive = true
-        sizeReadout.toolTip = "Size"
-
-        colorButton.isBordered = false
-        colorButton.imageScaling = .scaleNone
-        colorButton.target = self
-        colorButton.action = #selector(showColors)
-        colorButton.toolTip = "Color"
-        colorButton.setAccessibilityLabel("Color")
-        colorButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-
-        widthSlider.controlSize = .small
-        widthSlider.target = self
-        widthSlider.action = #selector(widthChanged)
-        widthSlider.toolTip = "Size"
-        widthSlider.setAccessibilityLabel("Size")
-        widthSlider.widthAnchor.constraint(equalToConstant: 84).isActive = true
-
-        Self.images(arrowControl, ArrowStyle.allCases.map { ($0.symbol, $0.title) })
-        Self.images(dashControl, [("line.diagonal", "Solid Line"), ("line.horizontal.3.decrease", "Dashed Line")])
-        Self.images(sketchControl, [("pencil.line", "Clean Strokes"), ("scribble", "Hand-Drawn Strokes")])
-        Self.images(fillControl, FillStyle.allCases.map { ($0.symbol, $0.title) })
-        Self.images(shapeControl, CounterShape.allCases.map { ($0.symbol, $0.title) })
-        Self.images(lensShapeControl, LensShape.allCases.map { ($0.symbol, $0.title) })
-        Self.images(calloutControl, CalloutStyle.allCases.map { ($0.symbol, $0.title) })
-        lensZoomControl.toolTip = "Magnification · pinch, scroll or +/− over a selected magnifier for finer steps"
-        blurControl.toolTip = "Blur or Erase (fills with the surrounding color)"
-        unitControl.toolTip = "One logical point is equal two physical pixels on Retina displays."
-        fontControl.toolTip = "Font"
-        for c in [arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl, unitControl, lensShapeControl, lensZoomControl,
-                  calloutControl] {
-            c.controlSize = .small
-            c.target = self
-            c.action = #selector(optionChanged(_:))
-        }
-
-
         backdropButton = PillButton(title: "Backdrop", symbol: "rectangle.inset.filled",
                                     tooltip: "Backdrop: background, aspect ratio, padding, shadow (K toggles)") { [weak self] in
             guard let self else { return }
             self.onBackdropPanel?(self.backdropButton)
         }
-
-        cropModeControl.controlSize = .small
-        cropModeControl.target = self
-        cropModeControl.action = #selector(cropModeChanged)
-        cropModeControl.setImage(NSImage(systemSymbolName: "crop", accessibilityDescription: "Crop"), forSegment: 0)
-        cropModeControl.setImage(NSImage(systemSymbolName: "scissors", accessibilityDescription: "Cut Out"), forSegment: 1)
-        cropModeControl.setToolTip("Keep the selected area (X)", forSegment: 0)
-        cropModeControl.setToolTip("Remove a horizontal or vertical strip and join the rest (⇧X)", forSegment: 1)
-
-        hint.font = .systemFont(ofSize: 11)
-        hint.textColor = InfoCellsView.infoColor
-        hint.lineBreakMode = .byTruncatingTail
-        hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        // Clicking these must never take keyboard focus away from a text box being typed in.
-        for c in [colorButton, widthSlider, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl, unitControl,
-                  lensShapeControl, lensZoomControl, calloutControl, cropModeControl] as [NSControl] {
-            c.refusesFirstResponder = true
-        }
-        wireDefaults()
-        let left = NSStackView(views: [colorButton, widthSlider, sizeReadout, cropModeControl, autoadjustButton, imprintButton, arrangeButton, calloutControl, arrowControl, dashControl, sketchControl, fillControl, blurControl, fontControl, shapeControl,
-                                       unitControl, lensShapeControl, lensZoomControl, hint])
-        left.spacing = 12
-        left.alignment = .centerY
+        // The hint gives way first on narrow windows.
+        hint.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        hint.setContentHuggingPriority(.defaultLow, for: .horizontal)
         // Shottr's info cells (color · size · zoom) sit here, always visible even on narrow screens.
         info.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let divider = NSView()
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([divider.widthAnchor.constraint(equalToConstant: 1), divider.heightAnchor.constraint(equalToConstant: 26)])
-        let row = NSStackView(views: [left, divider, info, backdropButton])
-        row.spacing = 14
+        info.setContentHuggingPriority(.required, for: .horizontal)
+        backdropButton.setContentHuggingPriority(.required, for: .horizontal)
+        let row = NSStackView(views: [hint, Self.divider(), info, backdropButton])
+        row.spacing = Self.spacing
         row.distribution = .fill
         row.alignment = .centerY
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 12)
-        row.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(row)
-        NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: leadingAnchor), row.trailingAnchor.constraint(equalTo: trailingAnchor),
-            row.topAnchor.constraint(equalTo: topAnchor), row.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-    }
-
-    // MARK: Defaults (right-click)
-
-    private func wireDefaults() {
-        for entry in defaultables {
-            let c = entry.control
-            c.onSetDefault = { [weak self] i in
-                guard let self else { return }
-                ToolStyle.updateDefaults { entry.set(&$0, i) }
-                // Use it right away too, so the choice and the default agree.
-                entry.set(&self.style, i)
-                self.onChange?(self.style)
-                self.refreshDefaultMarks()
-                Toast.show("“\(c.name(of: i))” is now the default")
-            }
-            c.onResetDefault = { [weak self] in
-                let builtIn = entry.get(ToolStyle())
-                ToolStyle.updateDefaults { entry.set(&$0, builtIn) }
-                self?.refreshDefaultMarks()
-                if builtIn >= 0 { Toast.show("Default reset to “\(c.name(of: builtIn))”") }
-            }
-        }
-        colorButton.menu = defaultMenu(for: "color")
-        widthSlider.menu = defaultMenu(for: "size")
-        sizeReadout.menu = defaultMenu(for: "size")
-        refreshDefaultMarks()
-    }
-
-    private func refreshDefaultMarks() {
-        let d = ToolStyle.loadDefaults()
-        for entry in defaultables { entry.control.defaultIndex = entry.get(d) }
-        colorButton.toolTip = "Color · default \(d.color.hexString) (right-click to change)"
-        widthSlider.toolTip = "Size · default \(Int(d.width)) (right-click to change)"
-    }
-
-    /// Right-click menu for the color swatch and the size slider.
-    private func defaultMenu(for what: String) -> NSMenu {
-        let m = NSMenu()
-        m.delegate = self
-        m.identifier = NSUserInterfaceItemIdentifier(what)
-        return m
-    }
-
-    var currentStyle: ToolStyle { style }
-    @objc func setColorDefaultAction() { setColorDefault() }
-    @objc func resetColorDefaultAction() { resetColorDefault() }
-    @objc func setSizeDefaultAction() { setSizeDefault() }
-    @objc func resetSizeDefaultAction() { resetSizeDefault() }
-
-    @objc private func setColorDefault() {
-        let c = style.color
-        ToolStyle.updateDefaults { $0.color = c }
-        refreshDefaultMarks()
-        Toast.show("\(c.hexString) is now the default color")
-    }
-
-    @objc private func setSizeDefault() {
-        let w = style.width
-        ToolStyle.updateDefaults { $0.width = w }
-        refreshDefaultMarks()
-        Toast.show("Size \(Int(w)) is now the default")
-    }
-
-    @objc private func resetColorDefault() {
-        ToolStyle.updateDefaults { $0.color = ToolStyle().color }
-        refreshDefaultMarks()
-        Toast.show("Default color reset")
-    }
-
-    @objc private func resetSizeDefault() {
-        ToolStyle.updateDefaults { $0.width = ToolStyle().width }
-        refreshDefaultMarks()
-        Toast.show("Default size reset")
-    }
-
-    override var wantsUpdateLayer: Bool { true }
-
-    override func updateLayer() {
-        layer?.backgroundColor = Theme.card.cgColor
-        layer?.borderColor = Theme.cardBorder.cgColor
+        embed(row)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    private static func images(_ c: NSSegmentedControl, _ items: [(String, String)]) {
-        c.segmentCount = items.count
-        c.trackingMode = .selectOne
-        for (i, (sym, title)) in items.enumerated() {
-            c.setImage(NSImage(systemSymbolName: sym, accessibilityDescription: title), forSegment: i)
-            c.setToolTip(title, forSegment: i)
-            c.setWidth(28, forSegment: i)
-        }
-    }
-
-    /// Color dot with a white ring and a hairline outline (an accent ring when selected).
-    static func swatch(_ c: NSColor, size: CGFloat = 18, selected: Bool = false) -> NSImage {
-        NSImage(size: NSSize(width: size, height: size), flipped: false) { r in
-            let outer = NSBezierPath(ovalIn: r.insetBy(dx: 0.75, dy: 0.75))
-            (selected ? Palette.accent : NSColor.black.withAlphaComponent(0.18)).setStroke()
-            outer.lineWidth = selected ? 1.5 : 1
-            NSColor.white.setFill()
-            outer.fill()
-            outer.stroke()
-            let inner = NSBezierPath(ovalIn: r.insetBy(dx: size * 0.16, dy: size * 0.16))
-            c.setFill()
-            inner.fill()
-            NSColor.black.withAlphaComponent(0.12).setStroke()
-            inner.lineWidth = 0.5
-            inner.stroke()
-            return true
-        }
-    }
-
-    func update(tool: Tool, style s: ToolStyle, backdrop: Backdrop, cutOut: Bool = false, selectionCount: Int = 0) {
-        style = s
-        colorButton.image = Self.swatch(s.color, size: 24)
-        widthSlider.doubleValue = Double(s.width)
-        sizeReadout.stringValue = "\(Int(s.width))"
-        arrowControl.selectedSegment = s.arrow.rawValue
-        dashControl.selectedSegment = s.dashed ? 1 : 0
-        sketchControl.selectedSegment = s.sketch ? 1 : 0
-        fillControl.selectedSegment = s.fill.rawValue
-        blurControl.selectedSegment = s.blur.rawValue
-        fontControl.selectedSegment = s.font.rawValue
-        shapeControl.selectedSegment = s.counterShape.rawValue
-        unitControl.selectedSegment = s.rulerInPoints ? 1 : 0
-        lensShapeControl.selectedSegment = s.lensShape.rawValue
-        calloutControl.selectedSegment = s.callout.rawValue
-        lensZoomControl.selectedSegment = Self.zoomSteps.firstIndex { abs($0 - s.magnification) < 0.01 } ?? -1
+    func update(tool: Tool, backdrop: Backdrop, cutOut: Bool) {
         backdropButton.isOn = backdrop.isOn
-
-        cropModeControl.selectedSegment = cutOut ? 1 : 0
-        cropModeControl.isHidden = tool != .crop
-        autoadjustButton.isHidden = tool != .crop || cutOut
-        imprintButton.isHidden = tool != .crop || cutOut
-        arrangeButton.isHidden = selectionCount == 0
-        arrowControl.isHidden = tool != .arrow
-        dashControl.isHidden = ![.rect, .oval, .line].contains(tool) || s.sketch
-        sketchControl.isHidden = ![.arrow, .rect, .oval, .line].contains(tool)
-        fillControl.isHidden = ![.rect, .oval].contains(tool)
-        blurControl.isHidden = tool != .blur
-        fontControl.isHidden = tool != .text && tool != .callout
-        calloutControl.isHidden = tool != .callout
-        shapeControl.isHidden = tool != .counter
-        unitControl.isHidden = tool != .ruler
-        lensShapeControl.isHidden = tool != .magnifier
-        lensZoomControl.isHidden = tool != .magnifier
-        let usesStroke = ![.blur, .spotlight, .crop, .select, .image].contains(tool)
-        colorButton.isHidden = !usesStroke
-        widthSlider.isHidden = !usesStroke
-        sizeReadout.isHidden = !usesStroke
-
         switch tool {
         case .counter: hint.stringValue = "Type digits to renumber · drag the bubble tip to point it"
         case .crop where cutOut: hint.stringValue = "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
@@ -1031,149 +764,12 @@ final class OptionsBar: NSView, NSMenuDelegate {
         case .magnifier: hint.stringValue = "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
         default: hint.stringValue = "Shift constrains · Tab copies the color under the cursor"
         }
-    }
-
-    static func smallButton(_ title: String, symbol: String, tooltip: String, target: AnyObject, action: Selector) -> NSButton {
-        let b = NSButton(title: title, image: NSImage(systemSymbolName: symbol, accessibilityDescription: title)!, target: target, action: action)
-        b.controlSize = .small
-        b.bezelStyle = .rounded
-        b.imagePosition = .imageLeading
-        b.toolTip = tooltip
-        b.refusesFirstResponder = true
-        return b
-    }
-
-    @objc private func autoadjustClicked() { onAutoadjust?() }
-    @objc private func imprintClicked() { onImprint?() }
-    @objc private func arrangeClicked() { onArrangePanel?(arrangeButton) }
-
-    @objc private func cropModeChanged() {
-        onCutOutMode?(cropModeControl.selectedSegment == 1)
-    }
-
-    @objc private func widthChanged() {
-        style.width = CGFloat(widthSlider.doubleValue.rounded())
-        sizeReadout.stringValue = "\(Int(style.width))"
-        onChange?(style)
-    }
-
-    @objc private func optionChanged(_ sender: NSSegmentedControl) {
-        let i = sender.selectedSegment
-        switch sender {
-        case arrowControl: style.arrow = ArrowStyle(rawValue: i) ?? .tapered
-        case dashControl: style.dashed = i == 1
-        case sketchControl: style.sketch = i == 1
-        case fillControl: style.fill = FillStyle(rawValue: i) ?? .none
-        case blurControl: style.blur = BlurMode(rawValue: i) ?? .blur
-        case fontControl: style.font = TextFont(rawValue: i) ?? .sans
-        case shapeControl: style.counterShape = CounterShape(rawValue: i) ?? .circle
-        case unitControl: style.rulerInPoints = i == 1
-        case lensShapeControl: style.lensShape = LensShape(rawValue: i) ?? .oval
-        case calloutControl: style.callout = CalloutStyle(rawValue: i) ?? .box
-        case lensZoomControl: if i >= 0 { style.magnification = Self.zoomSteps[i] }
-        default: break
-        }
-        onChange?(style)
-    }
-
-    // MARK: Color popover
-
-    @objc private func showColors() {
-        let vc = NSViewController()
-        let grid = NSGridView()
-        grid.rowSpacing = 6
-        grid.columnSpacing = 6
-        var row: [NSView] = []
-        for (i, c) in Palette.colors.enumerated() {
-            let b = NSButton(image: Self.swatch(c, size: 22, selected: c.hexString == style.color.hexString), target: self, action: #selector(pickColor(_:)))
-            b.isBordered = false
-            b.tag = i
-            b.toolTip = c.hexString
-            row.append(b)
-            if row.count == 6 { grid.addRow(with: row); row = [] }
-        }
-        let custom = NSButton(image: NSImage(systemSymbolName: "eyedropper", accessibilityDescription: "Custom color")!, target: self, action: #selector(customColor))
-        custom.isBordered = false
-        custom.toolTip = "Custom color…"
-        row.append(custom)
-        grid.addRow(with: row)
-        let container = NSView()
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(grid)
-        NSLayoutConstraint.activate([
-            grid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            grid.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            grid.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            grid.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
-        ])
-        vc.view = container
-        let p = NSPopover()
-        p.behavior = .transient
-        p.contentViewController = vc
-        p.show(relativeTo: colorButton.bounds, of: colorButton, preferredEdge: .maxY)
-        popover = p
-    }
-
-    @objc private func pickColor(_ sender: NSButton) {
-        style.color = Palette.colors[sender.tag]
-        popover?.close()
-        onChange?(style)
-    }
-
-    @objc private func customColor() {
-        popover?.close()
-        let panel = NSColorPanel.shared
-        panel.color = style.color
-        panel.setTarget(self)
-        panel.setAction(#selector(colorPanelPicked(_:)))
-        panel.isContinuous = true
-        // The panel stays linked to this editor only while it's open.
-        if let old = panelCloseObserver { NotificationCenter.default.removeObserver(old) }
-        panelCloseObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) {
-            [weak self] _ in
-            MainActor.assumeIsolated {
-                NSColorPanel.shared.setTarget(nil)
-                NSColorPanel.shared.setAction(nil)
-                if let o = self?.panelCloseObserver { NotificationCenter.default.removeObserver(o) }
-                self?.panelCloseObserver = nil
-            }
-        }
-        // Open it beside the color swatch, on the editor's screen (macOS reopens it wherever it was last, which can be
-        // another display).
-        if let win = window, let screen = win.screen {
-            let anchor = win.convertToScreen(colorButton.convert(colorButton.bounds, to: nil))
-            let vf = screen.visibleFrame
-            var origin = CGPoint(x: anchor.minX, y: anchor.maxY + 12)
-            origin.x = min(max(origin.x, vf.minX + 8), vf.maxX - panel.frame.width - 8)
-            if origin.y + panel.frame.height > vf.maxY - 8 { origin.y = max(vf.minY + 8, anchor.minY - panel.frame.height - 12) }
-            panel.setFrameOrigin(origin)
-        }
-        panel.orderFront(nil)
+        hint.toolTip = hint.stringValue
     }
 
     #if SCREENSHOT_SELFTESTS
-    func debugOpenCustomColor() { customColor() }
-    var debugShownStyle: ToolStyle { style }
-    /// What the color panel does when a color is picked: its action reaches the options bar.
-    func debugPickCustomColor(_ c: NSColor) {
-        NSColorPanel.shared.color = c
-        colorPanelChanged(NSColorPanel.shared)
-    }
+    var debugHint: String { hint.stringValue }
     #endif
-
-    private var panelCloseObserver: NSObjectProtocol?
-
-    /// The panel's action: only a color the user picks counts (the panel also fires when something else sets its color).
-    @objc private func colorPanelPicked(_ sender: NSColorPanel) {
-        guard sender.isVisible else { return }
-        if let e = NSApp.currentEvent, e.window != nil, e.window !== sender, e.type != .keyDown { return }
-        colorPanelChanged(sender)
-    }
-
-    @objc private func colorPanelChanged(_ sender: NSColorPanel) {
-        style.color = sender.color.usingColorSpace(.sRGB) ?? sender.color
-        onChange?(style)
-    }
 }
 
 /// One auto-save: a snapshot taken on the main thread, encoded and written on the save queue.
@@ -1203,39 +799,6 @@ private final class AutosaveJob: @unchecked Sendable {
         } catch {
             let message = error.localizedDescription
             DispatchQueue.main.async { MainActor.assumeIsolated { Toast.show("Auto-save failed: \(message)") } }
-        }
-    }
-}
-
-extension OptionsBar {
-    /// Fills the color/size right-click menus with the current value when they open.
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.removeAllItems()
-        let d = ToolStyle.loadDefaults()
-        if menu.identifier?.rawValue == "color" {
-            let set = NSMenuItem(title: "Set \(currentStyle.color.hexString) as Default Color", action: #selector(setColorDefaultAction), keyEquivalent: "")
-            set.target = self
-            set.image = OptionsBar.swatch(currentStyle.color, size: 14)
-            menu.addItem(set)
-            let info = NSMenuItem(title: "Current default: \(d.color.hexString)", action: nil, keyEquivalent: "")
-            info.image = OptionsBar.swatch(d.color, size: 14)
-            info.isEnabled = false
-            menu.addItem(info)
-            menu.addItem(.separator())
-            let reset = NSMenuItem(title: "Reset to Original Default", action: #selector(resetColorDefaultAction), keyEquivalent: "")
-            reset.target = self
-            menu.addItem(reset)
-        } else {
-            let set = NSMenuItem(title: "Set Size \(Int(currentStyle.width)) as Default", action: #selector(setSizeDefaultAction), keyEquivalent: "")
-            set.target = self
-            menu.addItem(set)
-            let info = NSMenuItem(title: "Current default: \(Int(d.width))", action: nil, keyEquivalent: "")
-            info.isEnabled = false
-            menu.addItem(info)
-            menu.addItem(.separator())
-            let reset = NSMenuItem(title: "Reset to Original Default", action: #selector(resetSizeDefaultAction), keyEquivalent: "")
-            reset.target = self
-            menu.addItem(reset)
         }
     }
 }

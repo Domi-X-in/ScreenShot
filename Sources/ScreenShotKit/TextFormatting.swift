@@ -64,11 +64,38 @@ struct TextFormatState: Equatable {
     var alignment: TextAlign?
     var verticalAlign: VerticalAlign?
     var orientation: TextOrientation?
+    /// Font Color of the selection; nil when it has several.
+    var color: NSColor?
     /// Vertical alignment and orientation only mean something for containers with a fixed size.
     var supportsVerticalAlign = false
     var supportsOrientation = false
 
     static let inactive = TextFormatState()
+
+    /// Several selected texts as one: a value they don't all share is mixed (nil), a toggle is on only if all have it,
+    /// and container controls work when one of them supports them.
+    static func merged(_ states: [TextFormatState]) -> TextFormatState {
+        let active = states.filter(\.isActive)
+        guard var s = active.first else { return .inactive }
+        for o in active.dropFirst() {
+            if s.family != o.family { s.family = nil }
+            if s.size != o.size { s.size = nil }
+            s.bold = s.bold && o.bold
+            s.italic = s.italic && o.italic
+            s.underline = s.underline && o.underline
+            if s.alignment != o.alignment { s.alignment = nil }
+            if s.color?.rgbaHex != o.color?.rgbaHex { s.color = nil }
+            if o.supportsVerticalAlign {
+                if !s.supportsVerticalAlign { s.verticalAlign = o.verticalAlign } else if s.verticalAlign != o.verticalAlign { s.verticalAlign = nil }
+            }
+            if o.supportsOrientation {
+                if !s.supportsOrientation { s.orientation = o.orientation } else if s.orientation != o.orientation { s.orientation = nil }
+            }
+            s.supportsVerticalAlign = s.supportsVerticalAlign || o.supportsVerticalAlign
+            s.supportsOrientation = s.supportsOrientation || o.supportsOrientation
+        }
+        return s
+    }
 }
 
 /// One formatting command, as the toolbar and the keyboard shortcuts send it.
@@ -82,6 +109,8 @@ enum FormatChange: Equatable {
     case alignment(TextAlign)
     case verticalAlign(VerticalAlign)
     case orientation(TextOrientation)
+    /// Font Color.
+    case color(NSColor)
 
     var isContainer: Bool {
         switch self {
@@ -203,16 +232,26 @@ enum TextFormatting {
         s.isActive = true
         var fonts: [NSFont] = []
         var underlines: [Bool] = []
+        var colors = Set<String>()
+        var firstColor: NSColor?
+        func note(_ c: NSColor?) {
+            guard let c else { return }
+            if firstColor == nil { firstColor = c }
+            colors.insert(c.rgbaHex)
+        }
         let sel = NSIntersectionRange(selection, NSRange(location: 0, length: storage.length))
         if selection.length > 0, sel.length > 0 {
             storage.enumerateAttributes(in: sel) { attrs, _, _ in
                 if let f = attrs[.font] as? NSFont { fonts.append(f) }
                 underlines.append(((attrs[.underlineStyle] as? Int) ?? 0) != 0)
+                note(attrs[.foregroundColor] as? NSColor)
             }
         } else {
             if let f = typing[.font] as? NSFont { fonts.append(f) }
             underlines.append(((typing[.underlineStyle] as? Int) ?? 0) != 0)
+            note(typing[.foregroundColor] as? NSColor)
         }
+        s.color = colors.count == 1 ? firstColor : nil
         let families = Set(fonts.map(family(of:)))
         let sizes = Set(fonts.map { (($0.pointSize / scale) * 2).rounded() / 2 })
         s.family = families.count == 1 ? families.first : nil
@@ -252,6 +291,11 @@ enum TextFormatting {
             return
         }
         guard !change.isContainer else { return }
+        if case let .color(c) = change {
+            if selection.length > 0, sel.length > 0 { storage.addAttribute(.foregroundColor, value: c, range: sel) }
+            typing[.foregroundColor] = c
+            return
+        }
 
         let current = state(of: storage, selection: selection, typing: typing, scale: scale, defaultAlign: defaultAlign)
         /// The new font for one run.

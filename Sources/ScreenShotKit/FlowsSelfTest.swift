@@ -239,6 +239,7 @@ import ScreenCaptureKit
             ("callout-editing", calloutEditingFlow),
             ("style-sync", styleSyncFlow),
             ("formatting", formattingFlow),
+            ("toolbar", toolbarFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

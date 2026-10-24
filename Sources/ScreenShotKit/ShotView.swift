@@ -92,8 +92,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         guard tool == .crop, !cutOutMode, let r = cropRect?.integral.intersection(doc.imageRect), r.width >= 2, r.height >= 2 else { return nil }
         return r
     }
-    private var textField: NSTextField?
-    private var editingID: UUID?
+    private(set) var textField: NSTextField?
+    private(set) var editingID: UUID?
     /// When the backdrop last changed, so a slider drag becomes one undo step.
     private var lastBackdropEdit = Date.distantPast
     /// User zoom (canvas points per image pixel); nil fits the image to the view.
@@ -126,11 +126,12 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Geometry
 
-    /// Room kept free at the bottom for the floating options card.
+    /// Room kept free for the floating toolbar cards at the top and bottom.
+    var topInset: CGFloat = 0
     var bottomInset: CGFloat = 68
 
     private var available: CGRect {
-        CGRect(x: 20, y: 20, width: max(10, bounds.width - 40), height: max(10, bounds.height - 40 - bottomInset))
+        CGRect(x: 20, y: 20 + topInset, width: max(10, bounds.width - 40), height: max(10, bounds.height - 40 - topInset - bottomInset))
     }
 
     private var fitZoom: CGFloat {
@@ -329,7 +330,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     private var snapshot: EditorDocument.Snapshot { .init(image: doc.image, objects: doc.objects, backdrop: doc.backdrop) }
 
     /// Records the state before an edit; also counts as a change for auto-save.
-    private func pushUndo() {
+    func pushUndo() {
         doc.undoStack.append(snapshot)
         if doc.undoStack.count > 200 { doc.undoStack.removeFirst() }
         doc.redoStack.removeAll()
@@ -362,7 +363,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         if s.image !== doc.image { doc.image = s.image }
         doc.objects = s.objects
         doc.backdrop = s.backdrop
-        selectedID = nil
+        // Objects that are still there stay selected (as in Office), so undo after a toolbar change keeps working on them.
+        let kept = selection.filter { id in s.objects.contains { $0.id == id } }
+        setSelection(kept, primary: selectedID.flatMap { kept.contains($0) ? $0 : nil })
         controller?.documentChanged(resized: resized)
         needsDisplay = true
         markChanged()
@@ -424,7 +427,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             pushUndo()
             var pasted: [UUID] = []
             defer { setSelection(Set(pasted), primary: pasted.last) }
-            for var o in objects {
+            for var o in Grouping.regroupCopies(objects) {
                 o.id = UUID()
                 // Same spot as the original would hide the copy; nudge it. Objects from a bigger image are pulled inside.
                 if doc.objects.contains(where: { $0.p1 == o.p1 && $0.p2 == o.p2 }) { o.offset(by: CGVector(dx: 20, dy: 20)) }
@@ -531,7 +534,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         if mods.contains(.shift), let i = hitIndex(p) {
             var ids = selection
             let id = doc.objects[i].id
-            if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+            // A group is added or removed as a whole.
+            let unit = Grouping.expand([id], in: doc.objects)
+            if ids.contains(id) { ids.subtract(unit) } else { ids.formUnion(unit) }
             setSelection(ids, primary: ids.contains(id) ? id : ids.first)
             return
         }
@@ -539,7 +544,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         if mods.contains(.option), let i = hitIndex(p) {
             let ids = selection.contains(doc.objects[i].id) ? selection : [doc.objects[i].id]
             pushUndo()
-            let copies = doc.objects.filter { ids.contains($0.id) }.map { o -> Annotation in
+            let copies = Grouping.regroupCopies(doc.objects.filter { ids.contains($0.id) }).map { o -> Annotation in
                 var c = o
                 c.id = UUID()
                 if c.kind == .blur { c.textRects = nil }
@@ -552,6 +557,13 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         // Dragging one object of a multi-selection moves them all.
         if selection.count > 1, let i = hitIndex(p), selection.contains(doc.objects[i].id) {
+            let o = doc.objects[i]
+            // Double-clicking the text of a grouped object edits it.
+            if event.clickCount == 2, o.kind == .text || o.kind == .callout || o.holdsTextInShape {
+                setSelection([o.id], primary: o.id)
+                beginTextEdit(id: o.id)
+                return
+            }
             pushUndo()
             beginMoveMany(at: p, clicked: doc.objects[i].id)
             return
@@ -579,6 +591,13 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             pushUndo()
             drag = .tail(index: i)
             needsDisplay = true
+            return
+        }
+        // A click on a grouped object selects the whole group (PowerPoint); a second click picks one object of it.
+        if let i = hitIndex(p), doc.objects[i].groupID != nil, selection != [doc.objects[i].id] {
+            setSelection(Grouping.expand([doc.objects[i].id], in: doc.objects), primary: doc.objects[i].id)
+            pushUndo()
+            beginMoveMany(at: p)
             return
         }
         if let i = hitIndex(p) {
@@ -684,12 +703,12 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Arrange
 
-    /// Align, distribute or restack the selection (one object aligns to the image).
+    /// Align, distribute or restack the selection (one object, or everything with Align to Canvas, aligns to the image).
     func arrange(_ action: ArrangeAction) {
         commitText()
-        guard selection.count >= action.minimumSelection else { NSSound.beep(); return }
+        guard Grouping.units(doc.objects, selected: selection).count >= action.minimumSelection else { NSSound.beep(); return }
         let before = doc.objects
-        let after = Arrange.apply(action, to: before, selected: selection, reference: doc.imageRect)
+        let after = Arrange.apply(action, to: before, selected: selection, reference: doc.imageRect, toCanvas: Settings.alignToCanvas)
         guard after.map(\.id) != before.map(\.id) || zip(after, before).contains(where: { $0.p1 != $1.p1 || $0.p2 != $1.p2 }) else { return }
         pushUndo()
         doc.objects = after
@@ -736,8 +755,11 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(arrangeFromMenu(_:)), let raw = item.representedObject as? String, let a = ArrangeAction(rawValue: raw) {
-            return selection.count >= a.minimumSelection
+            return Grouping.units(doc.objects, selected: selection).count >= a.minimumSelection
         }
+        if item.action == #selector(groupSelection(_:)) { return canGroup }
+        if item.action == #selector(ungroupSelection(_:)) { return canUngroup }
+        if item.action == #selector(transformFromMenu(_:)) { return canTransform }
         if item.action == #selector(toggleSnapToGuides(_:)) {
             item.state = Settings.snapToGuides ? .on : .off
             return true
@@ -814,7 +836,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             let r = CGRect(p1: start, p2: raw)
             marqueeRect = r
             let hits = doc.objects.filter { $0.bounds.intersects(r) }.map(\.id)
-            setSelection(base.union(hits), primary: hits.last ?? selectedID)
+            setSelection(Grouping.expand(base.union(hits), in: doc.objects), primary: hits.last ?? selectedID)
         case let .backdrop(start, original):
             let io = Renderer.imageOrigin(doc), t = doc.layout.travel
             let d = CGPoint(x: raw.x + io.x, y: raw.y + io.y) - start
@@ -846,6 +868,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
                 // Plain click on one object of a multi-selection: select just that one (nothing moved; drop the undo point).
                 doc.undoStack.removeLast()
                 setSelection([clicked], primary: clicked)
+            case .moveMany(_, _, nil) where !dragMoved:
+                // Plain click that selected a group: nothing moved, so no undo step.
+                doc.undoStack.removeLast()
             case .move, .lens, .tail, .resize, .moveMany, .calloutTip, .backdrop: markChanged()
             case let .calloutCreate(start):
                 guard var o = live else { break }
@@ -907,9 +932,14 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         needsDisplay = true
     }
 
+    /// Back to Select with the new object selected (as in PowerPoint), so the toolbar's Fill, Outline and Arrange
+    /// work on it right away; Return still types in a new rectangle or oval.
     private func returnToSelectKeepingJustDrawn() {
         let keep = justDrawnID
+        let drawn = doc.objects.last?.id
         tool = .select
+        justDrawnID = keep
+        if let drawn { selectedID = drawn }
         justDrawnID = keep
     }
 
@@ -996,7 +1026,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Selection
 
-    private func setSelection(_ ids: Set<UUID>, primary: UUID?) {
+    func setSelection(_ ids: Set<UUID>, primary: UUID?) {
         keepSelection = true
         selection = ids
         selectedID = primary.flatMap { ids.contains($0) ? $0 : nil } ?? ids.first
@@ -1021,7 +1051,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         let objects = doc.objects.filter { selection.contains($0.id) }
         guard !objects.isEmpty else { NSSound.beep(); return }
         pushUndo()
-        let copies = objects.map { o -> Annotation in
+        let copies = Grouping.regroupCopies(objects).map { o -> Annotation in
             var c = o
             c.id = UUID()
             c.offset(by: CGVector(dx: 20, dy: 20))
@@ -1127,7 +1157,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     // MARK: Blur / Erase Text
 
     /// Finds text boxes for Text-mode blur regions that have not been scanned yet (Shottr's "reconceal").
-    private func scanTextRegions() {
+    func scanTextRegions() {
         let image = doc.image
         for o in doc.objects where o.kind == .blur && o.blurMode.textOnly && o.textRects == nil {
             let id = o.id, region = o.rect
@@ -1226,6 +1256,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         s.lensShape = o.lensShape
         s.magnification = o.factor
         s.callout = o.calloutStyle
+        s.fillColor = o.fillColor
+        s.noOutline = o.noOutline
         // Text styled as a whole from per-letter runs: show its first letter's style.
         if o.kind == .text, let r = o.runs?.first {
             s.color = NSColor(rgbaHex: r.color) ?? s.color
@@ -1282,6 +1314,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         if a.lensShape != b.lensShape { o.lensShape = b.lensShape }
         if a.magnification != b.magnification { o.factor = b.magnification }
         if a.callout != b.callout { o.calloutStyle = b.callout }
+        if a.fillColor?.rgbaHex != b.fillColor?.rgbaHex { o.fillColor = b.fillColor }
+        if a.noOutline != b.noOutline { o.noOutline = b.noOutline }
     }
 
     /// Options-bar change: remembered for new annotations, and only the setting that changed is applied to the selection
@@ -1682,14 +1716,15 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Formatting toolbar
 
-    /// The text the formatting toolbar works on: the text being typed, or one selected object that holds text.
+    /// The text the formatting toolbar works on: the text being typed, one selected object that holds text, or every
+    /// selected object that does.
     func formattingTarget() -> TextFormattingTarget? {
         if textField != nil, let id = editingID { return EditingTextTarget(view: self, id: id) }
-        if selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }),
-           o.kind == .text || o.kind == .callout || (o.holdsTextInShape && !o.text.isEmpty) {
+        if selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }), ShapeKinds.holdsText(o) {
             return SelectedTextTarget(view: self, id: id)
         }
-        return nil
+        let texts = doc.objects.filter { selection.contains($0.id) && ShapeKinds.holdsText($0) }.map(\.id)
+        return texts.isEmpty ? nil : MultiSelectedTextTarget(view: self, ids: texts)
     }
 
     /// The field editor of the text being typed, focused again with its selection if a toolbar control took the focus.
@@ -1791,18 +1826,40 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     }
 
     /// Formats a selected object's whole text: one undo step in the document's history.
-    func applySelectedFormat(_ change: FormatChange, to id: UUID) {
-        guard let i = doc.objects.firstIndex(where: { $0.id == id }) else { return }
+    func applySelectedFormat(_ change: FormatChange, to id: UUID) { applySelectedFormat(change, to: [id]) }
+
+    /// Formats the whole text of each object (one undo step). Toggles follow the objects' shared state, so Bold on a
+    /// mix of bold and regular texts makes them all bold, as in Word.
+    func applySelectedFormat(_ change: FormatChange, to ids: [UUID]) {
+        let indices = ids.compactMap { id in doc.objects.firstIndex { $0.id == id } }
+        guard !indices.isEmpty else { return }
+        let shared = TextFormatState.merged(ids.map(selectedFormatState))
         pushUndo()
-        if change.isContainer {
-            setContainer(change, at: i, undo: nil)
-        } else {
+        for i in indices {
             var o = doc.objects[i]
-            guard !o.text.isEmpty else { return }
+            if change.isContainer {
+                var s = TextFormatState()
+                addContainerState(o, to: &s)
+                if case .verticalAlign = change, !s.supportsVerticalAlign { continue }
+                if case .orientation = change, !s.supportsOrientation { continue }
+                setContainer(change, at: i, undo: nil)
+                continue
+            }
+            guard !o.text.isEmpty else { continue }
             let m = NSMutableAttributedString(attributedString: o.attributedText())
             var typing = m.attributes(at: 0, effectiveRange: nil)
-            TextFormatting.apply(change, to: m, selection: NSRange(location: 0, length: m.length), typing: &typing, scale: 1,
-                                 defaultAlign: o.defaultTextAlign)
+            let whole = NSRange(location: 0, length: m.length)
+            // A toggle sets every text to the opposite of what they share (Word's rule for a mixed selection).
+            let own = TextFormatting.state(of: m, selection: whole, typing: typing, scale: 1, defaultAlign: o.defaultTextAlign)
+            let toggled: Bool? = switch change {
+            case .bold: own.bold != shared.bold
+            case .italic: own.italic != shared.italic
+            case .underline: own.underline != shared.underline
+            default: nil
+            }
+            if toggled != true {
+                TextFormatting.apply(change, to: m, selection: whole, typing: &typing, scale: 1, defaultAlign: o.defaultTextAlign)
+            }
             o.setText(from: m, scale: 1)
             doc.objects[i] = o
         }

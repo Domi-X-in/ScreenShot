@@ -95,12 +95,6 @@ import AppKit
                 ed.shotView.debugShowGuides([SmartGuides.Guide(vertical: true, position: x, from: a.bounds.minY, to: b.bounds.maxY)], select: [a.id, b.id])
                 return editor
             }),
-            ("panel-arrange", {
-                guard let ed = editor?.windowController as? EditorWindowController, let content = editor?.contentView else { return nil }
-                let before = Set(NSApp.windows.map(ObjectIdentifier.init))
-                ed.showArrangePanel(from: content)
-                return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) }
-            }),
             ("editor-cutout", {
                 guard let ed = editor?.windowController as? EditorWindowController else { return nil }
                 let h = CGFloat(ed.doc.image.height)
@@ -777,7 +771,7 @@ import AppKit
         picked.width = 9
         ed.shotView.setStyle(picked)
         ed.syncToolbar()
-        guard let bar = find(OptionsBar.self, in: content, where: { _ in true }) else { print("FAIL options bar"); exit(1) }
+        let bar = ed.debugOptions
         for (what, title) in [("color", "Set #007AFF as Default Color"), ("size", "Set Size 9 as Default")] {
             let m = NSMenu()
             m.identifier = NSUserInterfaceItemIdentifier(what)

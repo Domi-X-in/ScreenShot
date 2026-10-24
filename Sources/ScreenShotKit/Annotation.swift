@@ -190,6 +190,9 @@ struct ToolStyle: Equatable {
     var lensShape: LensShape = .oval
     var magnification: CGFloat = 2
     var callout: CalloutStyle = .box
+    /// Shape Fill and Shape Outline: a fill color of its own (nil fills with `color`), and no outline at all.
+    var fillColor: NSColor?
+    var noOutline = false
 
     /// Starting style for new annotations. Built-in defaults are the property defaults above
     /// (Callout: Professional · Box); right-click an option in the options bar to change one.
@@ -375,6 +378,12 @@ struct Annotation {
     var paragraphAligns: [TextAlign]?
     var verticalAlign: VerticalAlign = .middle
     var orientation: TextOrientation = .horizontal
+    /// Shape Fill / Shape Outline (rectangles and ovals): a fill color apart from the outline's (nil fills with
+    /// `color`, as before), and no outline.
+    var fillColor: NSColor?
+    var noOutline = false
+    /// Objects grouped together (Arrange › Group) share an id; they are selected, moved and aligned as one.
+    var groupID: UUID?
 
     init(kind: Tool, p1: CGPoint, p2: CGPoint, points: [CGPoint] = [], color: NSColor, width: CGFloat) {
         self.kind = kind
@@ -405,6 +414,8 @@ struct Annotation {
         lensShape = s.lensShape
         factor = s.magnification
         calloutStyle = s.callout
+        fillColor = s.fillColor
+        noOutline = s.noOutline
         // Restyling a whole text object replaces any per-letter styles.
         runs = nil
     }
@@ -736,10 +747,13 @@ extension Annotation {
         switch kind {
         case .callout where calloutStyle.filled: color.contrasting
         // (A `where` applies only to the pattern right before it, so each shape needs its own.)
-        case .rect where fill == .opaque, .oval where fill == .opaque: color.contrasting
+        case .rect where fill == .opaque, .oval where fill == .opaque: fillPaint.contrasting
         default: color
         }
     }
+
+    /// What a rectangle or oval is filled with: its own fill color, or the outline's.
+    var fillPaint: NSColor { fillColor ?? color }
 
     /// Rectangles and ovals can hold centered text (Return or double-click to type).
     var holdsTextInShape: Bool { kind == .rect || kind == .oval }
@@ -868,7 +882,7 @@ extension Annotation: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, kind, p1, p2, points, color, width, text, number, shape, tailAngle, arrowStyle, dashed, sketch, fill, blurMode, font
         case rulerInPoints, factor, lensShape, lensCenter, textRects, imageData, runs, calloutStyle, pointer
-        case paragraphAligns, verticalAlign, orientation
+        case paragraphAligns, verticalAlign, orientation, fillColor, noOutline, groupID
     }
 
     init(from decoder: Decoder) throws {
@@ -903,6 +917,9 @@ extension Annotation: Codable {
         paragraphAligns = try c.decodeIfPresent([TextAlign].self, forKey: .paragraphAligns)
         verticalAlign = try c.decodeIfPresent(VerticalAlign.self, forKey: .verticalAlign) ?? .middle
         orientation = try c.decodeIfPresent(TextOrientation.self, forKey: .orientation) ?? .horizontal
+        fillColor = try c.decodeIfPresent(String.self, forKey: .fillColor).flatMap { NSColor(rgbaHex: $0) }
+        noOutline = try c.decodeIfPresent(Bool.self, forKey: .noOutline) ?? false
+        groupID = try c.decodeIfPresent(UUID.self, forKey: .groupID)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -938,6 +955,9 @@ extension Annotation: Codable {
         try c.encodeIfPresent(paragraphAligns, forKey: .paragraphAligns)
         if verticalAlign != .middle { try c.encode(verticalAlign, forKey: .verticalAlign) }
         if orientation != .horizontal { try c.encode(orientation, forKey: .orientation) }
+        try c.encodeIfPresent(fillColor?.rgbaHex, forKey: .fillColor)
+        if noOutline { try c.encode(noOutline, forKey: .noOutline) }
+        try c.encodeIfPresent(groupID, forKey: .groupID)
         if kind == .callout {
             try c.encode(calloutStyle, forKey: .calloutStyle)
             try c.encodeIfPresent(pointer, forKey: .pointer)
@@ -1363,11 +1383,13 @@ enum Renderer {
             let path = o.kind == .rect ? CGPath(roundedRect: r, cornerWidth: c, cornerHeight: c, transform: nil) : CGPath(ellipseIn: r, transform: nil)
             if o.fill != .none {
                 ctx.addPath(path)
-                ctx.setFillColor(o.color.withAlphaComponent(o.fill == .opaque ? 1 : 0.3).cgColor)
+                ctx.setFillColor(o.fillPaint.withAlphaComponent(o.fill == .opaque ? 1 : 0.3).cgColor)
                 ctx.fillPath()
             }
-            ctx.addPath(path)
-            ctx.strokePath()
+            if !o.noOutline {
+                ctx.addPath(path)
+                ctx.strokePath()
+            }
             if showText { drawShapeText(o) }
         case .freehand:
             guard let f = o.points.first, o.points.count > 1 else { return }
@@ -1476,9 +1498,10 @@ enum Renderer {
         let r = o.rect
         if o.fill != .none, o.kind == .rect || o.kind == .oval {
             ctx.addPath(o.kind == .rect ? CGPath(rect: r, transform: nil) : CGPath(ellipseIn: r, transform: nil))
-            ctx.setFillColor(o.color.withAlphaComponent(o.fill == .opaque ? 1 : 0.3).cgColor)
+            ctx.setFillColor(o.fillPaint.withAlphaComponent(o.fill == .opaque ? 1 : 0.3).cgColor)
             ctx.fillPath()
         }
+        if o.noOutline, o.kind == .rect || o.kind == .oval { return }
         let path: CGPath
         switch o.kind {
         case .oval:

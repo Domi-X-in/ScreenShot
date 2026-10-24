@@ -126,8 +126,7 @@ extension FlowsSelfTest {
         check(ui.vertical.isEnabled && ui.direction.isEnabled, "a shape's text can be aligned vertically and turned")
         ui.vertical.selectedSegment = 2
         _ = ui.vertical.target?.perform(ui.vertical.action, with: ui.vertical)
-        ui.direction.selectItem(at: 1)
-        _ = ui.direction.target?.perform(ui.direction.action, with: ui.direction)
+        ed.debugRibbon.debugPickDirection(.rotateDown)
         let b2 = v.doc.objects.first { $0.id == box.id }
         await snapshot(ed, "ribbon-shape")
         check(b2?.verticalAlign == .bottom && b2?.orientation == .rotate90,

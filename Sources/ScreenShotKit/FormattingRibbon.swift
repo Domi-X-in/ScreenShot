@@ -1,9 +1,10 @@
 import AppKit
 
-/// Word-style formatting toolbar (Home › Font and Paragraph). It only talks to a FormattingController: it shows its
-/// state and sends it commands. Always visible; greyed out when no text is focused or selected. Buttons and menus
-/// never take the keyboard focus, so the text keeps its selection; the size box gives it back after use.
-final class FormattingRibbon: NSView, NSComboBoxDelegate {
+/// The top toolbar's Font and Paragraph sections (Word's Home › Font and Paragraph). They only talk to a
+/// FormattingController: they show its state and send it commands. Greyed out when no text is focused or selected.
+/// Buttons and menus never take the keyboard focus, so the text keeps its selection; the size box gives it back after
+/// use.
+@MainActor final class FormattingRibbon: NSObject, NSComboBoxDelegate {
     private let controller: FormattingController
     private let fontPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let sizeBox = NSComboBox()
@@ -36,23 +37,23 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
     private let styleChanges: [FormatChange] = [.bold, .italic, .underline]
     private let align = NSSegmentedControl()
     private let vertical = NSSegmentedControl()
-    private let direction = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let direction = MenuButton(image: TextDirection.horizontal.icon, tooltip: "Text Direction")
+    let fontColor = ColorSplitButton(.font)
     private var families: [String] = []
+    private(set) var fontSection: NSStackView!
+    private(set) var paragraphSection: NSStackView!
+    /// Font Color with no text to format: the color for the next text box (the Text tool is in hand).
+    var onNewTextColor: ((NSColor) -> Void)?
+    /// Whether Font Color has something to color without a formatting target (set by the toolbar).
+    var newTextColorEnabled = false { didSet { show(controller.state) } }
+    private var lastState = TextFormatState.inactive
 
     init(controller: FormattingController) {
         self.controller = controller
-        super.init(frame: .zero)
-        wantsLayer = true
+        super.init()
         build()
         controller.onChange = { [weak self] s in self?.show(s) }
         show(.inactive)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var wantsUpdateLayer: Bool { true }
-    override func updateLayer() {
-        layer?.backgroundColor = Theme.dynamic(light: NSColor(hex: 0xF7F8FA), dark: NSColor(hex: 0x24252B)).cgColor
     }
 
     // MARK: Building
@@ -65,38 +66,11 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         b.setAccessibilityLabel(String(tip.prefix { $0 != "(" }).trimmingCharacters(in: .whitespaces))
         b.refusesFirstResponder = true
         changes[ObjectIdentifier(b)] = change
-        b.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        b.widthAnchor.constraint(equalToConstant: 26).isActive = true
         return b
     }
 
     private var changes: [ObjectIdentifier: FormatChange] = [:]
-
-    private func caption(_ s: String) -> NSTextField {
-        let l = NSTextField(labelWithString: s)
-        l.font = .systemFont(ofSize: 10, weight: .medium)
-        l.textColor = .secondaryLabelColor
-        l.alignment = .center
-        return l
-    }
-
-    private func group(_ title: String, rows: [[NSView]]) -> NSView {
-        let lines = rows.map { views -> NSStackView in
-            let r = NSStackView(views: views)
-            r.spacing = 4
-            r.alignment = .centerY
-            return r
-        }
-        let label = caption(title)
-        let stack = NSStackView(views: lines + [label])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setAccessibilityElement(true)
-        stack.setAccessibilityRole(.group)
-        stack.setAccessibilityLabel(title)
-        return stack
-    }
 
     private func build() {
         // Font family: each name shown in its own font, like Word.
@@ -113,7 +87,7 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         fontPopup.setAccessibilityLabel("Font")
         fontPopup.refusesFirstResponder = true
         fontPopup.controlSize = .small
-        fontPopup.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        fontPopup.widthAnchor.constraint(equalToConstant: 112).isActive = true
 
         // Size: Word's presets, and any value typed in (13.5).
         sizeBox.addItems(withObjectValues: TextFormatting.sizePresets.map(TextFormatting.sizeLabel))
@@ -125,7 +99,7 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         sizeBox.toolTip = "Font Size"
         sizeBox.setAccessibilityLabel("Font Size")
         sizeBox.controlSize = .small
-        sizeBox.widthAnchor.constraint(equalToConstant: 62).isActive = true
+        sizeBox.widthAnchor.constraint(equalToConstant: 52).isActive = true
 
         for (control, items) in [(align, [("text.alignleft", "Align Left (⌘L)"), ("text.aligncenter", "Center (⌘E)"), ("text.alignright", "Align Right (⌘R)")]),
                                  (vertical, [("align.vertical.top", "Align Top"), ("align.vertical.center", "Align Middle"),
@@ -135,7 +109,7 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
             for (i, (symbol, tip)) in items.enumerated() {
                 control.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: tip), forSegment: i)
                 control.setToolTip(tip, forSegment: i)
-                control.setWidth(30, forSegment: i)
+                control.setWidth(24, forSegment: i)
             }
             control.target = self
             control.action = #selector(segmentPicked(_:))
@@ -147,7 +121,7 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         for (i, (symbol, tip)) in [("bold", "Bold (⌘B)"), ("italic", "Italic (⌘I)"), ("underline", "Underline (⌘U)")].enumerated() {
             styles.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: tip), forSegment: i)
             styles.setToolTip(tip, forSegment: i)
-            styles.setWidth(30, forSegment: i)
+            styles.setWidth(24, forSegment: i)
         }
         styles.target = self
         styles.action = #selector(stylePicked)
@@ -157,54 +131,51 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         align.setAccessibilityLabel("Paragraph alignment")
         vertical.setAccessibilityLabel("Vertical alignment")
 
-        let symbols = ["text.justify.left", "rotate.right", "rotate.left", "character.textbox"]
-        for (i, o) in TextOrientation.allCases.enumerated() {
-            direction.addItem(withTitle: o.title)
-            direction.lastItem?.image = NSImage(systemSymbolName: symbols[i], accessibilityDescription: nil)
-        }
-        direction.target = self
-        direction.action = #selector(directionPicked)
-        direction.toolTip = "Text Direction"
-        direction.setAccessibilityLabel("Text Direction")
-        direction.refusesFirstResponder = true
-        direction.controlSize = .small
+        direction.menuProvider = { [weak self] in self?.directionMenu() ?? NSMenu() }
 
-        let font = group("Font", rows: [[fontPopup, sizeBox, grow, shrink], [styles]])
-        let paragraph = group("Paragraph", rows: [[align, vertical], [direction]])
-        let divider = NSBox()
-        divider.boxType = .separator
-        let row = NSStackView(views: [font, divider, paragraph])
-        row.spacing = 14
-        row.alignment = .top
-        row.edgeInsets = NSEdgeInsets(top: 6, left: 14, bottom: 4, right: 14)
-        row.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(row)
-        let line = NSBox()
-        line.boxType = .separator
-        line.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(line)
-        NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: leadingAnchor), row.topAnchor.constraint(equalTo: topAnchor),
-            row.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
-            divider.heightAnchor.constraint(equalToConstant: 52),
-            line.leadingAnchor.constraint(equalTo: leadingAnchor), line.trailingAnchor.constraint(equalTo: trailingAnchor),
-            line.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-        setAccessibilityElement(true)
-        setAccessibilityRole(.toolbar)
-        setAccessibilityLabel("Text formatting")
+        fontColor.onColor = { [weak self] c in
+            guard let self, let c else { return }
+            if self.controller.target != nil { self.controller.applyFormat(.color(c)) } else { self.onNewTextColor?(c) }
+        }
+
+        fontSection = ToolbarShell.section("Font", [fontPopup, sizeBox, grow, shrink, styles, fontColor])
+        paragraphSection = ToolbarShell.section("Paragraph", [align, vertical, direction])
     }
 
-    /// Whether `responder` belongs to this toolbar (the size box's field editor counts).
-    func owns(_ responder: NSResponder) -> Bool {
-        if let v = responder as? NSView, v.isDescendant(of: self) { return true }
-        if let t = responder as? NSTextView, let d = t.delegate as? NSView, d.isDescendant(of: self) { return true }
-        return false
+    // MARK: Text Direction
+
+    private func directionMenu() -> NSMenu {
+        let m = NSMenu(title: "Text Direction")
+        let active = TextDirection(lastState.orientation)
+        for d in TextDirection.allCases {
+            if d == .horizontal { m.addItem(.separator()) }
+            let item = NSMenuItem(title: d.title, action: #selector(directionPicked(_:)), keyEquivalent: "")
+            item.target = self
+            item.image = d.icon
+            item.representedObject = d.rawValue
+            item.state = lastState.isActive && d == active ? .on : .off
+            if d.orientation == nil {
+                // No angled text yet: the editor only turns text by quarter turns.
+                item.isEnabled = false
+                item.toolTip = "Angled text isn't available yet"
+                item.action = nil
+            }
+            m.addItem(item)
+        }
+        return m
+    }
+
+    @objc private func directionPicked(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let d = TextDirection(rawValue: raw), let o = d.orientation else { return }
+        // Picking the active direction again turns the text back to horizontal (Excel's rule).
+        let target: TextOrientation = sender.state == .on && d != .horizontal ? .horizontal : o
+        controller.applyFormat(.orientation(target))
     }
 
     // MARK: State
 
     private func show(_ s: TextFormatState) {
+        lastState = s
         let on = s.isActive
         for c in [fontPopup, grow, shrink, styles, align] as [NSControl] { c.isEnabled = on }
         sizeBox.isEnabled = on
@@ -218,11 +189,11 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
             .map(\.element).joined(separator: ", "))
         align.selectedSegment = on ? s.alignment.flatMap { TextAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
         vertical.selectedSegment = on && s.supportsVerticalAlign ? s.verticalAlign.flatMap { VerticalAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
-        if on && s.supportsOrientation, let o = s.orientation, let i = TextOrientation.allCases.firstIndex(of: o) {
-            direction.selectItem(at: i)
-        } else {
-            direction.selectItem(at: 0)
-        }
+        let shown = on && s.supportsOrientation ? TextDirection(s.orientation) : .horizontal
+        direction.setFace(shown.icon)
+        direction.toolTip = "Text Direction: " + (on && s.supportsOrientation && s.orientation == nil ? "mixed" : shown.title)
+        fontColor.isEnabled = on || newTextColorEnabled
+        fontColor.show(current: on ? s.color : nil, none: false, mixed: on && s.color == nil)
     }
 
     // MARK: Actions
@@ -262,16 +233,18 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         if sender === vertical, VerticalAlign.allCases.indices.contains(i) { controller.applyFormat(.verticalAlign(VerticalAlign.allCases[i])) }
     }
 
-    @objc private func directionPicked() {
-        let i = direction.indexOfSelectedItem
-        guard TextOrientation.allCases.indices.contains(i) else { return }
-        controller.applyFormat(.orientation(TextOrientation.allCases[i]))
-    }
 
     #if SCREENSHOT_SELFTESTS
     var debugControls: (font: NSPopUpButton, size: NSComboBox, styles: NSSegmentedControl,
-                        grow: NSButton, shrink: NSButton, align: NSSegmentedControl, vertical: NSSegmentedControl, direction: NSPopUpButton) {
+                        grow: NSButton, shrink: NSButton, align: NSSegmentedControl, vertical: NSSegmentedControl, direction: MenuButton) {
         (fontPopup, sizeBox, styles, grow, shrink, align, vertical, direction)
+    }
+
+    /// The Text Direction menu as it opens now, and a pick from it.
+    var debugDirectionMenu: NSMenu { directionMenu() }
+    func debugPickDirection(_ d: TextDirection) {
+        guard let item = directionMenu().items.first(where: { $0.representedObject as? String == d.rawValue }) else { return }
+        directionPicked(item)
     }
 
     /// A click on the Bold, Italic or Underline segment.
@@ -280,4 +253,98 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         stylePicked()
     }
     #endif
+}
+
+/// Word and PowerPoint's Text Direction menu, mapped onto the editor's text orientations.
+enum TextDirection: String, CaseIterable {
+    case angleCounterclockwise, angleClockwise, vertical, rotateUp, rotateDown, horizontal
+
+    var title: String {
+        switch self {
+        case .angleCounterclockwise: "Angle Counterclockwise"
+        case .angleClockwise: "Angle Clockwise"
+        case .vertical: "Vertical Text"
+        case .rotateUp: "Rotate Text Up"
+        case .rotateDown: "Rotate Text Down"
+        case .horizontal: "Horizontal"
+        }
+    }
+
+    /// The orientation it sets; nil for the angled options, which have no orientation yet.
+    var orientation: TextOrientation? {
+        switch self {
+        case .angleCounterclockwise, .angleClockwise: nil
+        case .vertical: .stacked
+        case .rotateUp: .rotate270
+        case .rotateDown: .rotate90
+        case .horizontal: .horizontal
+        }
+    }
+
+    init(_ o: TextOrientation?) {
+        switch o {
+        case .stacked: self = .vertical
+        case .rotate270: self = .rotateUp
+        case .rotate90: self = .rotateDown
+        default: self = .horizontal
+        }
+    }
+
+    /// "ab" in the text color with a blue arrow showing the reading direction.
+    var icon: NSImage {
+        let d = self
+        let img = NSImage(size: NSSize(width: 18, height: 16), flipped: true) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            let font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
+            func glyphs(_ s: String, at p: CGPoint, angle: CGFloat = 0) {
+                let a = NSAttributedString(string: s, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+                let size = a.size()
+                ctx.saveGState()
+                ctx.translateBy(x: p.x, y: p.y)
+                ctx.rotate(by: angle)
+                a.draw(at: CGPoint(x: -size.width / 2, y: -size.height / 2))
+                ctx.restoreGState()
+            }
+            func arrow(_ from: CGPoint, _ to: CGPoint) {
+                let path = NSBezierPath()
+                path.move(to: from)
+                path.line(to: to)
+                let angle = atan2(to.y - from.y, to.x - from.x)
+                for side: CGFloat in [-1, 1] {
+                    let a = angle + .pi + side * .pi / 5
+                    path.move(to: to)
+                    path.line(to: CGPoint(x: to.x + 3.2 * cos(a), y: to.y + 3.2 * sin(a)))
+                }
+                path.lineWidth = 1.3
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                NSColor.systemBlue.setStroke()
+                path.stroke()
+            }
+            switch d {
+            case .horizontal:
+                glyphs("ab", at: CGPoint(x: 8, y: 6))
+                arrow(CGPoint(x: 2.5, y: 13.5), CGPoint(x: 15.5, y: 13.5))
+            case .angleCounterclockwise:
+                glyphs("ab", at: CGPoint(x: 7, y: 8.5), angle: -.pi / 4)
+                arrow(CGPoint(x: 9, y: 15), CGPoint(x: 16.5, y: 7.5))
+            case .angleClockwise:
+                glyphs("ab", at: CGPoint(x: 7, y: 7.5), angle: .pi / 4)
+                arrow(CGPoint(x: 9, y: 1.5), CGPoint(x: 16.5, y: 9))
+            case .vertical:
+                glyphs("a", at: CGPoint(x: 6, y: 4.5))
+                glyphs("b", at: CGPoint(x: 6, y: 11.5))
+                arrow(CGPoint(x: 13.5, y: 2), CGPoint(x: 13.5, y: 14.5))
+            case .rotateUp:
+                glyphs("ab", at: CGPoint(x: 6.5, y: 8), angle: -.pi / 2)
+                arrow(CGPoint(x: 13.5, y: 14.5), CGPoint(x: 13.5, y: 2))
+            case .rotateDown:
+                glyphs("ab", at: CGPoint(x: 6.5, y: 8), angle: .pi / 2)
+                arrow(CGPoint(x: 13.5, y: 2), CGPoint(x: 13.5, y: 14.5))
+            }
+            return true
+        }
+        img.accessibilityDescription = title
+        return img
+    }
 }

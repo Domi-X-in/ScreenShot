@@ -96,3 +96,17 @@ import AppKit
     var formatState: TextFormatState { view?.selectedFormatState(id) ?? .inactive }
     func applyFormat(_ change: FormatChange) { view?.applySelectedFormat(change, to: id) }
 }
+
+/// Several selected objects with text: the toolbar shows what they share and formats all of them in one undo step.
+@MainActor final class MultiSelectedTextTarget: TextFormattingTarget {
+    private weak var view: ShotView?
+    let ids: [UUID]
+
+    init(view: ShotView, ids: [UUID]) {
+        self.view = view
+        self.ids = ids
+    }
+
+    var formatState: TextFormatState { TextFormatState.merged(ids.compactMap { view?.selectedFormatState($0) }) }
+    func applyFormat(_ change: FormatChange) { view?.applySelectedFormat(change, to: ids) }
+}

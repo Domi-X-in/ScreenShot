@@ -115,6 +115,12 @@ enum Settings {
         set { d.set(newValue, forKey: "returnToSelect") }
     }
     /// Smart guides: snap shapes to the edges and centers of other objects and of the image (⌘ while dragging skips it).
+    /// Arrange › Align: align to the canvas (the screenshot) rather than to the selection.
+    static var alignToCanvas: Bool {
+        get { d.bool(forKey: "alignToCanvas") }
+        set { d.set(newValue, forKey: "alignToCanvas") }
+    }
+
     static var snapToGuides: Bool {
         get { d.object(forKey: "snapToGuides") as? Bool ?? true }
         set { d.set(newValue, forKey: "snapToGuides") }
