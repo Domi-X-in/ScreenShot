@@ -89,18 +89,18 @@ extension FlowsSelfTest {
             check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "choosing another arrow style restyles the selected arrow")
         } else { check(false, "the options bar shows arrow styles for a selected arrow") }
 
-        // Arrange panel from the options bar.
+        // Align from the top toolbar's Align menu (it replaced the Arrange popover).
         type("r"); drag(ed, CGPoint(x: 500, y: 100), CGPoint(x: 600, y: 160))
         type("v")
         type("a", mods: .command)
-        let arrange = await popover {
-            if let b = allViews(NSButton.self, in: content).first(where: { $0.title == "Arrange" && !$0.isHidden }) { b.performClick(nil) }
-        }
-        check(arrange != nil, "the Arrange button shows for a selection and opens its panel")
-        allViews(NSButton.self, in: arrange?.contentView).first { $0.identifier?.rawValue == ArrangeAction.alignTop.rawValue }?.performClick(nil)
+        let bar = ed.debugTopBar
+        check(bar.debugControls.align.isEnabled, "with several objects selected the Align button is enabled")
+        let alignMenu = bar.debugAlignMenu
+        if let i = alignMenu.items.firstIndex(where: { $0.title == ArrangeAction.alignTop.title }) {
+            alignMenu.performActionForItem(at: i)
+        } else { check(false, "the Align menu has Align Top") }
         let tops = v.doc.objects.map(\.frame.minY)
-        check(tops.allSatisfy { abs($0 - tops[0]) < 0.5 }, "Align Top from the panel lines up the tops (\(tops))")
-        arrange?.close()
+        check(tops.allSatisfy { abs($0 - tops[0]) < 0.5 }, "Align Top from the Align menu lines up the tops (\(tops))")
     }
 
     /// Pin, Esc (copy and close), the floating thumbnail's buttons, the menu bar menu.

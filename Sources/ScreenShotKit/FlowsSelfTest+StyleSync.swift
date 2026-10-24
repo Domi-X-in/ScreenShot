@@ -57,9 +57,12 @@ extension FlowsSelfTest {
         // Two selected arrows of different colors: changing the width keeps each color.
         s.width = 4; s.color = NSColor(hex: 0xFF3B30); v.setStyle(s)
         type("a"); drag(ed, CGPoint(x: 100, y: 200), CGPoint(x: 300, y: 200))
+        key("esc") // a new arrow stays selected; let it go so the next color is only for the next arrow
         s.color = NSColor(hex: 0x007AFF); s.width = 8; v.setStyle(s)
         type("a"); drag(ed, CGPoint(x: 100, y: 300), CGPoint(x: 300, y: 300))
+        key("esc")
         let arrows = v.doc.objects.filter { $0.kind == .arrow }
+        check(arrows.map(\.color.hexString) == ["#FF3B30", "#007AFF"], "the two arrows are drawn red and blue (\(arrows.map(\.color.hexString)))")
         click(ed, CGPoint(x: 200, y: 200)); click(ed, CGPoint(x: 200, y: 300), mods: .shift)
         check(v.selection == Set(arrows.map(\.id)), "both arrows selected")
         setOption { $0.width = 6 }

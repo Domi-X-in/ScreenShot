@@ -13,6 +13,7 @@ extension FlowsSelfTest {
         }
         tool("a", .arrow); drag(ed, CGPoint(x: 100, y: 600), CGPoint(x: 260, y: 460))
         tool("l", .line); var st = v.style; st.dashed = true; v.setStyle(st); drag(ed, CGPoint(x: 100, y: 700), CGPoint(x: 400, y: 700))
+        key("esc") // new objects stay selected; let go before changing the style for the next one
         st.dashed = false; v.setStyle(st)
         tool("d", .freehand); drag(ed, CGPoint(x: 500, y: 600), CGPoint(x: 620, y: 680), steps: 10)
         tool("r", .rect); drag(ed, CGPoint(x: 80, y: 130), CGPoint(x: 400, y: 360))
@@ -26,11 +27,14 @@ extension FlowsSelfTest {
         check(salesColor?.hexString == v.doc.objects.first { $0.id == rectID }?.color.hexString,
               "the text in an unfilled shape is the shape's color (\(salesColor?.hexString ?? "nil"))")
         tool("o", .oval); st = v.style; st.sketch = true; v.setStyle(st); drag(ed, CGPoint(x: 800, y: 130), CGPoint(x: 1100, y: 340))
+        key("esc")
         st.sketch = false; v.setStyle(st)
         tool("h", .highlighter); drag(ed, CGPoint(x: 85, y: 420), CGPoint(x: 300, y: 480))
         tool("b", .blur); drag(ed, CGPoint(x: 460, y: 150), CGPoint(x: 640, y: 330))
+        key("esc")
         tool("b", .blur) // the tool went back to Select after the first blur
         st = v.style; st.blur = .blurText; v.setStyle(st); drag(ed, CGPoint(x: 80, y: 410), CGPoint(x: 700, y: 500))
+        key("esc")
         st.blur = .blur; v.setStyle(st)
         tool("s", .spotlight); drag(ed, CGPoint(x: 780, y: 120), CGPoint(x: 1120, y: 360))
         tool("m", .magnifier); drag(ed, CGPoint(x: 900, y: 600), CGPoint(x: 960, y: 650))

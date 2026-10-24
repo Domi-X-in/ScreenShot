@@ -97,12 +97,12 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
 **Se adapta** (misma función, nueva cara): `ToolOptions`, `FormattingRibbon`, `ColorSplitButton`/`ColorGridView`, `SplitButton`/`MenuButton`, `InfoCellsView`, `DragOutView`, `RecentStrip`, `StatusBar`, `InfoPanels`, `Library`, menú de estado de `AppDelegate`.
 **Se hace de cero**: `DesignTokens`, familia de iconos (mismas rutas que el diseño, con un intérprete de rutas SVG), infraestructura de la cinta (controles, grupos, botón compacto con panel, motor de colapso), `NotificationBar`, barra de título del editor, guía de bienvenida de 3 pasos. Al final se borran `EditorToolbar`, la tira de herramientas del título, `IconPalette`, `PaletteButton`, `PillButton`, el degradado de acento y las páginas viejas de `Onboarding`.
 
-- [ ] **R0 · Preparación**:
+- [x] **R0 · Preparación**:
   - [x] Commit del trabajo en curso (barra superior con Fuente, Párrafo, Estilos de forma y Organizar), rama `ui-refactor` (`1bd3d5a`).
   - [x] Ajuste `newEditorUI` (solo debug; también `SCREENSHOT_NEW_UI=1`).
   - [x] Capturas de referencia del editor actual, claro y oscuro: `docs/screenshots/baseline-r0/`.
-  - [x] 77 tests unitarios en verde; integración: 11 de 12 suites en verde.
-  - [ ] FLOWS: 274 bien y 4 fallos estables que trajo la barra en curso: Blur Text no encuentra la línea de texto; cambiar el grosor de dos flechas les pone a ambas el mismo color; el flujo de paneles busca el botón "Arrange" con popover, que ya no existe, y por eso falla también "Align Top".
+  - [x] Corregidos los 4 fallos de FLOWS que trajo la barra. No eran errores de la app sino de las pruebas: ahora un objeto recién dibujado queda seleccionado (como en Office), así que el siguiente cambio de estilo de la prueba lo modificaba. Las pruebas sueltan la selección antes de cambiar el estilo, y "Align Top" se prueba desde el menú Align de la barra.
+  - [x] Verificado: 77 tests unitarios y las 12 suites de integración en verde (FLOWS 279/0).
 - [ ] **R1 · Tokens e iconos**: `DesignTokens` (claro/oscuro, escala de #FF5500, estados, radios, tipografía), intérprete de rutas SVG, catálogo de ~100 iconos, hoja de iconos en `DebugSnapshots`. Pruebas: intérprete, contraste mínimo de cada pareja texto/fondo, todos los iconos de la cinta existen.
 - [ ] **R2 · Infraestructura de la cinta (sin conectar)**: botones grande, pequeño, dividido, desplegable, campo y color con sus 5 estados; grupos con etiqueta; botón compacto con panel; colapso de derecha a izquierda (1200/1020/960/860/830/800/640); teclado y VoiceOver. Pruebas: tabla de anchos → grupos colapsados; ventana de demostración en debug.
 - [ ] **R3 · Nuevo armazón del editor**: barra de título solo con ventana, Copiar imagen, Guardar, Fijar, Arrastrar, Deshacer/Rehacer; cinta con Portapapeles, Formas y Herramientas conectados a `Tool` y a `ShotView`; herramienta activa en naranja aunque su grupo esté colapsado. Pruebas: `FlowsSelfTest+Toolbar` y `+Editor`, capturas ancho/estrecho.
