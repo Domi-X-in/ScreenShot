@@ -126,6 +126,17 @@ enum Settings {
         set { d.set(newValue, forKey: "snapToGuides") }
     }
 
+    /// The Office-style ribbon editor being built on the `ui-refactor` branch (ROADMAP, Fase 6). Debug builds only, so
+    /// release builds always show the current editor: `defaults write local.screenshot.app newEditorUI -bool YES`, or
+    /// SCREENSHOT_NEW_UI=1 for a single run. Removed in R9, when the new editor becomes the only one.
+    static var newEditorUI: Bool {
+        #if SCREENSHOT_SELFTESTS
+        ProcessInfo.processInfo.environment["SCREENSHOT_NEW_UI"] == "1" || d.bool(forKey: "newEditorUI")
+        #else
+        false
+        #endif
+    }
+
     /// App-only appearance: "system" follows macOS, "light" / "dark" override it for ScreenShot's windows.
     static var appearance: String { d.string(forKey: "appearance") ?? "system" }
 

@@ -87,6 +87,34 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 - [x] **Versiones por fecha**: `YYMMDD.N` en hora local (`261023.1` es la primera publicación del 23-oct-2026; `.2` la segunda de ese día). Las compilaciones de prueba son `YYMMDD.0`. Probado que Sparkle ordena bien `261023.9` → `261023.10`.
 - [x] Publicada la primera versión, [261023.1](https://github.com/Domi-X-in/ScreenShot/releases/tag/v261023.1): una copia 261023.0 se actualizó sola desde GitHub.
 
+## Fase 6 — Nueva interfaz: cinta estilo Office 🟢
+
+Diseño de referencia: lienzo "Editor Ribbon Redesign" (pantallas del editor ancho/estrecho, cinta y colapso, menús, colores, notificaciones, iconos, estados, menú de la barra de menús, ventana de inicio y guía de bienvenida de 3 pasos). Acento #FF5500; tema oscuro principal y claro.
+
+Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `defaults write local.screenshot.app newEditorUI -bool YES`) hasta R9, para que la app siempre funcione y se pueda comparar lo viejo con lo nuevo. Cada fase se integra, se prueba y se cierra antes de seguir.
+
+**Se queda sin tocar** (motor y modelo): `ShotView` (+`ShapeStyles`), `Annotation`, `EditableFile`, `Exporter`, `TextFormatting`, `FormattingController`, `Arrange`, `ShapeTransform`, `OfficeColors`, `Capturer`, `AppLogic`, `HotKeys`, `ScrollCapture`, `OCR`, `Pin`, `Backdrop`, `CutOut`, `Measure`, `Sketch`, `GIFOverlay`, `TextIndex`, `Settings`, `Thumbnail`, `Updates`, y todas las pruebas de comportamiento.
+**Se adapta** (misma función, nueva cara): `ToolOptions`, `FormattingRibbon`, `ColorSplitButton`/`ColorGridView`, `SplitButton`/`MenuButton`, `InfoCellsView`, `DragOutView`, `RecentStrip`, `StatusBar`, `InfoPanels`, `Library`, menú de estado de `AppDelegate`.
+**Se hace de cero**: `DesignTokens`, familia de iconos (mismas rutas que el diseño, con un intérprete de rutas SVG), infraestructura de la cinta (controles, grupos, botón compacto con panel, motor de colapso), `NotificationBar`, barra de título del editor, guía de bienvenida de 3 pasos. Al final se borran `EditorToolbar`, la tira de herramientas del título, `IconPalette`, `PaletteButton`, `PillButton`, el degradado de acento y las páginas viejas de `Onboarding`.
+
+- [ ] **R0 · Preparación**:
+  - [x] Commit del trabajo en curso (barra superior con Fuente, Párrafo, Estilos de forma y Organizar), rama `ui-refactor` (`1bd3d5a`).
+  - [x] Ajuste `newEditorUI` (solo debug; también `SCREENSHOT_NEW_UI=1`).
+  - [x] Capturas de referencia del editor actual, claro y oscuro: `docs/screenshots/baseline-r0/`.
+  - [x] 77 tests unitarios en verde; integración: 11 de 12 suites en verde.
+  - [ ] FLOWS: 274 bien y 4 fallos estables que trajo la barra en curso: Blur Text no encuentra la línea de texto; cambiar el grosor de dos flechas les pone a ambas el mismo color; el flujo de paneles busca el botón "Arrange" con popover, que ya no existe, y por eso falla también "Align Top".
+- [ ] **R1 · Tokens e iconos**: `DesignTokens` (claro/oscuro, escala de #FF5500, estados, radios, tipografía), intérprete de rutas SVG, catálogo de ~100 iconos, hoja de iconos en `DebugSnapshots`. Pruebas: intérprete, contraste mínimo de cada pareja texto/fondo, todos los iconos de la cinta existen.
+- [ ] **R2 · Infraestructura de la cinta (sin conectar)**: botones grande, pequeño, dividido, desplegable, campo y color con sus 5 estados; grupos con etiqueta; botón compacto con panel; colapso de derecha a izquierda (1200/1020/960/860/830/800/640); teclado y VoiceOver. Pruebas: tabla de anchos → grupos colapsados; ventana de demostración en debug.
+- [ ] **R3 · Nuevo armazón del editor**: barra de título solo con ventana, Copiar imagen, Guardar, Fijar, Arrastrar, Deshacer/Rehacer; cinta con Portapapeles, Formas y Herramientas conectados a `Tool` y a `ShotView`; herramienta activa en naranja aunque su grupo esté colapsado. Pruebas: `FlowsSelfTest+Toolbar` y `+Editor`, capturas ancho/estrecho.
+- [ ] **R4 · Grupos de formato**: Fuente, Párrafo, Color (relleno, contorno con grosor y guiones, color y contorno de fuente) y Formato de formas (Organizar, Alinear, Girar, Voltear, puntas de flecha, estilo de línea). Se borra `EditorToolbar`. Pruebas: `+Formatting`, `+StyleSync`, `+Callout`, `ArrangeTests`, `FormattingTests`.
+- [ ] **R5 · Parte inferior**: `NotificationBar` (info, éxito, aviso, error, con temporizador y acción) en lugar del texto de ayuda y los Toast del editor; lecturas de color/tamaño/zoom, Fondo y tira de recientes con el nuevo estilo.
+- [ ] **R6 · Funciones nuevas del diseño** (PR pequeños): tachado, justificado, viñetas, numeración, cambiar mayúsculas/minúsculas, contorno de fuente, copiar formato, cortar/copiar/pegar objetos, OCR/QR y selección de área de imagen como herramientas del editor.
+- [ ] **R7 · Puntos de entrada**: nuevo icono de la barra de menús, menú de estado con iconos, ventana de inicio con barra tipo cinta y agrupación por día.
+- [ ] **R8 · Guía de bienvenida de 3 pasos**: Bienvenida con bucle animado, Configuración (permiso, carpeta, tema), Listo (atajos y primera captura); se mantiene la reanudación tras reiniciar y "Reducir movimiento".
+- [ ] **R9 · Cierre**: quitar `newEditorUI` y el código viejo, revisar tema claro y accesibilidad, actualizar `docs/screenshots`, README y esta hoja de ruta, versión de prueba con `release.sh`.
+
+Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2.
+
 ---
 
 ## Cómo se verifica cada punto
