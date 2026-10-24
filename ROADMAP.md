@@ -66,7 +66,8 @@ Verificado: 54 tests unitarios, 9 suites de integración (incluida la nueva PHAS
 
 ## Fase 4 — Mejoras propias 🟢
 
-- [ ] **Texto en varias líneas** (Mayús+Retorno añade un salto de línea).
+- [x] **Texto en varias líneas**: Retorno añade una línea; Esc o clic fuera termina.
+- [x] **Barra de formato estilo Word** (Fuente y Párrafo): fuente, tamaño, agrandar/reducir, negrita, cursiva, subrayado, alineación, alineación vertical, dirección del texto; atajos de Word; deshacer paso a paso; se guarda con el archivo. Ver docs/text-formatting.md.
 - [x] **Orden de capas**: Traer al frente / adelante / atrás / al fondo; alinear (6 modos) y distribuir; menú Arrange, botón en la barra y clic derecho.
 - [x] **Guías inteligentes**: al mover, dibujar o cambiar el tamaño, ajuste a bordes y centros de otros objetos y de la captura, con guía rosa (⌘ para desactivar).
 - [x] **Texto dentro de formas**: Return o doble clic en un rectángulo u óvalo para escribir dentro, centrado.

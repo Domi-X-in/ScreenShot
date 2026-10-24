@@ -33,6 +33,9 @@ import UniformTypeIdentifiers
     private let info = InfoCellsView()
     private lazy var options = OptionsBar(info: info)
     private let recent = RecentStrip()
+    /// The formatting store and its Word-style toolbar.
+    let formatting = FormattingController()
+    private lazy var ribbon = FormattingRibbon(controller: formatting)
 
     private enum Item {
         static let actions = NSToolbarItem.Identifier("actions")
@@ -98,12 +101,20 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let content = NSView()
         win.contentView = content
-        for v in [shotView, options, recent] as [NSView] {
+        // The canvas paints its dot background over whatever it is asked to redraw; keep that inside it, and keep the
+        // toolbar above it (views don't clip to their bounds by default since macOS 14).
+        shotView.clipsToBounds = true
+        for v in [shotView, ribbon, options, recent] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
         NSLayoutConstraint.activate([
-            shotView.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
+            // Text formatting, like Word's ribbon, under the toolbar.
+            ribbon.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
+            ribbon.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            ribbon.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            ribbon.heightAnchor.constraint(equalToConstant: 72),
+            shotView.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
             shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
@@ -159,7 +170,7 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
-        let chrome: CGFloat = 52 + 68 + 84
+        let chrome: CGFloat = 52 + 72 + 68 + 84
         var w = max(1180, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
@@ -176,6 +187,8 @@ import UniformTypeIdentifiers
         cropButton.isOn = shotView.tool == .crop
         options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
                        selectionCount: shotView.selection.count)
+        // The formatting toolbar follows focus, selection and the caret.
+        formatting.attach(shotView.formattingTarget())
         updateInfo()
     }
 
@@ -399,6 +412,7 @@ import UniformTypeIdentifiers
     private let annotationFieldEditor: AnnotationFieldEditor = {
         let t = AnnotationFieldEditor()
         t.isFieldEditor = true
+        t.allowsUndo = true
         return t
     }()
 
@@ -406,7 +420,11 @@ import UniformTypeIdentifiers
         (client as? NSTextField)?.superview === shotView ? annotationFieldEditor : nil
     }
 
+    /// Whether keyboard focus is in the formatting toolbar (its size box), so text being typed stays open.
+    func isFormattingControl(_ responder: NSResponder) -> Bool { ribbon.owns(responder) }
+
     #if SCREENSHOT_SELFTESTS
+    var debugRibbon: FormattingRibbon { ribbon }
     var debugOptions: OptionsBar { options }
     #endif
 
@@ -1226,6 +1244,17 @@ extension OptionsBar {
 /// the text never pushes its letters' color into the panel (the panel would announce it as a pick, and the bubble or
 /// shape would take it, e.g. black after deleting all the text).
 final class AnnotationFieldEditor: NSTextView {
+    /// Word's formatting shortcuts (⌘B, ⌘I, ⌘U, ⌘L/E/R, ⌘⇧> <, ⌘] [) while typing; they go through the formatting store,
+    /// so the toolbar updates too. Other ⌘ keys reach the menus as usual.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder === self, let change = FormattingController.change(for: event),
+           let formatting = (window?.windowController as? EditorWindowController)?.formatting, formatting.target != nil {
+            formatting.applyFormat(change)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func changeColor(_ sender: Any?) {}
     override func updateFontPanel() {}
     override var usesFontPanel: Bool {

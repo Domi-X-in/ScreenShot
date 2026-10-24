@@ -294,6 +294,46 @@ struct TextRun: Codable, Equatable {
     var color: String // "#RRGGBBAA"
     var size: CGFloat
     var font: TextFont
+    /// Formatting-toolbar settings. Runs saved before the toolbar have none of them and draw with `font`.
+    var family: String? = nil
+    var bold: Bool? = nil
+    var italic: Bool? = nil
+    var underline: Bool? = nil
+
+    func makeFont(scale: CGFloat) -> NSFont {
+        guard let family else { return font.font(size: size * scale) }
+        return TextFormatting.font(family: family, size: size * scale, bold: bold ?? false, italic: italic ?? false)
+    }
+
+    /// Only a color, size and one of the original two faces: what the object's own settings can express.
+    var isPlain: Bool { family == nil && underline != true }
+
+    func sameStyle(as o: TextRun) -> Bool {
+        color == o.color && size == o.size && font == o.font && family == o.family && bold == o.bold && italic == o.italic
+            && underline == o.underline
+    }
+
+    /// The run for one stretch of edited text: one of the original faces stays as before, anything else (another
+    /// family, bold or italic picked in the toolbar) is recorded as such.
+    static func from(attributes attrs: [NSAttributedString.Key: Any], range: NSRange, color: NSColor, fallbackSize: CGFloat,
+                     scale: CGFloat) -> TextRun {
+        let f = attrs[.font] as? NSFont
+        let c = (attrs[.foregroundColor] as? NSColor) ?? color
+        let size = (((f?.pointSize ?? fallbackSize * scale) / scale) * 2).rounded() / 2
+        var run = TextRun(location: range.location, length: range.length, color: c.rgbaHex, size: size, font: .sans)
+        if let f {
+            if let legacy = TextFont.allCases.first(where: { $0.font(size: f.pointSize).fontName == f.fontName }) {
+                run.font = legacy
+            } else {
+                run.font = f.fontName.contains("Chalkboard") ? .goofy : .sans
+                run.family = TextFormatting.family(of: f)
+                run.bold = TextFormatting.isBold(f)
+                run.italic = TextFormatting.isItalic(f)
+            }
+        }
+        if ((attrs[.underlineStyle] as? Int) ?? 0) != 0 { run.underline = true }
+        return run
+    }
 }
 
 /// One annotation. Coordinates are image pixels with a top-left origin.
@@ -330,6 +370,11 @@ struct Annotation {
     /// Callout: design and the point its pointer aims at (image coordinates).
     var calloutStyle: CalloutStyle = .box
     var pointer: CGPoint?
+    /// Formatting toolbar: alignment of each paragraph (nil = all default), and for the text container its vertical
+    /// alignment (shapes) and Word-style text direction (text boxes and shapes).
+    var paragraphAligns: [TextAlign]?
+    var verticalAlign: VerticalAlign = .middle
+    var orientation: TextOrientation = .horizontal
 
     init(kind: Tool, p1: CGPoint, p2: CGPoint, points: [CGPoint] = [], color: NSColor, width: CGFloat) {
         self.kind = kind
@@ -523,24 +568,46 @@ struct Annotation {
         for r in runs ?? [] {
             let range = NSRange(location: r.location, length: r.length)
             guard r.length > 0, NSMaxRange(range) <= m.length else { continue }
-            m.addAttributes([.font: r.font.font(size: r.size * scale), .foregroundColor: NSColor(rgbaHex: r.color) ?? color], range: range)
+            m.addAttributes([.font: r.makeFont(scale: scale), .foregroundColor: NSColor(rgbaHex: r.color) ?? color], range: range)
+            if r.underline == true { m.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
+        }
+        // Paragraph alignment (shapes center by default).
+        for (i, p) in TextFormatting.paragraphRanges(in: m.string as NSString, covering: NSRange(location: 0, length: m.length)).enumerated()
+            where p.length > 0 {
+            let ps = NSMutableParagraphStyle()
+            ps.alignment = (paragraphAligns.flatMap { i < $0.count ? $0[i] : nil } ?? defaultTextAlign).ns
+            m.addAttribute(.paragraphStyle, value: ps, range: p)
         }
         return m
     }
 
-    var textSize: CGSize { attributedText().size() }
+    var defaultTextAlign: TextAlign { holdsTextInShape ? .center : .left }
+
+    /// The text as laid out: Stacked puts each letter on its own line (callouts always run horizontally).
+    func drawnText(scale: CGFloat = 1) -> NSAttributedString {
+        let t = attributedText(scale: scale)
+        return orientation == .stacked && kind != .callout ? TextFormatting.stacked(t) : t
+    }
+
+    /// A text box's size on the image; turned text swaps width and height.
+    var textSize: CGSize {
+        let s = drawnText().size()
+        return kind == .text && orientation.isRotated ? CGSize(width: s.height, height: s.width) : s
+    }
 
     /// Takes text and per-letter styles back from the editing field (`scale` = view points per image pixel).
     mutating func setText(from attributed: NSAttributedString, scale: CGFloat) {
         text = attributed.string
+        let all = NSRange(location: 0, length: attributed.length)
+        let aligns = TextFormatting.paragraphRanges(in: attributed.string as NSString, covering: all).map {
+            TextFormatting.alignment(in: attributed, at: $0.location, default: defaultTextAlign)
+        }
+        paragraphAligns = aligns.allSatisfy { $0 == defaultTextAlign } ? nil : aligns
         var found: [TextRun] = []
-        attributed.enumerateAttributes(in: NSRange(location: 0, length: attributed.length)) { attrs, range, _ in
-            let f = attrs[.font] as? NSFont
-            let c = (attrs[.foregroundColor] as? NSColor) ?? color
-            let size = (((f?.pointSize ?? fontSize * scale) / scale) * 2).rounded() / 2
-            let face: TextFont = f?.fontName.contains("Chalkboard") == true ? .goofy : .sans
-            let run = TextRun(location: range.location, length: range.length, color: c.rgbaHex, size: size, font: face)
-            if var last = found.last, last.color == run.color, last.size == run.size, last.font == run.font,
+        attributed.enumerateAttributes(in: all) { attrs, range, _ in
+            let run = TextRun.from(attributes: attrs, range: range, color: color, fallbackSize: holdsTextInShape ? shapeFontSize : fontSize,
+                                   scale: scale)
+            if var last = found.last, last.sameStyle(as: run),
                NSMaxRange(NSRange(location: last.location, length: last.length)) == run.location {
                 last.length += run.length
                 found[found.count - 1] = last
@@ -551,6 +618,11 @@ struct Annotation {
         if holdsTextInShape {
             // Text inside a rectangle or oval: the outline keeps its own color and width; the text keeps its styles.
             runs = found.isEmpty ? nil : found
+        } else if found.count == 1, let only = found.first, !only.isPlain {
+            // One style, but with toolbar formatting (a family, bold, italic, underline): keep it as a run.
+            width = only.size / 6
+            if kind == .text { color = NSColor(rgbaHex: only.color) ?? color }
+            runs = [only]
         } else if kind == .callout, found.count <= 1, let only = found.first {
             // A callout's color is its bubble's, set from the options bar only. The text never recolors it: on
             // filled designs the text is drawn in a contrasting color, and after deleting everything the field can
@@ -796,6 +868,7 @@ extension Annotation: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, kind, p1, p2, points, color, width, text, number, shape, tailAngle, arrowStyle, dashed, sketch, fill, blurMode, font
         case rulerInPoints, factor, lensShape, lensCenter, textRects, imageData, runs, calloutStyle, pointer
+        case paragraphAligns, verticalAlign, orientation
     }
 
     init(from decoder: Decoder) throws {
@@ -827,6 +900,9 @@ extension Annotation: Codable {
         runs = try c.decodeIfPresent([TextRun].self, forKey: .runs)
         calloutStyle = try c.decodeIfPresent(CalloutStyle.self, forKey: .calloutStyle) ?? .box
         pointer = try c.decodeIfPresent(CGPoint.self, forKey: .pointer)
+        paragraphAligns = try c.decodeIfPresent([TextAlign].self, forKey: .paragraphAligns)
+        verticalAlign = try c.decodeIfPresent(VerticalAlign.self, forKey: .verticalAlign) ?? .middle
+        orientation = try c.decodeIfPresent(TextOrientation.self, forKey: .orientation) ?? .horizontal
     }
 
     func encode(to encoder: Encoder) throws {
@@ -859,6 +935,9 @@ extension Annotation: Codable {
         try c.encodeIfPresent(textRects, forKey: .textRects)
         try c.encodeIfPresent(imageData, forKey: .imageData)
         try c.encodeIfPresent(runs, forKey: .runs)
+        try c.encodeIfPresent(paragraphAligns, forKey: .paragraphAligns)
+        if verticalAlign != .middle { try c.encode(verticalAlign, forKey: .verticalAlign) }
+        if orientation != .horizontal { try c.encode(orientation, forKey: .orientation) }
         if kind == .callout {
             try c.encode(calloutStyle, forKey: .calloutStyle)
             try c.encodeIfPresent(pointer, forKey: .pointer)
@@ -1325,14 +1404,13 @@ enum Renderer {
             s.draw(at: CGPoint(x: o.p1.x - sz.width / 2, y: o.p1.y - sz.height / 2), withAttributes: attrs)
         case .text:
             // Outline pass in each run's contrasting color, then the fill pass.
-            let fill = o.attributedText()
+            let fill = o.drawnText()
             let outline = NSMutableAttributedString(attributedString: fill)
             fill.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: fill.length)) { value, range, _ in
                 let c = (value as? NSColor) ?? o.color
                 outline.addAttributes([.strokeColor: c.contrasting.withAlphaComponent(0.9), .strokeWidth: 12], range: range)
             }
-            outline.draw(at: o.p1)
-            fill.draw(at: o.p1)
+            drawTextBlock(o, outline: outline, fill: fill, ctx: ctx)
         case .magnifier:
             drawMagnifier(o, doc: doc, ctx: ctx)
         case .ruler:
@@ -1349,17 +1427,48 @@ enum Renderer {
     }
 
     /// Text inside a rectangle or oval: centered both ways, wrapped to the shape's width.
+    /// Text inside a rectangle or oval: each paragraph aligned as set (centered by default), wrapped to the shape,
+    /// placed at its top, middle or bottom, and turned for 90° / 270° text direction.
     static func drawShapeText(_ o: Annotation) {
-        guard o.holdsTextInShape, !o.text.isEmpty else { return }
+        guard o.holdsTextInShape, !o.text.isEmpty, let ctx = NSGraphicsContext.current?.cgContext else { return }
         let r = o.rect
-        let m = NSMutableAttributedString(attributedString: o.attributedText())
-        let para = NSMutableParagraphStyle()
-        para.alignment = .center
-        m.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: m.length))
+        let m = o.drawnText()
         let inset = max(6, o.width + 4)
-        let w = max(20, r.width - 2 * inset)
+        // In the text's own frame (turned with it), the box it wraps to.
+        let box = o.orientation.isRotated ? CGSize(width: r.height - 2 * inset, height: r.width - 2 * inset)
+                                          : CGSize(width: r.width - 2 * inset, height: r.height - 2 * inset)
+        let w = max(20, box.width)
         let h = ceil(m.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height)
-        m.draw(with: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h), options: [.usesLineFragmentOrigin])
+        let y: CGFloat = switch o.verticalAlign {
+        case .top: -box.height / 2
+        case .middle: -h / 2
+        case .bottom: box.height / 2 - h
+        }
+        ctx.saveGState()
+        ctx.translateBy(x: r.midX, y: r.midY)
+        ctx.rotate(by: o.orientation.rotation)
+        m.draw(with: CGRect(x: -w / 2, y: y, width: w, height: h), options: [.usesLineFragmentOrigin])
+        ctx.restoreGState()
+    }
+
+    /// A text box: each paragraph aligned within the block, turned for 90° / 270° text direction.
+    static func drawTextBlock(_ o: Annotation, outline: NSAttributedString, fill: NSAttributedString, ctx: CGContext) {
+        let block = fill.size()
+        let size = CGSize(width: ceil(block.width) + 1, height: ceil(block.height))
+        if o.orientation.isRotated {
+            let b = o.bounds
+            ctx.saveGState()
+            ctx.translateBy(x: b.midX, y: b.midY)
+            ctx.rotate(by: o.orientation.rotation)
+            let r = CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height)
+            outline.draw(with: r, options: [.usesLineFragmentOrigin])
+            fill.draw(with: r, options: [.usesLineFragmentOrigin])
+            ctx.restoreGState()
+        } else {
+            let r = CGRect(origin: o.p1, size: size)
+            outline.draw(with: r, options: [.usesLineFragmentOrigin])
+            fill.draw(with: r, options: [.usesLineFragmentOrigin])
+        }
     }
 
     /// Hand-drawn version of an arrow, line, rectangle or oval (fills stay clean underneath the strokes).
@@ -1451,7 +1560,12 @@ enum Renderer {
         case .shout:
             paint(body, fill: o.color.cgColor, stroke: o.color.contrasting.withAlphaComponent(0.85).cgColor, lineWidth: border, shadowed: true)
         }
-        if showText { o.attributedText().draw(at: o.textOrigin) }
+        if showText {
+            // Drawn in a box as wide as the text, so each paragraph's alignment shows.
+            let t = o.attributedText()
+            let s = t.size()
+            t.draw(with: CGRect(origin: o.textOrigin, size: CGSize(width: ceil(s.width) + 1, height: ceil(s.height))), options: [.usesLineFragmentOrigin])
+        }
     }
 
     /// Shottr's ObjMagnifier: source outline (lmagnifier), connector (lmagline) and an enlarged lens with a border (lmagborder).

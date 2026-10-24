@@ -177,6 +177,16 @@ import AppKit
         return true
     }
 
+    /// With FLOWS_SHOTS=<dir>, saves a picture of the window (for looking at the UI a flow leaves behind).
+    func snapshot(_ ed: EditorWindowController, _ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["FLOWS_SHOTS"], let frame = ed.window?.contentView?.superview else { return }
+        frame.layoutSubtreeIfNeeded()
+        guard let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
+        frame.cacheDisplay(in: frame.bounds, to: rep)
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
+    }
+
     func closeAllEditors() async {
         for ed in editors { ed.window?.performClose(nil) }
         await sleep(0.4)
@@ -213,6 +223,7 @@ import AppKit
             ("color-zoom-info", colorZoomInfoFlow),
             ("callout-editing", calloutEditingFlow),
             ("style-sync", styleSyncFlow),
+            ("formatting", formattingFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

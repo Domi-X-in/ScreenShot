@@ -76,6 +76,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     }
     private var cutStrip: CutOut.Strip?
     private var selectionObserver: NSObjectProtocol?
+    /// Where the caret or selection was when a toolbar control (the font size box) took the focus.
+    private var suspendedSelection: NSRange?
     /// The rectangle or oval drawn last, until anything else happens (Return types in it).
     private var justDrawnID: UUID?
     /// Smart guides for the drag in progress: what can be snapped to, and the lines shown right now.
@@ -366,7 +368,15 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         markChanged()
     }
 
+    /// While typing, ⌘Z / ⇧⌘Z step through the text's own history (letters and formatting); otherwise the document's.
+    private var textUndoManager: UndoManager? { (textField?.currentEditor() as? NSTextView)?.undoManager }
+
     @objc func undo(_ sender: Any?) {
+        if let um = textUndoManager, um.canUndo {
+            um.undo()
+            controller?.syncToolbar()
+            return
+        }
         commitText()
         guard let s = doc.undoStack.popLast() else { NSSound.beep(); return }
         doc.redoStack.append(snapshot)
@@ -374,6 +384,11 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     }
 
     @objc func redo(_ sender: Any?) {
+        if let um = textUndoManager, um.canRedo {
+            um.redo()
+            controller?.syncToolbar()
+            return
+        }
         commitText()
         guard let s = doc.redoStack.popLast() else { NSSound.beep(); return }
         doc.undoStack.append(snapshot)
@@ -1651,12 +1666,156 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         repositionTextField()
     }
 
-    func controlTextDidEndEditing(_ obj: Notification) { commitText() }
+    /// Typing ends when focus moves away, except to the formatting toolbar's size box: then the text stays open, and the
+    /// toolbar brings the focus back (with the same selection) when it applies the size.
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let tf = textField, obj.object as? NSTextField === tf else { commitText(); return }
+        if let editor = obj.userInfo?["NSFieldEditor"] as? NSTextView { suspendedSelection = editor.selectedRange() }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.textField === tf else { return }
+                if let fr = self.window?.firstResponder, self.controller?.isFormattingControl(fr) == true { return }
+                self.commitText()
+            }
+        }
+    }
+
+    // MARK: Formatting toolbar
+
+    /// The text the formatting toolbar works on: the text being typed, or one selected object that holds text.
+    func formattingTarget() -> TextFormattingTarget? {
+        if textField != nil, let id = editingID { return EditingTextTarget(view: self, id: id) }
+        if selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }),
+           o.kind == .text || o.kind == .callout || (o.holdsTextInShape && !o.text.isEmpty) {
+            return SelectedTextTarget(view: self, id: id)
+        }
+        return nil
+    }
+
+    /// The field editor of the text being typed, focused again with its selection if a toolbar control took the focus.
+    private func resumedEditor() -> NSTextView? {
+        guard let tf = textField else { return nil }
+        if let e = tf.currentEditor() as? NSTextView { return e }
+        window?.makeFirstResponder(tf)
+        guard let e = tf.currentEditor() as? NSTextView else { return nil }
+        if let r = suspendedSelection, NSMaxRange(r) <= (e.string as NSString).length { e.setSelectedRange(r) }
+        suspendedSelection = nil
+        return e
+    }
+
+    private func addContainerState(_ o: Annotation, to s: inout TextFormatState) {
+        s.supportsVerticalAlign = o.holdsTextInShape
+        s.supportsOrientation = o.kind != .callout
+        s.verticalAlign = s.supportsVerticalAlign ? o.verticalAlign : nil
+        s.orientation = s.supportsOrientation ? o.orientation : nil
+    }
+
+    func editingFormatState(_ id: UUID) -> TextFormatState {
+        guard let tf = textField, let o = doc.objects.first(where: { $0.id == id }) else { return .inactive }
+        var s: TextFormatState
+        if let e = tf.currentEditor() as? NSTextView, let storage = e.textStorage {
+            s = TextFormatting.state(of: storage, selection: e.selectedRange(), typing: e.typingAttributes, scale: zoom, defaultAlign: o.defaultTextAlign)
+        } else {
+            // The size box has the focus for a moment: show the text as it was left.
+            let a = tf.attributedStringValue
+            let r = suspendedSelection ?? NSRange(location: 0, length: a.length)
+            let typing = a.length > 0 ? a.attributes(at: min(max(0, r.location - 1), a.length - 1), effectiveRange: nil) : [:]
+            s = TextFormatting.state(of: a, selection: r, typing: typing, scale: zoom, defaultAlign: o.defaultTextAlign)
+        }
+        addContainerState(o, to: &s)
+        return s
+    }
+
+    func selectedFormatState(_ id: UUID) -> TextFormatState {
+        guard let o = doc.objects.first(where: { $0.id == id }) else { return .inactive }
+        let a = o.attributedText()
+        var s = TextFormatting.state(of: a, selection: NSRange(location: 0, length: o.text.isEmpty ? 0 : a.length),
+                                     typing: a.length > 0 ? a.attributes(at: 0, effectiveRange: nil) : [:], scale: 1, defaultAlign: o.defaultTextAlign)
+        addContainerState(o, to: &s)
+        return s
+    }
+
+    /// Vertical alignment or text direction of the text's container.
+    private func setContainer(_ change: FormatChange, at i: Int, undo: UndoManager?) {
+        let id = doc.objects[i].id
+        let old = (doc.objects[i].verticalAlign, doc.objects[i].orientation)
+        switch change {
+        case let .verticalAlign(v): doc.objects[i].verticalAlign = v
+        case let .orientation(o): doc.objects[i].orientation = o
+        default: return
+        }
+        undo?.registerUndo(withTarget: self) { v in
+            MainActor.assumeIsolated {
+                guard let j = v.doc.objects.firstIndex(where: { $0.id == id }) else { return }
+                v.doc.objects[j].verticalAlign = old.0
+                v.doc.objects[j].orientation = old.1
+                v.needsDisplay = true
+                v.controller?.syncToolbar()
+            }
+        }
+        markChanged()
+        needsDisplay = true
+    }
+
+    /// Formats the text being typed: the selected letters, the paragraphs it touches, the pending format at the caret,
+    /// or the container. One undo step in the text's own undo history.
+    func applyEditingFormat(_ change: FormatChange, to id: UUID) {
+        guard let i = doc.objects.firstIndex(where: { $0.id == id }), let e = resumedEditor(), let storage = e.textStorage else { return }
+        if change.isContainer {
+            setContainer(change, at: i, undo: e.undoManager)
+            return
+        }
+        let sel = e.selectedRange()
+        let o = doc.objects[i]
+        var typing = e.typingAttributes
+        let affected: NSRange = change.isParagraph
+            ? TextFormatting.paragraphRanges(in: storage.string as NSString, covering: sel).reduce(sel) { NSUnionRange($0, $1) }
+            : sel
+        // Its own undo step: close the run of typed letters first (macOS groups typing into one step).
+        e.breakUndoCoalescing()
+        e.undoManager?.beginUndoGrouping()
+        if affected.length > 0, e.shouldChangeText(in: affected, replacementString: nil) {
+            storage.beginEditing()
+            TextFormatting.apply(change, to: storage, selection: sel, typing: &typing, scale: zoom, defaultAlign: o.defaultTextAlign)
+            storage.endEditing()
+            e.didChangeText()
+        } else {
+            let scratch = NSMutableAttributedString(attributedString: storage)
+            TextFormatting.apply(change, to: scratch, selection: sel, typing: &typing, scale: zoom, defaultAlign: o.defaultTextAlign)
+        }
+        e.undoManager?.endUndoGrouping()
+        e.typingAttributes = typing
+        if o.kind == .callout { doc.objects[i].text = e.string }
+        repositionTextField()
+        needsDisplay = true
+    }
+
+    /// Formats a selected object's whole text: one undo step in the document's history.
+    func applySelectedFormat(_ change: FormatChange, to id: UUID) {
+        guard let i = doc.objects.firstIndex(where: { $0.id == id }) else { return }
+        pushUndo()
+        if change.isContainer {
+            setContainer(change, at: i, undo: nil)
+        } else {
+            var o = doc.objects[i]
+            guard !o.text.isEmpty else { return }
+            let m = NSMutableAttributedString(attributedString: o.attributedText())
+            var typing = m.attributes(at: 0, effectiveRange: nil)
+            TextFormatting.apply(change, to: m, selection: NSRange(location: 0, length: m.length), typing: &typing, scale: 1,
+                                 defaultAlign: o.defaultTextAlign)
+            o.setText(from: m, scale: 1)
+            doc.objects[i] = o
+        }
+        controller?.documentChanged(resized: false)
+        needsDisplay = true
+    }
 
     func commitText() {
         guard let tf = textField, let id = editingID else { return }
         let content = editingContent() ?? NSAttributedString(string: tf.stringValue)
         let z = zoom
+        // The text's own undo history ends with the typing; it mustn't reach into the next text.
+        (tf.currentEditor() as? NSTextView)?.undoManager?.removeAllActions()
         textField = nil
         editingID = nil
         if let o = selectionObserver { NotificationCenter.default.removeObserver(o) }
@@ -1679,6 +1838,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         // Keyboard shortcuts work again right away (focus can be left on the window when the field goes away).
         let fr = window?.firstResponder
         if fr == nil || fr is NSText || fr === window || fr === tf { window?.makeFirstResponder(self) }
+        // The formatting toolbar moves from the typing to the (still selected) object.
+        controller?.syncToolbar()
         needsDisplay = true
     }
 
