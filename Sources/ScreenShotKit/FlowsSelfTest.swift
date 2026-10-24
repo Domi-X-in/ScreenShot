@@ -1,4 +1,5 @@
 import AppKit
+import ScreenCaptureKit
 
 #if SCREENSHOT_SELFTESTS
 /// Real-usage flows across features, driven with mouse and key events (⌘ shortcuts go through the menu bar like a real
@@ -177,14 +178,28 @@ import AppKit
         return true
     }
 
-    /// With FLOWS_SHOTS=<dir>, saves a picture of the window (for looking at the UI a flow leaves behind).
-    func snapshot(_ ed: EditorWindowController, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["FLOWS_SHOTS"], let frame = ed.window?.contentView?.superview else { return }
-        frame.layoutSubtreeIfNeeded()
-        guard let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
-        frame.cacheDisplay(in: frame.bounds, to: rep)
+    /// With FLOWS_SHOTS=<dir>, saves a real screen capture of the window, as the user sees it (falls back to drawing
+    /// the window when it can't be captured, e.g. while the Mac is locked).
+    func snapshot(_ ed: EditorWindowController, _ name: String) async {
+        guard let dir = ProcessInfo.processInfo.environment["FLOWS_SHOTS"], let win = ed.window else { return }
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
+        let url = URL(fileURLWithPath: dir).appendingPathComponent(name + ".png")
+        await sleep(0.3)
+        if let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+           let w = content.windows.first(where: { $0.windowID == CGWindowID(win.windowNumber) }) {
+            let filter = SCContentFilter(desktopIndependentWindow: w)
+            let cfg = SCStreamConfiguration()
+            cfg.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
+            cfg.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
+            cfg.ignoreShadowsSingleWindow = true
+            if let img = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) {
+                try? NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])?.write(to: url)
+                return
+            }
+        }
+        guard let frame = win.contentView?.superview, let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
+        frame.cacheDisplay(in: frame.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 
     func closeAllEditors() async {

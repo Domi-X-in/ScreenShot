@@ -29,35 +29,36 @@ extension FlowsSelfTest {
         }
         func fontAt(_ i: Int) -> NSFont? { editor()?.textStorage?.attribute(.font, at: i, effectiveRange: nil) as? NSFont }
 
-        check(!ui.bold.isEnabled && !ui.font.isEnabled && !ui.size.isEnabled && !ui.align.isEnabled, "with no text, the toolbar is greyed out")
+        check(!ui.styles.isEnabled && !ui.font.isEnabled && !ui.size.isEnabled && !ui.align.isEnabled, "with no text, the toolbar is greyed out")
 
         // Typing a text.
         type("t"); click(ed, CGPoint(x: 100, y: 500)); await sleep(0.15)
         type("Hello world")
-        check(ui.bold.isEnabled && ui.size.isEnabled && store.state.isActive, "typing a text turns the toolbar on")
+        check(ui.styles.isEnabled && ui.size.isEnabled && store.state.isActive, "typing a text turns the toolbar on")
         check(!ui.size.stringValue.isEmpty && ui.font.titleOfSelectedItem != nil, "it shows the text's font and size (\(ui.font.titleOfSelectedItem ?? "-") \(ui.size.stringValue))")
         check(!ui.vertical.isEnabled && ui.direction.isEnabled, "vertical alignment is off for a text box (it fits its text); direction is on")
 
         // Bold from the toolbar on “world”.
         editor()?.setSelectedRange(NSRange(location: 6, length: 5))
-        ui.bold.performClick(nil)
+        ed.debugRibbon.debugClickStyle(0)
         await pause()
         check(fontAt(6).map(TextFormatting.isBold) == true && fontAt(0).map(TextFormatting.isBold) == false, "Bold applies to the selected word only")
-        check(ui.bold.state == .on, "Bold shows pressed for the bold word")
-        snapshot(ed, "ribbon-editing")
+        check(ui.styles.isSelected(forSegment: 0), "Bold shows pressed for the bold word")
+        await snapshot(ed, "ribbon-editing")
         check(editor() != nil && editor()?.selectedRange() == NSRange(location: 6, length: 5), "the text keeps the focus and its selection after the click")
         editor()?.setSelectedRange(NSRange(location: 2, length: 0))
         store.refresh()
-        check(ui.bold.state == .off, "moving the caret into “Hello” shows Bold off")
+        check(!ui.styles.isSelected(forSegment: 0), "moving the caret into “Hello” shows Bold off")
         editor()?.setSelectedRange(NSRange(location: 0, length: 11))
         store.refresh()
-        check(ui.bold.state == .off, "a half-bold selection shows Bold off (Word)")
+        check(!ui.styles.isSelected(forSegment: 0), "a half-bold selection shows Bold off (Word)")
 
         // ⌘I at a collapsed caret: the next letters are italic.
         editor()?.setSelectedRange(NSRange(location: 11, length: 0))
         shortcut("i", .command)
         await pause()
-        check(ui.italic.state == .on, "⌘I at the caret shows Italic pressed (pending format)")
+        check(ui.styles.isSelected(forSegment: 1), "⌘I at the caret shows Italic pressed (pending format)")
+        await snapshot(ed, "ribbon-italic-pending")
         type("!")
         await pause()
         check(fontAt(11).map(TextFormatting.isItalic) == true && fontAt(5).map(TextFormatting.isItalic) == false, "the next letter typed is italic, the rest isn't")
@@ -112,7 +113,7 @@ extension FlowsSelfTest {
         key("esc")
         guard let text = v.doc.objects.last, text.kind == .text else { check(false, "the text was kept"); return }
         check(store.state.isActive && store.target is SelectedTextTarget, "a selected text keeps the toolbar on")
-        ui.underline.performClick(nil)
+        ed.debugRibbon.debugClickStyle(2)
         check(v.doc.objects.last?.runs?.allSatisfy { $0.underline == true } == true, "Underline on a selected text underlines all of it")
         type("z", mods: .command)
         check(v.doc.objects.last?.runs?.contains { $0.underline == true } != true, "⌘Z undoes it")
@@ -128,7 +129,7 @@ extension FlowsSelfTest {
         ui.direction.selectItem(at: 1)
         _ = ui.direction.target?.perform(ui.direction.action, with: ui.direction)
         let b2 = v.doc.objects.first { $0.id == box.id }
-        snapshot(ed, "ribbon-shape")
+        await snapshot(ed, "ribbon-shape")
         check(b2?.verticalAlign == .bottom && b2?.orientation == .rotate90,
               "Align Bottom and Rotate 90° apply to the shape (\(String(describing: b2?.verticalAlign)), \(String(describing: b2?.orientation)), target \(String(describing: store.target.map { Swift.type(of: $0) })), selection \(v.selection.count))")
 
@@ -136,7 +137,7 @@ extension FlowsSelfTest {
         type("e"); drag(ed, CGPoint(x: 200, y: 200), CGPoint(x: 300, y: 100)); await sleep(0.1); type("Note")
         check(!ui.direction.isEnabled && !ui.vertical.isEnabled, "callouts don't offer direction or vertical alignment")
         key("esc"); key("esc")
-        check(!store.state.isActive && !ui.bold.isEnabled, "with nothing selected the toolbar is greyed out again")
+        check(!store.state.isActive && !ui.styles.isEnabled, "with nothing selected the toolbar is greyed out again")
 
         // Saved and reopened.
         type("s", mods: .command)

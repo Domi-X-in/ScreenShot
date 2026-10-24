@@ -30,9 +30,10 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         img.isTemplate = true
         return img
     }
-    private lazy var bold = toggle("bold", "Bold (⌘B)", .bold)
-    private lazy var italic = toggle("italic", "Italic (⌘I)", .italic)
-    private lazy var underline = toggle("underline", "Underline (⌘U)", .underline)
+    /// Bold, Italic, Underline as one control whose pressed segments are highlighted (plain toggle buttons barely
+    /// change in dark mode).
+    private let styles = NSSegmentedControl()
+    private let styleChanges: [FormatChange] = [.bold, .italic, .underline]
     private let align = NSSegmentedControl()
     private let vertical = NSSegmentedControl()
     private let direction = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -65,12 +66,6 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         b.refusesFirstResponder = true
         changes[ObjectIdentifier(b)] = change
         b.widthAnchor.constraint(equalToConstant: 30).isActive = true
-        return b
-    }
-
-    private func toggle(_ symbol: String, _ tip: String, _ change: FormatChange) -> NSButton {
-        let b = button(symbol, tip, change)
-        b.setButtonType(.pushOnPushOff)
         return b
     }
 
@@ -147,6 +142,18 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
             control.refusesFirstResponder = true
             control.controlSize = .small
         }
+        styles.segmentCount = 3
+        styles.trackingMode = .selectAny
+        for (i, (symbol, tip)) in [("bold", "Bold (⌘B)"), ("italic", "Italic (⌘I)"), ("underline", "Underline (⌘U)")].enumerated() {
+            styles.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: tip), forSegment: i)
+            styles.setToolTip(tip, forSegment: i)
+            styles.setWidth(30, forSegment: i)
+        }
+        styles.target = self
+        styles.action = #selector(stylePicked)
+        styles.refusesFirstResponder = true
+        styles.controlSize = .small
+        styles.setAccessibilityLabel("Bold, Italic, Underline")
         align.setAccessibilityLabel("Paragraph alignment")
         vertical.setAccessibilityLabel("Vertical alignment")
 
@@ -162,7 +169,7 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
         direction.refusesFirstResponder = true
         direction.controlSize = .small
 
-        let font = group("Font", rows: [[fontPopup, sizeBox, grow, shrink], [bold, italic, underline]])
+        let font = group("Font", rows: [[fontPopup, sizeBox, grow, shrink], [styles]])
         let paragraph = group("Paragraph", rows: [[align, vertical], [direction]])
         let divider = NSBox()
         divider.boxType = .separator
@@ -199,21 +206,16 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
 
     private func show(_ s: TextFormatState) {
         let on = s.isActive
-        for c in [fontPopup, grow, shrink, bold, italic, underline, align] as [NSControl] { c.isEnabled = on }
+        for c in [fontPopup, grow, shrink, styles, align] as [NSControl] { c.isEnabled = on }
         sizeBox.isEnabled = on
         vertical.isEnabled = on && s.supportsVerticalAlign
         direction.isEnabled = on && s.supportsOrientation
         // Mixed values show blank, like Word.
         if let f = s.family, on, let i = families.firstIndex(of: f) { fontPopup.selectItem(at: i) } else { fontPopup.select(nil) }
         if sizeBox.currentEditor() == nil { sizeBox.stringValue = on ? s.size.map(TextFormatting.sizeLabel) ?? "" : "" }
-        bold.state = on && s.bold ? .on : .off
-        italic.state = on && s.italic ? .on : .off
-        underline.state = on && s.underline ? .on : .off
-        for b in [bold, italic, underline] {
-            // Pressed toggles take the accent color so they read at a glance, in light and dark.
-            b.contentTintColor = b.state == .on ? .controlAccentColor : nil
-            b.setAccessibilityValue(b.state == .on ? "on" : "off")
-        }
+        for (i, pressed) in [s.bold, s.italic, s.underline].enumerated() { styles.setSelected(on && pressed, forSegment: i) }
+        styles.setAccessibilityValue(["Bold", "Italic", "Underline"].enumerated().filter { styles.isSelected(forSegment: $0.offset) }
+            .map(\.element).joined(separator: ", "))
         align.selectedSegment = on ? s.alignment.flatMap { TextAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
         vertical.selectedSegment = on && s.supportsVerticalAlign ? s.verticalAlign.flatMap { VerticalAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
         if on && s.supportsOrientation, let o = s.orientation, let i = TextOrientation.allCases.firstIndex(of: o) {
@@ -228,6 +230,13 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
     @objc private func sendChange(_ sender: NSButton) {
         guard let change = changes[ObjectIdentifier(sender)] else { return }
         controller.applyFormat(change)
+    }
+
+    /// The segment whose pressed state now differs from the text's is the one clicked.
+    @objc private func stylePicked() {
+        let current = [controller.state.bold, controller.state.italic, controller.state.underline]
+        guard let i = (0..<3).first(where: { styles.isSelected(forSegment: $0) != current[$0] }) else { return }
+        controller.applyFormat(styleChanges[i])
     }
 
     @objc private func familyPicked() {
@@ -260,9 +269,15 @@ final class FormattingRibbon: NSView, NSComboBoxDelegate {
     }
 
     #if SCREENSHOT_SELFTESTS
-    var debugControls: (font: NSPopUpButton, size: NSComboBox, bold: NSButton, italic: NSButton, underline: NSButton,
+    var debugControls: (font: NSPopUpButton, size: NSComboBox, styles: NSSegmentedControl,
                         grow: NSButton, shrink: NSButton, align: NSSegmentedControl, vertical: NSSegmentedControl, direction: NSPopUpButton) {
-        (fontPopup, sizeBox, bold, italic, underline, grow, shrink, align, vertical, direction)
+        (fontPopup, sizeBox, styles, grow, shrink, align, vertical, direction)
+    }
+
+    /// A click on the Bold, Italic or Underline segment.
+    func debugClickStyle(_ i: Int) {
+        styles.setSelected(!styles.isSelected(forSegment: i), forSegment: i)
+        stylePicked()
     }
     #endif
 }
