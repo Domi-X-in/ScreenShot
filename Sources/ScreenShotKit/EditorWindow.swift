@@ -174,7 +174,7 @@ import UniformTypeIdentifiers
     func syncToolbar() {
         toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
         cropButton.isOn = shotView.tool == .crop
-        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.style, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
+        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
                        selectionCount: shotView.selection.count)
         updateInfo()
     }
@@ -1135,6 +1135,7 @@ final class OptionsBar: NSView, NSMenuDelegate {
 
     #if SCREENSHOT_SELFTESTS
     func debugOpenCustomColor() { customColor() }
+    var debugShownStyle: ToolStyle { style }
     /// What the color panel does when a color is picked: its action reaches the options bar.
     func debugPickCustomColor(_ c: NSColor) {
         NSColorPanel.shared.color = c

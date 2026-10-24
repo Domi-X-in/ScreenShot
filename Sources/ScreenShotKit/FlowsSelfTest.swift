@@ -212,6 +212,7 @@ import AppKit
             ("capture-settings", captureSettingsFlow),
             ("color-zoom-info", colorZoomInfoFlow),
             ("callout-editing", calloutEditingFlow),
+            ("style-sync", styleSyncFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

@@ -32,6 +32,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         didSet {
             commitText()
             if tool != .crop { cropRect = nil; cutStrip = nil; cutOutMode = false }
+            // Picking a drawing tool starts something new: the selection is let go, so option changes are for the new
+            // object, not the one that was selected (as in PowerPoint).
+            if tool != .select && tool != oldValue && !selection.isEmpty { selectedID = nil }
             if tool == .crop && oldValue != .crop {
                 Toast.show(cutOutMode ? "Drag across the part to remove, then hit Enter to cut it out"
                                       : "Select the area to keep, then hit Enter to crop")
@@ -72,6 +75,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
     }
     private var cutStrip: CutOut.Strip?
+    private var selectionObserver: NSObjectProtocol?
     /// The rectangle or oval drawn last, until anything else happens (Return types in it).
     private var justDrawnID: UUID?
     /// Smart guides for the drag in progress: what can be snapped to, and the lines shown right now.
@@ -595,6 +599,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             pushUndo()
             let a = Annotation(kind: .text, p1: CGPoint(x: p.x, y: p.y - max(12, style.width * 6) * 0.6), p2: p, style: style)
             doc.objects.append(a)
+            selectedID = a.id // like a new callout: it's the object being worked on, and stays selected after Esc
             beginTextEdit(id: a.id)
         case .callout:
             // Press where the pointer should aim, drag to where the bubble goes.
@@ -1179,28 +1184,111 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         return doc.objects.first { $0.id == id }?.kind
     }
 
-    /// Options-bar change: remembered for new annotations and applied to the selection.
+    /// What the options bar shows: the letters being typed, else the selected object, else the style for new objects
+    /// (as PowerPoint shows the format of what is selected).
+    var displayedStyle: ToolStyle {
+        if let tf = textField, let id = editingID, let o = doc.objects.first(where: { $0.id == id }),
+           let editor = tf.currentEditor() as? NSTextView {
+            return Self.textStyle(of: o, editor: editor, base: style, zoom: zoom)
+        }
+        if let id = selectedID, let o = doc.objects.first(where: { $0.id == id }) { return Self.style(of: o, base: style) }
+        return style
+    }
+
+    /// An object's own settings, in options-bar terms.
+    static func style(of o: Annotation, base: ToolStyle) -> ToolStyle {
+        var s = base
+        s.color = o.color
+        s.width = o.width
+        s.arrow = o.arrowStyle
+        s.dashed = o.dashed
+        s.sketch = o.sketch
+        s.fill = o.fill
+        s.blur = o.blurMode
+        s.font = o.font
+        s.counterShape = o.shape
+        s.rulerInPoints = o.rulerInPoints
+        s.lensShape = o.lensShape
+        s.magnification = o.factor
+        s.callout = o.calloutStyle
+        // Text styled as a whole from per-letter runs: show its first letter's style.
+        if o.kind == .text, let r = o.runs?.first {
+            s.color = NSColor(rgbaHex: r.color) ?? s.color
+            s.width = r.size / 6
+            s.font = r.font
+        }
+        return s
+    }
+
+    /// The style of the selected letters (or of the letter before the cursor) while typing. A callout shows its
+    /// bubble's color until letters are selected.
+    static func textStyle(of o: Annotation, editor: NSTextView, base: ToolStyle, zoom: CGFloat) -> ToolStyle {
+        var s = style(of: o, base: base)
+        let sel = editor.selectedRange()
+        let length = editor.textStorage?.length ?? 0
+        let attrs: [NSAttributedString.Key: Any]
+        if sel.length > 0, sel.location < length {
+            attrs = editor.textStorage?.attributes(at: sel.location, effectiveRange: nil) ?? [:]
+        } else if sel.location > 0, sel.location <= length {
+            attrs = editor.textStorage?.attributes(at: sel.location - 1, effectiveRange: nil) ?? editor.typingAttributes
+        } else {
+            attrs = editor.typingAttributes
+        }
+        if let f = attrs[.font] as? NSFont {
+            s.width = ((f.pointSize / zoom) / 6 * 2).rounded() / 2
+            s.font = f.fontName.contains("Chalkboard") ? .goofy : .sans
+        }
+        if let c = attrs[.foregroundColor] as? NSColor, !(o.kind == .callout && sel.length == 0) { s.color = c }
+        return s
+    }
+
+    /// Applies only the settings that differ between what the bar showed and what it shows now.
+    static func applyChanges(from a: ToolStyle, to b: ToolStyle, on o: inout Annotation) {
+        let textKinds: Set<Tool> = [.text, .callout]
+        if a.color.rgbaHex != b.color.rgbaHex {
+            o.color = b.color
+            if o.kind == .text { o.runs = nil } // a whole text recolored loses its per-letter colors
+        }
+        if a.width != b.width {
+            o.width = b.width
+            if textKinds.contains(o.kind) { o.runs = o.runs?.map { var r = $0; r.size = max(12, b.width * 6); return r } }
+        }
+        if a.font != b.font {
+            o.font = b.font
+            if textKinds.contains(o.kind) { o.runs = o.runs?.map { var r = $0; r.font = b.font; return r } }
+        }
+        if a.arrow != b.arrow { o.arrowStyle = b.arrow }
+        if a.dashed != b.dashed { o.dashed = b.dashed }
+        if a.sketch != b.sketch { o.sketch = b.sketch }
+        if a.fill != b.fill { o.fill = b.fill }
+        if a.blur != b.blur { o.blurMode = b.blur; o.textRects = nil }
+        if a.counterShape != b.counterShape { o.shape = b.counterShape }
+        if a.rulerInPoints != b.rulerInPoints { o.rulerInPoints = b.rulerInPoints }
+        if a.lensShape != b.lensShape { o.lensShape = b.lensShape }
+        if a.magnification != b.magnification { o.factor = b.magnification }
+        if a.callout != b.callout { o.calloutStyle = b.callout }
+    }
+
+    /// Options-bar change: remembered for new annotations, and only the setting that changed is applied to the selection
+    /// (or to the letters being typed).
     func setStyle(_ s: ToolStyle) {
+        let shown = displayedStyle
         style = s
-        if styleEditedText(s) { return }
+        if styleEditedText(s, shown: shown) { controller?.syncToolbar(); return }
         var changed: [(Int, Annotation)] = []
         for i in doc.objects.indices where selection.contains(doc.objects[i].id) {
             let old = doc.objects[i]
             var o = old
-            o.apply(s)
-            guard o.color != old.color || o.width != old.width || o.arrowStyle != old.arrowStyle || o.dashed != old.dashed
-                || o.fill != old.fill || o.blurMode != old.blurMode || o.font != old.font || o.shape != old.shape
-                || o.rulerInPoints != old.rulerInPoints || o.lensShape != old.lensShape || o.factor != old.factor
-                || o.calloutStyle != old.calloutStyle
-            else { continue }
-            if o.blurMode != old.blurMode { o.textRects = nil }
+            Self.applyChanges(from: shown, to: s, on: &o)
+            guard (try? JSONEncoder().encode(o)) != (try? JSONEncoder().encode(old)) else { continue }
             changed.append((i, o))
         }
-        guard !changed.isEmpty else { return }
+        guard !changed.isEmpty else { controller?.syncToolbar(); return }
         pushUndo()
         for (i, o) in changed { doc.objects[i] = o }
         needsDisplay = true
         scanTextRegions()
+        controller?.syncToolbar()
     }
 
     /// Shottr's Resize: scales the image and every annotation (undoable here, unlike Shottr's "can't be undone!").
@@ -1435,6 +1523,13 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             window?.makeKeyAndOrderFront(nil)
         }
         window?.makeFirstResponder(tf)
+        // The options bar follows the letters at the cursor or in the selection.
+        if let editor = tf.currentEditor() {
+            selectionObserver = NotificationCenter.default.addObserver(forName: NSTextView.didChangeSelectionNotification, object: editor,
+                                                                       queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.controller?.syncToolbar() }
+            }
+        }
         if let editor = tf.currentEditor() as? NSTextView {
             var attrs: [NSAttributedString.Key: Any] = [.font: o.font.font(size: fontSize * zoom), .foregroundColor: o.baseTextColor]
             if o.holdsTextInShape {
@@ -1444,6 +1539,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             }
             editor.typingAttributes = attrs
         }
+        controller?.syncToolbar() // show this text's style
         needsDisplay = true
     }
 
@@ -1472,33 +1568,54 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         tf.frame = CGRect(x: p.x - 2, y: p.y, width: max(80, size.width + 30), height: ceil(lineHeight * 1.08))
     }
 
-    /// Options-bar change while typing: styles the selected letters, or the whole text when nothing is selected.
-    private func styleEditedText(_ s: ToolStyle) -> Bool {
+    /// Options-bar change while typing: styles the selected letters, or the whole text when nothing is selected. Only
+    /// the setting that changed is applied, so letters keep their other styles (a size change keeps each color).
+    private func styleEditedText(_ s: ToolStyle, shown: ToolStyle) -> Bool {
         guard let tf = textField, let id = editingID, let editor = tf.currentEditor() as? NSTextView,
               let storage = editor.textStorage, let i = doc.objects.firstIndex(where: { $0.id == id }) else { return false }
         let selected = editor.selectedRange()
-        var textColor = s.color
+        let colorChanged = s.color.rgbaHex != shown.color.rgbaHex
+        let sizeChanged = s.width != shown.width
+        let fontChanged = s.font != shown.font
+        let designChanged = s.callout != shown.callout
+        var textColor: NSColor? = colorChanged ? s.color : nil
         if doc.objects[i].kind == .callout {
-            // The bubble follows the options bar; its text stays readable on filled designs.
-            doc.objects[i].calloutStyle = s.callout
-            if selected.length == 0 {
-                doc.objects[i].color = s.color
+            if designChanged { doc.objects[i].calloutStyle = s.callout }
+            // With no letters selected the color is the bubble's; the text stays readable on it.
+            if selected.length == 0, colorChanged || designChanged {
+                if colorChanged { doc.objects[i].color = s.color }
                 textColor = doc.objects[i].baseTextColor
             }
             needsDisplay = true
         }
-        let attrs: [NSAttributedString.Key: Any] = [.font: s.font.font(size: max(12, s.width * 6) * zoom), .foregroundColor: textColor]
         let range = selected.length > 0 ? selected : NSRange(location: 0, length: storage.length)
+        let newSize = max(12, s.width * 6) * zoom
         if range.length > 0, editor.shouldChangeText(in: range, replacementString: nil) {
-            storage.addAttributes(attrs, range: range)
+            storage.beginEditing()
+            if sizeChanged || fontChanged {
+                storage.enumerateAttribute(.font, in: range) { value, r, _ in
+                    let f = value as? NSFont
+                    let face: TextFont = fontChanged ? s.font : (f?.fontName.contains("Chalkboard") == true ? .goofy : .sans)
+                    storage.addAttribute(.font, value: face.font(size: sizeChanged ? newSize : (f?.pointSize ?? newSize)), range: r)
+                }
+            }
+            if let textColor { storage.addAttribute(.foregroundColor, value: textColor, range: range) }
+            storage.endEditing()
             editor.didChangeText()
         }
-        editor.typingAttributes = editor.typingAttributes.merging(attrs) { $1 }
+        var typing = editor.typingAttributes
+        if sizeChanged || fontChanged {
+            let f = typing[.font] as? NSFont
+            let face: TextFont = fontChanged ? s.font : (f?.fontName.contains("Chalkboard") == true ? .goofy : .sans)
+            typing[.font] = face.font(size: sizeChanged ? newSize : (f?.pointSize ?? newSize))
+        }
+        if let textColor { typing[.foregroundColor] = textColor }
+        editor.typingAttributes = typing
         // A shape's outline keeps its own color and width while its text is styled.
         if selected.length == 0, !doc.objects[i].holdsTextInShape {
-            doc.objects[i].color = s.color
-            doc.objects[i].width = s.width
-            doc.objects[i].font = s.font
+            if colorChanged, doc.objects[i].kind != .callout { doc.objects[i].color = s.color }
+            if sizeChanged { doc.objects[i].width = s.width }
+            if fontChanged { doc.objects[i].font = s.font }
         }
         repositionTextField()
         return true
@@ -1542,6 +1659,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         let z = zoom
         textField = nil
         editingID = nil
+        if let o = selectionObserver { NotificationCenter.default.removeObserver(o) }
+        selectionObserver = nil
         tf.removeFromSuperview()
         if let i = doc.objects.firstIndex(where: { $0.id == id }) {
             if content.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
