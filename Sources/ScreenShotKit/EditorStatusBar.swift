@@ -240,9 +240,9 @@ final class EditorStatusBar: NSView {
         CGRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
     }
 
-    func update(tool: Tool, backdrop: Backdrop, cutOut: Bool) {
+    func update(tool: Tool, backdrop: Backdrop, cutOut: Bool, area: Bool = false) {
         backdropButton.isOn = backdrop.isOn
-        notices.setHint(StatusBar.hint(for: tool, cutOut: cutOut))
+        notices.setHint(StatusBar.hint(for: tool, cutOut: cutOut, area: area))
     }
 }
 

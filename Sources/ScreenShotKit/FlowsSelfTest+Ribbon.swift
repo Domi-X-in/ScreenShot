@@ -69,7 +69,7 @@ extension FlowsSelfTest {
         press(r.item(for: .crop)!)
         check(v.tool == .crop && active() == [.crop], "Tools › Crop starts cropping")
         key("esc")
-        check(!r.areaSelect.isEnabled && !r.format.isEnabled, "Image Area Selection and Format are off until R6")
+        check(r.areaSelect.isEnabled && !r.format.isEnabled, "Image Area Selection is on; Format waits for a selected object")
 
         // Clipboard on a drawn rectangle.
         press(r.item(for: .rect)!)

@@ -36,11 +36,15 @@ import AppKit
         copy = RibbonItem("copy", kind: .label, title: "Copy", icon: .copy, action: send(#selector(ShotView.copy(_:))))
         copy.shortcut = "⌘C"
         format = RibbonItem("format", kind: .label, title: "Format", icon: .formatPainter)
-        format.isEnabled = false // Copy Format arrives in R6
+        format.action = { [weak editor] in editor?.shotView.startFormatPainter() }
         ocr = RibbonItem("ocr", kind: .small, title: "Recognize Text or QR", icon: .ocr, action: { [weak editor] in editor?.ocrImage() })
         ocr.shortcut = "⌘O"
         areaSelect = RibbonItem("areaSelect", kind: .small, title: "Image Area Selection", icon: .areaSelect)
-        areaSelect.isEnabled = false // arrives in R6
+        areaSelect.action = { [weak editor] in
+            guard let v = editor?.shotView else { return }
+            v.beginAreaSelection()
+            v.window?.makeFirstResponder(v)
+        }
         copyImage = RibbonItem("copyImage", kind: .small, title: "Copy Full Image", icon: .copyImage, action: { [weak editor] in editor?.copyImage() })
         copyImage.shortcut = "⌘C"
         save = RibbonItem("save", kind: .small, title: "Save Image", icon: .save, action: { [weak editor] in editor?.saveImage() })
@@ -88,8 +92,12 @@ import AppKit
 
     /// Follows the tool in hand, the selection and what the clipboard holds.
     func update(tool: Tool, hasSelection: Bool, canUndo: Bool, canRedo: Bool) {
-        for (t, item) in toolItems { item.isActiveTool = t == tool }
+        let area = formatting.selectingArea
+        for (t, item) in toolItems { item.isActiveTool = t == tool && !(t == .crop && area) }
+        areaSelect.isActiveTool = tool == .crop && area
         cut.isEnabled = hasSelection
+        format.isEnabled = formatting.canCopyFormat
+        format.isOn = formatting.paintingFormat
         let types = NSPasteboard.general.types ?? []
         paste.isEnabled = types.contains(ShotView.objectPasteboardType) || types.contains(.png) || types.contains(.tiff)
         updateHistory(canUndo: canUndo, canRedo: canRedo)

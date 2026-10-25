@@ -208,6 +208,12 @@ final class RibbonView: NSView {
         flyout = nil
     }
 
+    /// Whether keyboard focus is in one of the ribbon's typeable fields (Font Size), so text being typed stays open.
+    func owns(_ responder: NSResponder) -> Bool {
+        let all = groupViews.flatMap(\.buttons) + (flyout?.groupView.buttons ?? [])
+        return all.contains { $0.ownsEditor(responder) }
+    }
+
     /// The open flyout's group, if any (for tests and VoiceOver).
     var openFlyoutGroup: RibbonGroup? { flyout?.group }
     var openFlyout: RibbonFlyout? { flyout }

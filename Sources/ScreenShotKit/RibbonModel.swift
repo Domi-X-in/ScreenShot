@@ -19,7 +19,8 @@ import AppKit
     let id: String
     let kind: Kind
     let title: String
-    let icon: IconName?
+    /// Can change (Align Text shows the current alignment).
+    var icon: IconName? { didSet { if icon != oldValue { changed() } } }
     /// Runs on a click (on the main part, for a split button).
     var action: (() -> Void)?
     /// Builds the item's menu. With `split` the chevron opens it and the rest runs `action`; otherwise any click opens it.
@@ -27,6 +28,8 @@ import AppKit
     var split = false
     /// The keyboard shortcut, shown in the tooltip ("Arrow (A)").
     var shortcut: String?
+    /// A field you can type in (Font Size): a click on its text opens an editor, Return sends what was typed here.
+    var onTextEntry: ((String) -> Void)?
 
     var isEnabled = true { didSet { if isEnabled != oldValue { changed() } } }
     /// A toggle that is on (Bold) or a choice that is current.

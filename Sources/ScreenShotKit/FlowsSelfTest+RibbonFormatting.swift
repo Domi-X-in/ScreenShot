@@ -48,7 +48,7 @@ extension FlowsSelfTest {
         check(ed.debugTopBarShown == false, "the new editor has no floating formatting bar")
         check(!f.bold.isEnabled && !f.family.isEnabled && !f.size.isEnabled && !f.hAlign.isEnabled, "with no text, Font and Paragraph are off")
         check(!f.strike.isEnabled && !f.bullets.isEnabled && !f.numbering.isEnabled && !f.changeCase.isEnabled && !f.fontOutline.isEnabled,
-              "Strikethrough, Bullets, Numbering, Change Case and Font Outline wait for R6")
+              "with no text, Strikethrough, Bullets, Numbering, Change Case and Font Outline are off too")
 
         // Font and Paragraph on a text being typed.
         type("t"); click(ed, CGPoint(x: 100, y: 500)); await sleep(0.15)

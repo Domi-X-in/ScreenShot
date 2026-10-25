@@ -335,7 +335,8 @@ import UniformTypeIdentifiers
         if editorRibbon == nil {
             statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
         } else {
-            editorStatus.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+            editorStatus.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
+                                area: shotView.selectingArea)
         }
         if editorRibbon == nil { topBar.update() }
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
@@ -448,7 +449,10 @@ import UniformTypeIdentifiers
 
     /// A tool picked in the ribbon: Crop starts a crop, or applies the one in progress, as the old Crop button did.
     func pickTool(_ t: Tool) {
-        if t == .crop { cropClicked(); return }
+        if t == .crop {
+            if shotView.selectingArea { shotView.beginCrop() } else { cropClicked() }
+            return
+        }
         shotView.tool = t
         window?.makeFirstResponder(shotView)
     }
@@ -585,7 +589,10 @@ import UniformTypeIdentifiers
     }
 
     /// Whether keyboard focus is in the formatting toolbar (its size box), so text being typed stays open.
-    func isFormattingControl(_ responder: NSResponder) -> Bool { editorRibbon == nil && topBar.owns(responder) }
+    func isFormattingControl(_ responder: NSResponder) -> Bool {
+        if let r = editorRibbon { return r.view.owns(responder) }
+        return topBar.owns(responder)
+    }
 
     #if SCREENSHOT_SELFTESTS
     var debugRibbon: FormattingRibbon { ribbon }
@@ -954,8 +961,9 @@ final class StatusBar: ToolbarShell {
     }
 
     /// A tip for the tool in hand.
-    static func hint(for tool: Tool, cutOut: Bool) -> String {
-        switch tool {
+    static func hint(for tool: Tool, cutOut: Bool, area: Bool = false) -> String {
+        if tool == .crop && area { return "Drag over an area · ⌘C or Enter copies it · Esc clears the selection" }
+        return switch tool {
         case .counter: "Type digits to renumber · drag the bubble tip to point it"
         case .crop where cutOut: "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
         case .crop: "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"

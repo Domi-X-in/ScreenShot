@@ -42,10 +42,19 @@ final class ClosureMenuItem: NSMenuItem {
     // Contextual: text, callout, counter, blur, crop, ruler, magnifier
     let editText: RibbonItem, textFace: RibbonItem, counterShape: RibbonItem, blurMode: RibbonItem
     let cropMode: RibbonItem, autoadjust: RibbonItem, imprint: RibbonItem, rulerUnits: RibbonItem, lensShape: RibbonItem, lensZoom: RibbonItem
+    // Image Area Selection
+    let copyArea: RibbonItem, cropArea: RibbonItem, readArea: RibbonItem, blurArea: RibbonItem
+    let fontOutlinePalette = ColorSplitButton(.outline)
 
     let fontGroup: RibbonGroup, paragraphGroup: RibbonGroup, colorGroup: RibbonGroup, arrangeGroup: RibbonGroup
     let textGroup: RibbonGroup, counterGroup: RibbonGroup, blurGroup: RibbonGroup, cropGroup: RibbonGroup, rulerGroup: RibbonGroup, magnifierGroup: RibbonGroup
-    var contextualGroups: [RibbonGroup] { [textGroup, counterGroup, blurGroup, cropGroup, rulerGroup, magnifierGroup] }
+    let areaGroup: RibbonGroup
+    var contextualGroups: [RibbonGroup] { [textGroup, counterGroup, blurGroup, cropGroup, areaGroup, rulerGroup, magnifierGroup] }
+
+    /// For the Clipboard group and the tool lights.
+    var selectingArea: Bool { shotView?.selectingArea ?? false }
+    var paintingFormat: Bool { shotView?.formatPainter != nil }
+    var canCopyFormat: Bool { (shotView?.selection.count ?? 0) == 1 || paintingFormat }
 
     static let weights: [CGFloat] = [1, 2, 3, 4, 6, 8, 12, 16, 20]
     static let zoomSteps: [CGFloat] = [1.5, 2, 3, 4]
@@ -92,7 +101,10 @@ final class ClosureMenuItem: NSMenuItem {
         rulerUnits = item("rulerUnits", .label, "Units", .ruler)
         lensShape = item("lensShape", .label, "Lens", .magnifier)
         lensZoom = item("lensZoom", .label, "Zoom", .growFont)
-        for i in [strike, changeCase, bullets, numbering, fontOutline] { i.isEnabled = false } // R6
+        copyArea = item("copyArea", .label, "Copy Area", .copy, shortcut: "⌘C")
+        cropArea = item("cropArea", .label, "Crop to Area", .crop)
+        readArea = item("readArea", .label, "Read Text", .ocr, shortcut: "⌘O")
+        blurArea = item("blurArea", .label, "Blur Area", .blur)
 
         fontGroup = RibbonGroup("font", title: "Font", compactTitle: "Fonts", compactIcon: .gFonts, columns: [
             .rows([[.item(family), .item(size), .item(grow), .item(shrink)],
@@ -116,6 +128,10 @@ final class ClosureMenuItem: NSMenuItem {
         blurGroup = RibbonGroup("blurOptions", title: "Blur", compactTitle: "Blur", compactIcon: .blur, columns: [.rows([[.item(blurMode)]])])
         cropGroup = RibbonGroup("cropOptions", title: "Crop", compactTitle: "Crop", compactIcon: .crop, columns: [
             .rows([[.item(cropMode)], [.item(autoadjust)], [.item(imprint)]]),
+        ])
+        areaGroup = RibbonGroup("areaOptions", title: "Selection", compactTitle: "Selection", compactIcon: .areaSelect, columns: [
+            .rows([[.item(copyArea)], [.item(readArea)]]),
+            .rows([[.item(cropArea)], [.item(blurArea)]]),
         ])
         rulerGroup = RibbonGroup("rulerOptions", title: "Ruler", compactTitle: "Ruler", compactIcon: .ruler, columns: [.rows([[.item(rulerUnits)]])])
         magnifierGroup = RibbonGroup("magnifierOptions", title: "Magnifier", compactTitle: "Magnifier", compactIcon: .magnifier, columns: [
@@ -171,16 +187,30 @@ final class ClosureMenuItem: NSMenuItem {
         bold.action = { [weak self] in self?.apply(.bold) }
         italic.action = { [weak self] in self?.apply(.italic) }
         underline.action = { [weak self] in self?.apply(.underline) }
+        strike.action = { [weak self] in self?.apply(.strikethrough) }
+        changeCase.menu = { [weak self] in
+            let m = NSMenu(title: "Change Case")
+            for c in TextCase.allCases { m.addItem(ClosureMenuItem(c.title) { self?.apply(.textCase(c)) }) }
+            return m
+        }
+        bullets.action = { [weak self] in self?.apply(.bullets) }
+        numbering.action = { [weak self] in self?.apply(.numbering) }
+        size.onTextEntry = { [weak self] text in
+            let t = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+            guard let v = Double(t), v >= 1, v <= 1638 else { NSSound.beep(); self?.controller.refresh(); return }
+            self?.apply(.size(CGFloat(v)))
+        }
+        fontOutlinePalette.onColor = { [weak self] c in self?.apply(.outline(c)) }
+        fontOutline.menu = { [weak self] in self?.fontOutlinePalette.paletteMenu() ?? NSMenu() }
         orientation.menu = { [weak self] in self?.directionMenu() ?? NSMenu() }
         // Paragraph
         hAlign.menu = { [weak self] in
             let m = NSMenu(title: "Align Text")
-            let icons: [TextAlign: (IconName, String)] = [.left: (.alignLeft, "⌘L"), .center: (.alignCenter, "⌘E"), .right: (.alignRight, "⌘R")]
             for a in TextAlign.allCases {
-                let (icon, key) = icons[a]!
-                m.addItem(ClosureMenuItem("\(a.rawValue.capitalized)    \(key)", icon: icon, checked: self?.format.alignment == a) { self?.apply(.alignment(a)) })
+                let (icon, key) = Self.alignIcons[a]!
+                let title = a == .justified ? "Justify" : a.rawValue.capitalized
+                m.addItem(ClosureMenuItem("\(title)    \(key)", icon: icon, checked: self?.format.alignment == a) { self?.apply(.alignment(a)) })
             }
-            m.addItem(ClosureMenuItem("Justify", icon: .justify, enabled: false) {})
             return m
         }
         vAlign.menu = { [weak self] in
@@ -267,7 +297,15 @@ final class ClosureMenuItem: NSMenuItem {
         }
         autoadjust.action = { [weak self] in self?.shotView?.autoadjustSelection() }
         imprint.action = { [weak self] in self?.shotView?.imprintSelectionSize() }
+        copyArea.action = { [weak self] in self?.shotView?.copyArea() }
+        cropArea.action = { [weak self] in self?.shotView?.cropToArea() }
+        readArea.action = { [weak self] in self?.editor?.ocrImage() }
+        blurArea.action = { [weak self] in self?.shotView?.blurArea() }
     }
+
+    static let alignIcons: [TextAlign: (IconName, String)] = [.left: (.alignLeft, "⌘L"), .center: (.alignCenter, "⌘E"),
+                                                             .right: (.alignRight, "⌘R"), .justified: (.justify, "⌘J")]
+    static let vAlignIcons: [VerticalAlign: IconName] = [.top: .vTop, .middle: .vMiddle, .bottom: .vBottom]
 
     private func setCutOut(_ on: Bool) {
         guard let v = shotView else { return }
@@ -405,7 +443,14 @@ final class ClosureMenuItem: NSMenuItem {
     private func show(_ s: TextFormatState) {
         format = s
         let on = s.isActive
-        for i in [family, size, grow, shrink, bold, italic, underline, hAlign] { i.isEnabled = on }
+        for i in [family, size, grow, shrink, bold, italic, underline, strike, changeCase, hAlign, bullets, numbering, fontOutline] { i.isEnabled = on }
+        strike.isOn = on && s.strikethrough
+        bullets.isOn = on && s.bullets
+        numbering.isOn = on && s.numbered
+        fontOutline.barColor = on ? s.outline : nil
+        fontOutlinePalette.show(current: s.outline, none: on && s.outline == nil, mixed: false)
+        hAlign.icon = Self.alignIcons[on ? s.alignment ?? .left : .left]?.0
+        vAlign.icon = Self.vAlignIcons[on && s.supportsVerticalAlign ? s.verticalAlign ?? .middle : .middle]
         vAlign.isEnabled = on && s.supportsVerticalAlign
         orientation.isEnabled = on && s.supportsOrientation
         family.text = on ? s.family ?? "" : ""
@@ -449,7 +494,10 @@ final class ClosureMenuItem: NSMenuItem {
         editText.isEnabled = v.selection.count == 1 && textLike && !v.isEditingText
         counterGroup.isHidden = kind != .counter
         blurGroup.isHidden = kind != .blur
-        cropGroup.isHidden = v.tool != .crop
+        cropGroup.isHidden = v.tool != .crop || v.selectingArea
+        areaGroup.isHidden = !(v.tool == .crop && v.selectingArea)
+        let hasArea = v.cropSelection != nil
+        for i in [copyArea, cropArea, readArea, blurArea] { i.isEnabled = hasArea }
         autoadjust.isEnabled = !v.cutOutMode
         imprint.isEnabled = !v.cutOutMode
         cropMode.isOn = v.cutOutMode

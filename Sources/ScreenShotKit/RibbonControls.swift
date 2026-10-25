@@ -6,8 +6,10 @@ private typealias DT = DesignTokens
 /// color button. States follow the design: neutral hover and pressed; the accent only for a toggle that is on
 /// (soft fill), the tool in hand (solid fill, white icon) and the keyboard focus ring. Like Office's buttons it never
 /// takes the keyboard focus unless Full Keyboard Access is on, so text being edited keeps its selection.
-final class RibbonButton: NSView {
+final class RibbonButton: NSView, NSTextFieldDelegate {
     let item: RibbonItem
+    /// The editor over a typeable field while it's open.
+    private(set) var entry: NSTextField?
     /// Row height given by the group (28 for two rows, 20 for three, 62 for a large button).
     private(set) var hovering = false { didSet { if hovering != oldValue { needsDisplay = true } } }
     private(set) var pressed = false { didSet { if pressed != oldValue { needsDisplay = true } } }
@@ -70,6 +72,14 @@ final class RibbonButton: NSView {
 
         if case .field = item.kind {
             let r = b.insetBy(dx: 0.5, dy: (b.height - 26) / 2 + 0.5)
+            if entry != nil {
+                // The editor draws the text; only the box and its chevron here.
+                let path = NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius)
+                DT.color(.field).setFill(); path.fill()
+                DT.color(.accent).setStroke(); path.lineWidth = 1; path.stroke()
+                drawIcon(.chev, size: 10, color: DT.color(.ink3), at: CGPoint(x: r.maxX - 16, y: r.midY - 5))
+                return
+            }
             let path = NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius)
             DT.color(.field).setFill(); path.fill()
             (menuOpen ? DT.color(.accent) : hovering && !disabled ? DT.color(.ink3) : DT.color(.line)).setStroke()
@@ -197,7 +207,79 @@ final class RibbonButton: NSView {
     /// A click (at `p`), a press of Space or Return (p nil runs the main part), or the accessibility press.
     func activate(at p: CGPoint?) {
         guard item.isEnabled else { return }
+        // A typeable field: its text opens the editor, its chevron the menu.
+        if item.onTextEntry != nil, let p, p.x < bounds.width - 18 { beginTextEntry(); return }
         if opensMenu(at: p) { showMenu() } else { item.action?() }
+    }
+
+    // MARK: Typing in a field
+
+    /// Opens an editor over the field with its value selected. Return applies, Esc or clicking away cancels.
+    func beginTextEntry() {
+        guard entry == nil, item.isEnabled, item.onTextEntry != nil else { return }
+        let f = NSTextField(string: item.text)
+        f.isBordered = false
+        f.drawsBackground = false
+        f.focusRingType = .none
+        f.font = DT.Font.ribbonLabel
+        f.textColor = DT.color(.ink)
+        f.delegate = self
+        f.setAccessibilityLabel(item.title)
+        let h: CGFloat = 16
+        f.frame = CGRect(x: 7, y: (bounds.height - h) / 2, width: bounds.width - 26, height: h)
+        addSubview(f)
+        entry = f
+        menuOpen = true
+        window?.makeFirstResponder(f)
+        f.currentEditor()?.selectAll(nil)
+    }
+
+    private func entryCommitted() {
+        guard let f = entry else { return }
+        let text = f.stringValue
+        endTextEntry()
+        item.onTextEntry?(text)
+    }
+
+    private func endTextEntry() {
+        guard let f = entry else { return }
+        entry = nil
+        menuOpen = false
+        f.delegate = nil
+        f.removeFromSuperview()
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        // Return (or Enter) applies what was typed; anything else (a click elsewhere, Tab) just closes the editor.
+        guard entry != nil else { return }
+        let commit = (obj.userInfo?["NSTextMovement"] as? Int) == NSTextMovement.return.rawValue
+        // After AppKit has finished closing this field: the window's field editor is shared, and giving it back to the
+        // text being typed any sooner would close that text too.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { if commit { self?.entryCommitted() } else { self?.endTextEntry() } }
+        }
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    /// Types `text` into the open editor and presses Return.
+    func debugType(_ text: String) {
+        guard let f = entry, let editor = f.currentEditor() as? NSTextView else { return }
+        editor.string = text
+        editor.insertNewline(nil) // Return, as a person presses it
+    }
+    #endif
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.cancelOperation(_:)) { endTextEntry(); return true }
+        return false
+    }
+
+    /// Whether `responder` is this field's editor (the editor's text view has the field as its delegate).
+    func ownsEditor(_ responder: NSResponder) -> Bool {
+        guard let f = entry else { return false }
+        if responder === f { return true }
+        if let t = responder as? NSTextView, t.delegate === f { return true }
+        return false
     }
 
     func showMenu() {

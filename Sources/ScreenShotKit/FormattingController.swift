@@ -58,6 +58,7 @@ import AppKit
             case "l": return .alignment(.left)
             case "e": return .alignment(.center)
             case "r": return .alignment(.right)
+            case "j": return .alignment(.justified)
             case "]": return .step(1)
             case "[": return .step(-1)
             default: return nil

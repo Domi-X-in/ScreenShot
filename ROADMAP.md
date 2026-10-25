@@ -134,7 +134,7 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] `EditorToolbar` sigue existiendo para el editor viejo (el predeterminado hasta R9); se borra en R9.
   - [x] Capturas: `docs/screenshots/r4-editor-dark.png` y `r4-editor-light.png`.
   - [x] Verificado: 103 tests unitarios; flujo nuevo `ribbon-formatting` (45 comprobaciones: fuente, tamaño, atajos, alineación, dirección, color de fuente, relleno, contorno, grosor, guiones, transparencia, sin contorno, ⌘Z, alinear, agrupar, girar, puntas de flecha, estilo de línea y grupos contextuales); `callout-editing` y `panels` usan la cinta con el editor nuevo; `formatting` y `toolbar` (controles de la barra vieja) solo con el viejo. FLOWS 347/0 y FLOWS-NEWUI 243/0.
-  - Pendiente: la casilla de tamaño ya no admite escribir un valor (13,5); solo menú y agrandar/reducir. Revisar en R6.
+  - Resuelto en R6: la casilla de tamaño vuelve a admitir escribir un valor (13,5).
 - [x] **R5 · Parte inferior** (con `newEditorUI`):
   - [x] `EditorStatusBar.swift`: barra inferior a todo el ancho (44 pt) entre el lienzo y la tira de recientes, en lugar de la tarjeta flotante.
   - [x] `NotificationBar`: píldora con icono, texto, acción opcional y cerrar, en cuatro estados: información (la ayuda de la herramienta, sin temporizador, y avisos breves de 4 s), éxito (se desvanece a los 3 s), aviso y error (se quedan hasta cerrarlos o hasta otro mensaje). Un cambio de herramienta no tapa un mensaje; la ayuda vuelve cuando el mensaje se va. VoiceOver anuncia cada mensaje.
@@ -152,7 +152,16 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Capturas: `docs/screenshots/r5b-editor-dark.png` y `r5b-editor-light.png`.
   - [x] Verificado: 103 tests unitarios; `ribbon-editor` ampliado (33: barra del sistema vacía, botones de la ventana dentro de la tarjeta de título, acciones, radios de 12 pt, separaciones de 10 pt) y flujo nuevo `callout-bar` (13: aparece y se oculta, 5 estilos, actual iluminado, aplicar al siguiente y al seleccionado, deshacer, la imagen quieta y su reajuste). FLOWS 390/0 y FLOWS-NEWUI 285/0.
   - Diferencias con el diseño: la tarjeta de título empieza a 6 pt del borde superior (no 10) para centrarse con los botones de la ventana que coloca macOS. La sombra de las tarjetas no se ve en las capturas automáticas (se dibujan sin sombras de capa); falta revisarla en una ventana real.
-- [ ] **R6 · Funciones nuevas del diseño** (PR pequeños): tachado, justificado, viñetas, numeración, cambiar mayúsculas/minúsculas, contorno de fuente, copiar formato, cortar/copiar/pegar objetos, OCR/QR y selección de área de imagen como herramientas del editor.
+- [x] **R6 · Funciones nuevas del diseño** (con `newEditorUI`):
+  - [x] Tachado y Contorno de fuente: atributos nuevos por tramo (`TextRun.strike`, `TextRun.outline`), que se guardan con el archivo; el contorno usa la paleta de Office con "No Outline".
+  - [x] Justificar: `TextAlign.justified` (⌘J). El botón Alinear texto muestra la alineación actual; Alinear verticalmente, la vertical.
+  - [x] Viñetas y Numeración: marcadores reales al inicio de cada párrafo ("• ", "1. ", "2. "…); se quitan si todos los párrafos ya los tienen; Numeración sustituye a las viñetas y al revés. Se ven igual al escribir y en la imagen, y se deshacen.
+  - [x] Cambiar mayúsculas: Tipo oración, minúsculas, MAYÚSCULAS, Poner En Mayúsculas Cada Palabra, tIPO iNVERSO; cada letra conserva su formato; sin selección, la palabra del cursor.
+  - [x] Tamaño de letra escribible: un clic en el número abre un editor (13,5 o 13.5); Retorno lo aplica y devuelve el foco y la selección al texto, que sigue abierto. Corregido al probarlo: devolver el foco antes de que AppKit terminara de cerrar la casilla cerraba también el texto.
+  - [x] Copiar formato (brocha): con un objeto seleccionado, Formato copia su aspecto (color, grosor, relleno, contorno, guiones, flecha, diseño de globo y el formato de las letras) y el siguiente clic lo aplica a otro objeto, en un paso de deshacer; Esc o un clic en vacío lo cancela.
+  - [x] Selección de área de imagen: la herramienta de recorte en modo selección, con su propio botón iluminado y un grupo contextual "Selection": Copiar área (⌘C o Retorno), Leer texto (OCR/QR del área), Desenfocar área y Recortar al área.
+  - [x] Cortar/copiar/pegar objetos y OCR/QR ya estaban desde R3 (Portapapeles y Herramientas).
+  - [x] Verificado: 111 tests unitarios (8 nuevos en `TextFeaturesTests`: tachado, contorno, justificar, los 5 casos de mayúsculas, formato conservado, viñetas, numeración, guardar y reabrir); flujo nuevo `ribbon-r6` (27 comprobaciones con clics y tecleo reales). FLOWS 417/0 y FLOWS-NEWUI 312/0.
 - [ ] **R7 · Puntos de entrada**: nuevo icono de la barra de menús, menú de estado con iconos, ventana de inicio con barra tipo cinta y agrupación por día, en tarjetas como el editor (R5b).
 - [ ] **R8 · Guía de bienvenida de 3 pasos**: Bienvenida con bucle animado, Configuración (permiso, carpeta, tema), Listo (atajos y primera captura); se mantiene la reanudación tras reiniciar y "Reducir movimiento".
 - [ ] **R9 · Cierre**: quitar `newEditorUI` y el código viejo, revisar tema claro y accesibilidad, actualizar `docs/screenshots`, README y esta hoja de ruta, versión de prueba con `release.sh`.

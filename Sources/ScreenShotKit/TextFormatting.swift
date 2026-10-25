@@ -1,14 +1,15 @@
 import AppKit
 
-/// Paragraph alignment. Justify can join later as one more case (and one more toolbar button).
+/// Paragraph alignment (Word's Left, Center, Right and Justify).
 enum TextAlign: String, Codable, CaseIterable {
-    case left, center, right
+    case left, center, right, justified
 
     var ns: NSTextAlignment {
         switch self {
         case .left: .left
         case .center: .center
         case .right: .right
+        case .justified: .justified
         }
     }
 
@@ -17,7 +18,46 @@ enum TextAlign: String, Codable, CaseIterable {
         case .left, .natural: self = .left
         case .center: self = .center
         case .right: self = .right
+        case .justified: self = .justified
         default: return nil
+        }
+    }
+}
+
+/// Word's Change Case.
+enum TextCase: String, CaseIterable {
+    case sentence, lower, upper, capitalized, toggle
+
+    var title: String {
+        switch self {
+        case .sentence: "Sentence case."
+        case .lower: "lowercase"
+        case .upper: "UPPERCASE"
+        case .capitalized: "Capitalize Each Word"
+        case .toggle: "tOGGLE cASE"
+        }
+    }
+
+    func apply(_ s: String) -> String {
+        switch self {
+        case .lower: return s.lowercased()
+        case .upper: return s.uppercased()
+        case .capitalized: return s.capitalized
+        case .toggle:
+            return String(s.map { c -> String in
+                let t = String(c)
+                return t == t.uppercased() ? t.lowercased() : t.uppercased()
+            }.joined())
+        case .sentence:
+            // Lowercase, then a capital at the start and after . ! ? or a new line.
+            var out = ""
+            var capitalizeNext = true
+            for c in s.lowercased() {
+                if capitalizeNext, c.isLetter { out += String(c).uppercased(); capitalizeNext = false; continue }
+                out.append(c)
+                if ".!?\n".contains(c) { capitalizeNext = true }
+            }
+            return out
         }
     }
 }
@@ -61,6 +101,12 @@ struct TextFormatState: Equatable {
     var bold = false
     var italic = false
     var underline = false
+    var strikethrough = false
+    /// Font Outline: the letters' outline color, shared by the selection; nil with no outline or a mix.
+    var outline: NSColor?
+    /// Every paragraph starts with a bullet, or with a number.
+    var bullets = false
+    var numbered = false
     var alignment: TextAlign?
     var verticalAlign: VerticalAlign?
     var orientation: TextOrientation?
@@ -83,6 +129,10 @@ struct TextFormatState: Equatable {
             s.bold = s.bold && o.bold
             s.italic = s.italic && o.italic
             s.underline = s.underline && o.underline
+            s.strikethrough = s.strikethrough && o.strikethrough
+            if s.outline?.rgbaHex != o.outline?.rgbaHex { s.outline = nil }
+            s.bullets = s.bullets && o.bullets
+            s.numbered = s.numbered && o.numbered
             if s.alignment != o.alignment { s.alignment = nil }
             if s.color?.rgbaHex != o.color?.rgbaHex { s.color = nil }
             if o.supportsVerticalAlign {
@@ -105,8 +155,13 @@ enum FormatChange: Equatable {
     case grow, shrink
     /// ⌘] / ⌘[: one point up or down.
     case step(CGFloat)
-    case bold, italic, underline
+    case bold, italic, underline, strikethrough
+    /// Font Outline: a color, or nil to remove it.
+    case outline(NSColor?)
     case alignment(TextAlign)
+    /// These rewrite the letters (see `TextFormatting.rewrite`).
+    case textCase(TextCase)
+    case bullets, numbering
     case verticalAlign(VerticalAlign)
     case orientation(TextOrientation)
     /// Font Color.
@@ -122,6 +177,14 @@ enum FormatChange: Equatable {
     var isParagraph: Bool {
         if case .alignment = self { return true }
         return false
+    }
+
+    /// Change Case, Bullets and Numbering change the text itself, not only its attributes.
+    var rewritesText: Bool {
+        switch self {
+        case .textCase, .bullets, .numbering: true
+        default: false
+        }
     }
 }
 
@@ -232,6 +295,18 @@ enum TextFormatting {
         s.isActive = true
         var fonts: [NSFont] = []
         var underlines: [Bool] = []
+        var strikes: [Bool] = []
+        var outlines = Set<String>()
+        var firstOutline: NSColor?
+        func noteOutline(_ attrs: [NSAttributedString.Key: Any]) {
+            let width = (attrs[.strokeWidth] as? CGFloat) ?? 0
+            if width != 0, let c = attrs[.strokeColor] as? NSColor {
+                if firstOutline == nil { firstOutline = c }
+                outlines.insert(c.rgbaHex)
+            } else {
+                outlines.insert("none")
+            }
+        }
         var colors = Set<String>()
         var firstColor: NSColor?
         func note(_ c: NSColor?) {
@@ -244,13 +319,23 @@ enum TextFormatting {
             storage.enumerateAttributes(in: sel) { attrs, _, _ in
                 if let f = attrs[.font] as? NSFont { fonts.append(f) }
                 underlines.append(((attrs[.underlineStyle] as? Int) ?? 0) != 0)
+                strikes.append(((attrs[.strikethroughStyle] as? Int) ?? 0) != 0)
+                noteOutline(attrs)
                 note(attrs[.foregroundColor] as? NSColor)
             }
         } else {
             if let f = typing[.font] as? NSFont { fonts.append(f) }
             underlines.append(((typing[.underlineStyle] as? Int) ?? 0) != 0)
+            strikes.append(((typing[.strikethroughStyle] as? Int) ?? 0) != 0)
+            noteOutline(typing)
             note(typing[.foregroundColor] as? NSColor)
         }
+        s.strikethrough = !strikes.isEmpty && strikes.allSatisfy { $0 }
+        s.outline = outlines.count == 1 && !outlines.contains("none") ? firstOutline : nil
+        let paragraphs = paragraphRanges(in: storage.string as NSString, covering: selection)
+            .map { (storage.string as NSString).substring(with: $0) }
+        s.bullets = !paragraphs.isEmpty && storage.length > 0 && paragraphs.allSatisfy { bulletPrefix($0) != nil }
+        s.numbered = !paragraphs.isEmpty && storage.length > 0 && paragraphs.allSatisfy { numberPrefix($0) != nil }
         s.color = colors.count == 1 ? firstColor : nil
         let families = Set(fonts.map(family(of:)))
         let sizes = Set(fonts.map { (($0.pointSize / scale) * 2).rounded() / 2 })
@@ -290,7 +375,18 @@ enum TextFormatting {
             typing[.paragraphStyle] = ps
             return
         }
-        guard !change.isContainer else { return }
+        guard !change.isContainer, !change.rewritesText else { return }
+        if case let .outline(c) = change {
+            let attrs: [NSAttributedString.Key: Any] = c.map { [.strokeColor: $0, .strokeWidth: outlineWidth] } ?? [:]
+            if selection.length > 0, sel.length > 0 {
+                storage.removeAttribute(.strokeColor, range: sel)
+                storage.removeAttribute(.strokeWidth, range: sel)
+                storage.addAttributes(attrs, range: sel)
+            }
+            typing[.strokeColor] = c
+            typing[.strokeWidth] = c == nil ? nil : outlineWidth
+            return
+        }
         if case let .color(c) = change {
             if selection.length > 0, sel.length > 0 { storage.addAttribute(.foregroundColor, value: c, range: sel) }
             typing[.foregroundColor] = c
@@ -315,6 +411,8 @@ enum TextFormatting {
         if selection.length > 0, sel.length > 0 {
             if change == .underline {
                 storage.addAttribute(.underlineStyle, value: current.underline ? 0 : NSUnderlineStyle.single.rawValue, range: sel)
+            } else if change == .strikethrough {
+                storage.addAttribute(.strikethroughStyle, value: current.strikethrough ? 0 : NSUnderlineStyle.single.rawValue, range: sel)
             } else {
                 storage.enumerateAttribute(.font, in: sel) { value, r, _ in
                     if let f = value as? NSFont { storage.addAttribute(.font, value: transform(f), range: r) }
@@ -322,14 +420,99 @@ enum TextFormatting {
             }
             // What is typed right after the selection continues its new format.
             let attrs = storage.attributes(at: max(sel.location, NSMaxRange(sel) - 1), effectiveRange: nil)
-            for key in [NSAttributedString.Key.font, .underlineStyle] { typing[key] = attrs[key] }
+            for key in [NSAttributedString.Key.font, .underlineStyle, .strikethroughStyle] { typing[key] = attrs[key] }
         } else {
             // Collapsed caret: pending format, like Word.
             if change == .underline {
                 typing[.underlineStyle] = current.underline ? 0 : NSUnderlineStyle.single.rawValue
+            } else if change == .strikethrough {
+                typing[.strikethroughStyle] = current.strikethrough ? 0 : NSUnderlineStyle.single.rawValue
             } else if let f = typing[.font] as? NSFont {
                 typing[.font] = transform(f)
             }
+        }
+    }
+
+    /// Font Outline's stroke: negative draws the letters' fill and the outline (a percentage of the font size).
+    static let outlineWidth: CGFloat = -3
+
+    // MARK: Rewriting the letters
+
+    static let bullet = "• "
+
+    /// The bullet at the start of a paragraph, if any.
+    static func bulletPrefix(_ paragraph: String) -> String? { paragraph.hasPrefix(bullet) ? bullet : nil }
+
+    /// "12. " at the start of a paragraph, if any.
+    static func numberPrefix(_ paragraph: String) -> String? {
+        let digits = paragraph.prefix { $0.isASCII && $0.isNumber }
+        guard !digits.isEmpty, digits.count <= 4 else { return nil }
+        let rest = paragraph.dropFirst(digits.count)
+        return rest.hasPrefix(". ") ? String(digits) + ". " : nil
+    }
+
+    /// Change Case, Bullets and Numbering: the range to replace, its new text (keeping each letter's format), and the
+    /// selection afterwards. Change Case works on the selection, or on the word at the caret; Bullets and Numbering on
+    /// every paragraph the selection touches, and turn off when all of them already have that marker. `force` sets the
+    /// marker on (true) or off (false) whatever the paragraphs have (several selected texts follow their shared state).
+    static func rewrite(_ change: FormatChange, in storage: NSAttributedString, selection: NSRange,
+                        force: Bool? = nil) -> (range: NSRange, text: NSAttributedString, selection: NSRange)? {
+        let ns = storage.string as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        switch change {
+        case let .textCase(c):
+            var range = NSIntersectionRange(selection, full)
+            if range.length == 0 {
+                guard ns.length > 0 else { return nil }
+                range = storage.doubleClick(at: min(selection.location, ns.length - 1))
+                guard range.length > 0, ns.substring(with: range).contains(where: \.isLetter) else { return nil }
+            }
+            let old = storage.attributedSubstring(from: range)
+            let newString = c.apply(old.string)
+            let out = NSMutableAttributedString(string: newString, attributes: old.length > 0 ? old.attributes(at: 0, effectiveRange: nil) : [:])
+            if (newString as NSString).length == old.length {
+                // Same length: every letter keeps its own format.
+                old.enumerateAttributes(in: NSRange(location: 0, length: old.length)) { attrs, r, _ in out.setAttributes(attrs, range: r) }
+            }
+            let after = selection.length > 0 ? NSRange(location: range.location, length: out.length) : selection
+            return (range, out, after)
+        case .bullets, .numbering:
+            let paragraphs = paragraphRanges(in: ns, covering: selection)
+            guard let first = paragraphs.first, let last = paragraphs.last else { return nil }
+            let union = NSUnionRange(first, last)
+            let numbering = change == .numbering
+            let texts = paragraphs.map { ns.substring(with: $0) }
+            let allHave = texts.allSatisfy { (numbering ? numberPrefix($0) : bulletPrefix($0)) != nil }
+            let turnOn = force ?? !allHave
+            let out = NSMutableAttributedString()
+            var firstShift = 0
+            for (i, p) in paragraphs.enumerated() {
+                var piece = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: p))
+                // Either marker comes off first: a paragraph has a bullet or a number, not both.
+                if let old = bulletPrefix(piece.string) ?? numberPrefix(piece.string) {
+                    piece.deleteCharacters(in: NSRange(location: 0, length: (old as NSString).length))
+                    if i == 0 { firstShift -= (old as NSString).length }
+                }
+                if turnOn {
+                    let marker = numbering ? "\(i + 1). " : bullet
+                    let attrs = piece.length > 0 ? piece.attributes(at: 0, effectiveRange: nil)
+                        : (p.location < ns.length ? storage.attributes(at: p.location, effectiveRange: nil) : [:])
+                    piece = {
+                        let m = NSMutableAttributedString(string: marker, attributes: attrs)
+                        m.removeAttribute(.underlineStyle, range: NSRange(location: 0, length: m.length))
+                        m.removeAttribute(.strikethroughStyle, range: NSRange(location: 0, length: m.length))
+                        m.append(piece)
+                        return m
+                    }()
+                    if i == 0 { firstShift += (marker as NSString).length }
+                }
+                out.append(piece)
+            }
+            let after = selection.length > 0 ? NSRange(location: union.location, length: out.length)
+                : NSRange(location: max(union.location, selection.location + firstShift), length: 0)
+            return (union, out, after)
+        default:
+            return nil
         }
     }
 

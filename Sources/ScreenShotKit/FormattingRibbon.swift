@@ -187,7 +187,8 @@ import AppKit
         for (i, pressed) in [s.bold, s.italic, s.underline].enumerated() { styles.setSelected(on && pressed, forSegment: i) }
         styles.setAccessibilityValue(["Bold", "Italic", "Underline"].enumerated().filter { styles.isSelected(forSegment: $0.offset) }
             .map(\.element).joined(separator: ", "))
-        align.selectedSegment = on ? s.alignment.flatMap { TextAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
+        // The old bar has Left, Center and Right only; Justify (new editor) shows none of them pressed.
+        align.selectedSegment = on ? s.alignment.flatMap { TextAlign.allCases.firstIndex(of: $0) }.flatMap { $0 < align.segmentCount ? $0 : nil } ?? -1 : -1
         vertical.selectedSegment = on && s.supportsVerticalAlign ? s.verticalAlign.flatMap { VerticalAlign.allCases.firstIndex(of: $0) } ?? -1 : -1
         let shown = on && s.supportsOrientation ? TextDirection(s.orientation) : .horizontal
         direction.setFace(shown.icon)

@@ -302,6 +302,9 @@ struct TextRun: Codable, Equatable {
     var bold: Bool? = nil
     var italic: Bool? = nil
     var underline: Bool? = nil
+    var strike: Bool? = nil
+    /// Font Outline's color ("#RRGGBBAA"), nil for none.
+    var outline: String? = nil
 
     func makeFont(scale: CGFloat) -> NSFont {
         guard let family else { return font.font(size: size * scale) }
@@ -309,11 +312,11 @@ struct TextRun: Codable, Equatable {
     }
 
     /// Only a color, size and one of the original two faces: what the object's own settings can express.
-    var isPlain: Bool { family == nil && underline != true }
+    var isPlain: Bool { family == nil && underline != true && strike != true && outline == nil }
 
     func sameStyle(as o: TextRun) -> Bool {
         color == o.color && size == o.size && font == o.font && family == o.family && bold == o.bold && italic == o.italic
-            && underline == o.underline
+            && underline == o.underline && strike == o.strike && outline == o.outline
     }
 
     /// The run for one stretch of edited text: one of the original faces stays as before, anything else (another
@@ -335,6 +338,8 @@ struct TextRun: Codable, Equatable {
             }
         }
         if ((attrs[.underlineStyle] as? Int) ?? 0) != 0 { run.underline = true }
+        if ((attrs[.strikethroughStyle] as? Int) ?? 0) != 0 { run.strike = true }
+        if ((attrs[.strokeWidth] as? CGFloat) ?? 0) != 0, let c = attrs[.strokeColor] as? NSColor { run.outline = c.rgbaHex }
         return run
     }
 }
@@ -581,6 +586,10 @@ struct Annotation {
             guard r.length > 0, NSMaxRange(range) <= m.length else { continue }
             m.addAttributes([.font: r.makeFont(scale: scale), .foregroundColor: NSColor(rgbaHex: r.color) ?? color], range: range)
             if r.underline == true { m.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
+            if r.strike == true { m.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
+            if let o = r.outline.flatMap(NSColor.init(rgbaHex:)) {
+                m.addAttributes([.strokeColor: o, .strokeWidth: TextFormatting.outlineWidth], range: range)
+            }
         }
         // Paragraph alignment (shapes center by default).
         for (i, p) in TextFormatting.paragraphRanges(in: m.string as NSString, covering: NSRange(location: 0, length: m.length)).enumerated()

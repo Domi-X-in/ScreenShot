@@ -31,13 +31,15 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     var tool: Tool = .arrow {
         didSet {
             commitText()
-            if tool != .crop { cropRect = nil; cutStrip = nil; cutOutMode = false }
+            if tool != .crop { cropRect = nil; cutStrip = nil; cutOutMode = false; selectingArea = false }
+            if tool != oldValue { formatPainter = nil }
             // Picking a drawing tool starts something new: the selection is let go, so option changes are for the new
             // object, not the one that was selected (as in PowerPoint).
             if tool != .select && tool != oldValue && !selection.isEmpty { selectedID = nil }
             if tool == .crop && oldValue != .crop {
-                Toast.show(cutOutMode ? "Drag across the part to remove, then hit Enter to cut it out"
-                                      : "Select the area to keep, then hit Enter to crop")
+                Toast.show(selectingArea ? "Drag over an area · ⌘C or Enter copies it"
+                           : cutOutMode ? "Drag across the part to remove, then hit Enter to cut it out"
+                                        : "Select the area to keep, then hit Enter to crop")
             }
             controller?.syncToolbar()
             needsDisplay = true
@@ -347,6 +349,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     override func cursorUpdate(with event: NSEvent) { updateCursor(at: convert(event.locationInWindow, from: nil)) }
 
     private func updateCursor(at vp: CGPoint) {
+        if formatPainter != nil { (hitIndex(toImage(vp)) != nil ? NSCursor.pointingHand : NSCursor.arrow).set(); return }
         if handleHit(vp) != nil { NSCursor.crosshair.set(); return }
         if tool == .select {
             (hitIndex(toImage(vp)) != nil ? NSCursor.openHand : NSCursor.arrow).set()
@@ -430,8 +433,10 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Responder actions (routed from the main menu)
 
-    /// With an object selected, copies the object (pasteable into any editor window); otherwise the whole image.
+    /// With an object selected, copies the object (pasteable into any editor window); otherwise the whole image. With
+    /// Image Area Selection, the selected area.
     @objc func copy(_ sender: Any?) {
+        if selectingArea, cropSelection != nil { copyArea(); return }
         let objects = doc.objects.filter { selection.contains($0.id) }
         guard !objects.isEmpty, let data = try? JSONEncoder().encode(objects) else {
             controller?.copyImage()
@@ -546,6 +551,12 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         snapper = nil
         window?.makeFirstResponder(self)
         let p = toImage(convert(event.locationInWindow, from: nil))
+
+        // Copy Format: the click gives the clicked object the copied format; a click on nothing stops.
+        if formatPainter != nil {
+            if let i = hitIndex(p) { paintFormat(on: i) } else { stopFormatPainter() }
+            return
+        }
 
         if tool == .crop {
             drag = .crop(start: p)
@@ -886,6 +897,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // A new crop or area selection turns the Crop and Selection commands on.
+        let endsCrop: Bool = { if case .crop = drag { return true }; return false }()
+        defer { if endsCrop { controller?.syncToolbar() } }
         defer {
             refitContent()
             guides = []
@@ -994,12 +1008,14 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             }
             return
         case 53: // Esc
+            if formatPainter != nil { stopFormatPainter(); return }
             if cropRect != nil || cutStrip != nil { cropRect = nil; cutStrip = nil; needsDisplay = true }
             else if tool == .crop { tool = .arrow }
             else if selectedID != nil { selectedID = nil; needsDisplay = true }
             else { controller?.escape() }
             return
         case 36, 76: // Return
+            if tool == .crop, selectingArea { copyArea(); return }
             if tool == .crop { cutOutMode ? applyCutOut() : applyCrop(); return }
             // Return on one selected rectangle, oval, text or callout, or on the shape just drawn, types in it.
             let target = selection.count == 1 ? selectedID : (selection.isEmpty ? justDrawnID : nil)
@@ -1561,7 +1577,82 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         controller?.updateInfo()
     }
 
-    func beginCrop() { tool = .crop }
+    func beginCrop() {
+        selectingArea = false
+        tool = .crop
+    }
+
+    // MARK: Copy Format and Image Area Selection
+
+    /// Copy Format (Office's Format Painter): the selected object's style, waiting for a click on another object.
+    private(set) var formatPainter: (style: ToolStyle, run: TextRun?)?
+
+    func startFormatPainter() {
+        guard selection.count == 1, let id = selectedID, let o = doc.objects.first(where: { $0.id == id }) else { NSSound.beep(); return }
+        formatPainter = (Self.style(of: o, base: style), o.runs?.first)
+        Toast.show("Click an object to give it this format · Esc to stop")
+        controller?.syncToolbar()
+    }
+
+    func stopFormatPainter() {
+        guard formatPainter != nil else { return }
+        formatPainter = nil
+        controller?.syncToolbar()
+    }
+
+    /// Gives the object the copied format: color, width, fill, outline, dashes, arrow, callout design… and, when both
+    /// hold text, the letters' format. One undo step.
+    private func paintFormat(on i: Int) {
+        guard let p = formatPainter else { return }
+        pushUndo()
+        var o = doc.objects[i]
+        Self.applyChanges(from: Self.style(of: o, base: style), to: p.style, on: &o)
+        if let run = p.run, ShapeKinds.holdsText(o), !o.text.isEmpty {
+            var r = run
+            r.location = 0
+            r.length = (o.text as NSString).length
+            o.runs = [r]
+        }
+        doc.objects[i] = o
+        formatPainter = nil
+        selectedID = o.id
+        needsDisplay = true
+        controller?.syncToolbar()
+    }
+
+    /// Image Area Selection: the Crop tool's rectangle, used to copy, read, blur or crop to an area.
+    var selectingArea = false
+
+    func beginAreaSelection() {
+        selectingArea = true
+        if tool == .crop { cropRect = nil; cutOutMode = false; needsDisplay = true; controller?.syncToolbar() } else { tool = .crop }
+    }
+
+    /// Copies the selected area of the screenshot.
+    func copyArea() {
+        guard let r = cropSelection, let part = doc.image.cropping(to: r) else { NSSound.beep(); return }
+        Exporter.copy(part, scale: doc.scale)
+        Toast.show("Area copied to the clipboard")
+    }
+
+    /// Covers the selected area with a blur.
+    func blurArea() {
+        guard let r = cropSelection else { NSSound.beep(); return }
+        pushUndo()
+        var s = style
+        s.blur = .blur
+        let a = Annotation(kind: .blur, p1: r.origin, p2: CGPoint(x: r.maxX, y: r.maxY), style: s)
+        doc.objects.append(a)
+        cropRect = nil
+        needsDisplay = true
+        controller?.syncToolbar()
+    }
+
+    /// Crops the screenshot to the selected area.
+    func cropToArea() {
+        guard cropSelection != nil else { NSSound.beep(); return }
+        applyCrop()
+    }
 
     func applyCropIfAny() {
         if cutOutMode { if cutStrip != nil { applyCutOut() } } else if cropRect != nil { applyCrop() }
@@ -1832,6 +1923,22 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         let sel = e.selectedRange()
         let o = doc.objects[i]
+        if change.rewritesText {
+            // Change Case, Bullets, Numbering: new letters in place, one step in the text's own undo history.
+            guard let r = TextFormatting.rewrite(change, in: storage, selection: sel) else { NSSound.beep(); return }
+            e.breakUndoCoalescing()
+            if e.shouldChangeText(in: r.range, replacementString: r.text.string) {
+                storage.beginEditing()
+                storage.replaceCharacters(in: r.range, with: r.text)
+                storage.endEditing()
+                e.didChangeText()
+                e.setSelectedRange(r.selection)
+            }
+            if o.kind == .callout { doc.objects[i].text = e.string }
+            repositionTextField()
+            needsDisplay = true
+            return
+        }
         var typing = e.typingAttributes
         let affected: NSRange = change.isParagraph
             ? TextFormatting.paragraphRanges(in: storage.string as NSString, covering: sel).reduce(sel) { NSUnionRange($0, $1) }
@@ -1885,9 +1992,20 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             case .bold: own.bold != shared.bold
             case .italic: own.italic != shared.italic
             case .underline: own.underline != shared.underline
+            case .strikethrough: own.strikethrough != shared.strikethrough
             default: nil
             }
-            if toggled != true {
+            if change.rewritesText {
+                // The whole text; Bullets and Numbering follow the shared state, so a mix ends up all on.
+                let force: Bool? = switch change {
+                case .bullets: !shared.bullets
+                case .numbering: !shared.numbered
+                default: nil
+                }
+                if let r = TextFormatting.rewrite(change, in: m, selection: whole, force: force) {
+                    m.replaceCharacters(in: r.range, with: r.text)
+                }
+            } else if toggled != true {
                 TextFormatting.apply(change, to: m, selection: whole, typing: &typing, scale: 1, defaultAlign: o.defaultTextAlign)
             }
             o.setText(from: m, scale: 1)
