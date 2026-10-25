@@ -1,6 +1,6 @@
 import AppKit
 
-/// Shared look: canvas, cards and the accent, each with light and dark variants.
+/// Shared look of the floating thumbnail, pins and HUD: canvas, palette wells and the accent, light and dark.
 enum Theme {
     static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
         NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light }
@@ -8,10 +8,6 @@ enum Theme {
 
     /// Editor backdrop behind the screenshot, with a faint dot grid.
     static let canvas = dynamic(light: NSColor(hex: 0xE8EAEF), dark: NSColor(hex: 0x17181D))
-    static let canvasDot = dynamic(light: NSColor.black.withAlphaComponent(0.09), dark: NSColor.white.withAlphaComponent(0.07))
-    /// Floating cards (options bar, palettes).
-    static let card = dynamic(light: NSColor.white.withAlphaComponent(0.92), dark: NSColor(hex: 0x26272E).withAlphaComponent(0.94))
-    static let cardBorder = dynamic(light: NSColor.black.withAlphaComponent(0.08), dark: NSColor.white.withAlphaComponent(0.09))
     static let paletteWell = dynamic(light: NSColor.black.withAlphaComponent(0.045), dark: NSColor.white.withAlphaComponent(0.06))
     static let hover = dynamic(light: NSColor.black.withAlphaComponent(0.07), dark: NSColor.white.withAlphaComponent(0.1))
     static let icon = dynamic(light: NSColor(hex: 0x3A3D45), dark: NSColor(hex: 0xD7D9E0))
@@ -26,15 +22,6 @@ enum Theme {
         g.startPoint = CGPoint(x: 0.5, y: 1)
         g.endPoint = CGPoint(x: 0.5, y: 0)
         return g
-    }
-
-    /// Applies a soft card shadow to a layer-backed view.
-    static func cardShadow(_ v: NSView, radius: CGFloat = 14, opacity: Float = 0.18) {
-        v.shadow = NSShadow()
-        v.layer?.shadowColor = NSColor.black.cgColor
-        v.layer?.shadowOpacity = opacity
-        v.layer?.shadowRadius = radius
-        v.layer?.shadowOffset = CGSize(width: 0, height: -3)
     }
 }
 
@@ -194,147 +181,4 @@ final class PaletteButton: NSView {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-}
-
-/// Text pill button with an icon (used for Crop), matching the palette look.
-final class PillButton: NSView {
-    var isOn = false { didSet { refresh() } }
-    private let label = NSTextField(labelWithString: "")
-    private let icon = NSImageView()
-    private let pill = Theme.accentGradientLayer()
-    private let action: () -> Void
-    private var hovering = false { didSet { refresh() } }
-
-    init(title: String, symbol: String, tooltip: String, action: @escaping () -> Void) {
-        self.action = action
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 9
-        pill.cornerRadius = 9
-        pill.opacity = 0
-        layer?.addSublayer(pill)
-        toolTip = tooltip
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
-        setAccessibilityLabel(title)
-        setAccessibilityHelp(tooltip)
-        label.stringValue = title
-        label.font = .systemFont(ofSize: 12, weight: .semibold)
-        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?.withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
-        let stack = NSStackView(views: [icon, label])
-        stack.spacing = 5
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: centerXAnchor), stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 32), widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 22),
-        ])
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
-        refresh()
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func layout() {
-        super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        pill.frame = bounds
-        CATransaction.commit()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        refresh()
-    }
-
-    private func refresh() {
-        pill.opacity = isOn ? 1 : 0
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = (isOn ? .clear : hovering ? Theme.hover : Theme.paletteWell).cgColor
-        }
-        label.textColor = isOn ? .white : Theme.icon
-        icon.contentTintColor = isOn ? .white : Theme.icon
-    }
-
-    override func mouseEntered(with event: NSEvent) { hovering = true }
-    override func mouseExited(with event: NSEvent) { hovering = false }
-    override func mouseDown(with event: NSEvent) { action() }
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func accessibilityPerformPress() -> Bool {
-        action()
-        return true
-    }
-}
-
-/// Segmented control for options-bar choices: right-click a segment to make it the default for new annotations.
-/// The current default carries a small accent dot.
-final class DefaultableSegmentedControl: NSSegmentedControl {
-    var defaultIndex: Int? { didSet { needsDisplay = true } }
-    var onSetDefault: ((Int) -> Void)?
-    var onResetDefault: (() -> Void)?
-
-    /// Name of a segment for menus: its label, else its tooltip.
-    func name(of i: Int) -> String {
-        if let l = label(forSegment: i), !l.isEmpty { return l }
-        return toolTip(forSegment: i) ?? "Option \(i + 1)"
-    }
-
-    /// Segment under a point in this control's coordinates (auto-width segments share the leftover space).
-    func segment(at p: CGPoint) -> Int? {
-        guard segmentCount > 0, bounds.contains(p) else { return nil }
-        let fixed = (0..<segmentCount).map { width(forSegment: $0) }
-        let autoCount = fixed.filter { $0 == 0 }.count
-        let share = autoCount > 0 ? max(0, bounds.width - fixed.reduce(0, +)) / CGFloat(autoCount) : 0
-        var x: CGFloat = 0
-        for i in 0..<segmentCount {
-            x += fixed[i] == 0 ? share : fixed[i]
-            if p.x < x { return i }
-        }
-        return segmentCount - 1
-    }
-
-    private func segmentMidX(_ i: Int) -> CGFloat {
-        let fixed = (0..<segmentCount).map { width(forSegment: $0) }
-        let autoCount = fixed.filter { $0 == 0 }.count
-        let share = autoCount > 0 ? max(0, bounds.width - fixed.reduce(0, +)) / CGFloat(autoCount) : 0
-        let widths = fixed.map { $0 == 0 ? share : $0 }
-        return widths.prefix(i).reduce(0, +) + widths[i] / 2
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        guard let i = segment(at: convert(event.locationInWindow, from: nil)) else { return nil }
-        let m = NSMenu()
-        let set = NSMenuItem(title: "Set “\(name(of: i))” as Default", action: #selector(setDefaultClicked(_:)), keyEquivalent: "")
-        set.target = self
-        set.tag = i
-        set.state = i == defaultIndex ? .on : .off
-        m.addItem(set)
-        if let d = defaultIndex, d >= 0, d < segmentCount {
-            let info = NSMenuItem(title: "Current default: \(name(of: d))", action: nil, keyEquivalent: "")
-            info.isEnabled = false
-            m.addItem(info)
-        }
-        m.addItem(.separator())
-        let reset = NSMenuItem(title: "Reset to Original Default", action: #selector(resetClicked), keyEquivalent: "")
-        reset.target = self
-        m.addItem(reset)
-        return m
-    }
-
-    @objc private func setDefaultClicked(_ sender: NSMenuItem) { onSetDefault?(sender.tag) }
-    @objc private func resetClicked() { onResetDefault?() }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard let d = defaultIndex, d >= 0, d < segmentCount else { return }
-        // Accent dot under the default choice.
-        let x = segmentMidX(d)
-        let y = isFlipped ? bounds.maxY - 3.5 : bounds.minY + 1
-        let dot = NSBezierPath(ovalIn: CGRect(x: x - 1.75, y: y, width: 3.5, height: 2.5))
-        Palette.accent.setFill()
-        dot.fill()
-    }
 }

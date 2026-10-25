@@ -118,7 +118,7 @@ import AppKit
             }),
             ("panel-backdrop", {
                 guard let ed = editor?.windowController as? EditorWindowController, let content = editor?.contentView,
-                      let pill = findView(PillButton.self, in: content, where: { $0.accessibilityLabel() == "Backdrop" }) else { return nil }
+                      let pill = findView(BarButton.self, in: content, where: { $0.accessibilityLabel() == "Backdrop" }) else { return nil }
                 let before = Set(NSApp.windows.map(ObjectIdentifier.init))
                 ed.showBackdropPanel(from: pill)
                 return NSApp.windows.first { !before.contains(ObjectIdentifier($0)) }
@@ -187,8 +187,8 @@ import AppKit
             w.orderFront(nil)
             return w
         }))
-        // The welcome guide, one shot per page (the new look has three, the old one eight).
-        for i in 0..<(Settings.newEditorUI ? 3 : 8) {
+        // The welcome guide, one shot per step.
+        for i in 0..<3 {
             steps.append(("welcome-\(i + 1)", {
                 OnboardingPage.forceReduceMotion = true // every part in place, no entrance animation half done
                 OnboardingWindowController.show(from: i)
@@ -785,39 +785,26 @@ final class IconSheetView: NSView {
             if !ok { failures += 1 }
         }
         func editors() -> [EditorWindowController] { NSApp.windows.compactMap { $0.windowController as? EditorWindowController } }
-        func find<T: NSView>(_ t: T.Type, in v: NSView, where ok: (T) -> Bool) -> T? {
-            if let x = v as? T, ok(x) { return x }
-            for s in v.subviews { if let f = find(t, in: s, where: ok) { return f } }
-            return nil
-        }
-        func rightClickMenu(_ c: DefaultableSegmentedControl, segment i: Int) -> NSMenu? {
-            let w = c.bounds.width / CGFloat(c.segmentCount)
-            let p = c.convert(CGPoint(x: w * (CGFloat(i) + 0.5), y: c.bounds.midY), to: nil)
-            let e = NSEvent.mouseEvent(with: .rightMouseDown, location: p, modifierFlags: [], timestamp: 0, windowNumber: c.window!.windowNumber,
-                                       context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-            return c.menu(for: e)
-        }
-
         check(ToolStyle.loadDefaults().callout == .box, "built-in default callout is Professional · Box")
         AppLogic.shared.openEditor(img, scale: 2)
         let ed = editors()[0]
         ed.window?.layoutIfNeeded()
         check(ed.shotView.style.callout == .box, "a new editor starts with the Box callout")
         ed.shotView.tool = .callout
-        guard let content = ed.window?.contentView,
-              let callouts = find(DefaultableSegmentedControl.self, in: content, where: { $0.segmentCount == CalloutStyle.allCases.count && $0.name(of: 0).contains("Box") })
-        else { print("FAIL callout control not found"); exit(1) }
-        check(callouts.defaultIndex == CalloutStyle.box.rawValue, "the Box segment carries the default marker")
+        guard let bar = ed.debugCalloutBar else { print("FAIL callout style bar not found"); exit(1) }
+        func choose(_ m: NSMenu?, _ title: String) {
+            if let i = m?.items.firstIndex(where: { $0.title == title }) { m?.performActionForItem(at: i) } else { check(false, "the menu has “\(title)”") }
+        }
+        check(bar.defaultsMenu(for: .box).items.first?.state == .on, "Box is marked as the default")
 
-        let menu = rightClickMenu(callouts, segment: CalloutStyle.thought.rawValue)
-        check(menu?.items.first?.title == "Set “Fun · Thought” as Default", "right-click offers “\(menu?.items.first?.title ?? "nil")”")
-        menu?.performActionForItem(at: 0)
+        let menu = bar.defaultsMenu(for: .thought)
+        check(menu.items.first?.title == "Set “Fun · Thought” as Default", "right-click offers “\(menu.items.first?.title ?? "nil")”")
+        menu.performActionForItem(at: 0)
         check(ToolStyle.loadDefaults().callout == .thought, "Thought is saved as the default")
-        check(callouts.defaultIndex == CalloutStyle.thought.rawValue, "the marker moves to Thought")
+        check(bar.defaultsMenu(for: .thought).items.first?.state == .on, "the mark moves to Thought")
         check(ed.shotView.style.callout == .thought, "Thought is also selected right away")
 
-        callouts.selectedSegment = CalloutStyle.speech.rawValue
-        callouts.sendAction(callouts.action, to: callouts.target)
+        bar.items[.speech]?.action?()
         check(ed.shotView.style.callout == .speech && ToolStyle.loadDefaults().callout == .thought,
               "an ordinary click picks Speech for now without changing the default")
 
@@ -825,24 +812,17 @@ final class IconSheetView: NSView {
         let second = editors().first { $0 !== ed }
         check(second?.shotView.style.callout == .thought, "a new editor starts from the new default (Thought)")
 
-        let reset = rightClickMenu(callouts, segment: 0)
-        if let i = reset?.items.firstIndex(where: { $0.title == "Reset to Original Default" }) { reset?.performActionForItem(at: i) }
-        check(ToolStyle.loadDefaults().callout == .box && callouts.defaultIndex == CalloutStyle.box.rawValue, "Reset to Original Default goes back to Box")
+        choose(bar.defaultsMenu(for: .box), "Reset to Original Default")
+        check(ToolStyle.loadDefaults().callout == .box, "Reset to Original Default goes back to Box")
 
-        // Color and size defaults through their right-click menus.
+        // Color and size: Shape Outline › Set as Default Outline.
+        ed.shotView.tool = .rect
         var picked = ed.shotView.style
         picked.color = NSColor(hex: 0x007AFF)
         picked.width = 9
         ed.shotView.setStyle(picked)
         ed.syncToolbar()
-        let bar = ed.debugOptions
-        for (what, title) in [("color", "Set #007AFF as Default Color"), ("size", "Set Size 9 as Default")] {
-            let m = NSMenu()
-            m.identifier = NSUserInterfaceItemIdentifier(what)
-            bar.menuNeedsUpdate(m)
-            check(m.items.first?.title == title, "\(what) menu offers “\(m.items.first?.title ?? "nil")”")
-            m.performActionForItem(at: 0)
-        }
+        choose(ed.debugEditorRibbon?.formatting.outlinePalette.paletteMenu(), "Set as Default Outline")
         let d = ToolStyle.loadDefaults()
         check(d.color.hexString == "#007AFF" && d.width == 9, "color and size are saved as defaults")
 

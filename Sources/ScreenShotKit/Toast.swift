@@ -46,9 +46,9 @@ import AppKit
     }
 
     static func show(_ text: String, duration: TimeInterval = 1.8) {
-        // In front of the new editor, messages go to its notification bar instead of a floating HUD.
-        if let editor = (NSApp.keyWindow ?? NSApp.mainWindow)?.windowController as? EditorWindowController,
-           editor.window?.isVisible == true, editor.notify(NotificationBar.Notice(noticeKind(for: text), text)) {
+        // In front of an editor, messages go to its notification bar instead of a floating HUD.
+        if let editor = (NSApp.keyWindow ?? NSApp.mainWindow)?.windowController as? EditorWindowController, editor.window?.isVisible == true {
+            editor.notify(NotificationBar.Notice(noticeKind(for: text), text))
             return
         }
         panel?.orderOut(nil)

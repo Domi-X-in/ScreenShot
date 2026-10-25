@@ -203,7 +203,6 @@ final class EditorStatusBar: NSView {
 
     init(info: InfoCellsView) {
         super.init(frame: .zero)
-        info.applyModernStyle()
         backdropButton.onClick = { [weak self] in
             guard let self else { return }
             self.onBackdropPanel?(self.backdropButton)
@@ -242,7 +241,25 @@ final class EditorStatusBar: NSView {
 
     func update(tool: Tool, backdrop: Backdrop, cutOut: Bool, area: Bool = false) {
         backdropButton.isOn = backdrop.isOn
-        notices.setHint(StatusBar.hint(for: tool, cutOut: cutOut, area: area))
+        notices.setHint(Self.hint(for: tool, cutOut: cutOut, area: area))
+    }
+
+    /// A tip for the tool in hand.
+    static func hint(for tool: Tool, cutOut: Bool, area: Bool = false) -> String {
+        if tool == .crop && area { return "Drag over an area · ⌘C or Enter copies it · Esc clears the selection" }
+        return switch tool {
+        case .counter: "Type digits to renumber · drag the bubble tip to point it"
+        case .crop where cutOut: "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
+        case .crop: "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
+        case .ruler: "Drag to measure · Shift snaps to 45° · hold 1 or 2 anywhere to measure what's under the pointer"
+        case .select: "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
+        case .text: "Click to type · double-click text to edit"
+        case .spotlight: "Everything outside the spotlights gets dimmed"
+        case .callout: "Press on the target, drag to place the bubble, type · drag the tip to re-aim"
+        case .image: "Drag to move · pinch or scroll over it to resize"
+        case .magnifier: "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
+        default: "Shift constrains · Tab copies the color under the cursor"
+        }
     }
 }
 

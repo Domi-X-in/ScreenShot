@@ -7,7 +7,7 @@ extension FlowsSelfTest {
         guard let ed = await openEditor(Self.sampleImage(1000, 700)) else { return }
         let v = ed.shotView
         Settings.returnToSelect = true
-        func shown() -> ToolStyle { ed.debugOptions.debugShownStyle }
+        func shown() -> ToolStyle { v.displayedStyle }
         func setOption(_ change: (inout ToolStyle) -> Void) { var s = shown(); change(&s); v.setStyle(s) }
 
         // A big blue text, then the style for new objects goes back to red 4.

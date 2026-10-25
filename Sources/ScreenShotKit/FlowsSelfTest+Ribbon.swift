@@ -2,12 +2,9 @@ import AppKit
 
 #if SCREENSHOT_SELFTESTS
 extension FlowsSelfTest {
-    /// The new editor (Settings.newEditorUI): the trimmed title bar, and the ribbon's Clipboard, Shapes and Tools groups
+    /// The editor: the trimmed title bar, and the ribbon's Clipboard, Shapes and Tools groups
     /// driving the editor with real clicks on their buttons.
     func ribbonEditorFlow() async {
-        let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
-        defer { d.removeObject(forKey: "newEditorUI") }
         guard let ed = await openEditor(Self.sampleImage(1000, 700)), let win = ed.window else { check(false, "editor opens"); return }
         let v = ed.shotView
         guard let r = ed.debugEditorRibbon else { check(false, "the new editor has a ribbon"); return }
@@ -103,13 +100,6 @@ extension FlowsSelfTest {
         }
         win.layoutIfNeeded()
         await closeAllEditors()
-
-        // Without the setting the editor is unchanged (unless SCREENSHOT_NEW_UI forces the new one for the whole run).
-        d.removeObject(forKey: "newEditorUI")
-        guard !Settings.newEditorUI else { return }
-        guard let old = await openEditor(Self.sampleImage(600, 400)) else { return }
-        let oldIds = old.window?.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
-        check(old.debugEditorRibbon == nil && oldIds.contains("tools"), "with newEditorUI off the editor keeps its tool strip")
     }
 }
 #endif
@@ -119,9 +109,6 @@ extension FlowsSelfTest {
     /// The callout style bar beside the canvas: only with callouts, the five designs, the current one lit, a click
     /// restyling the selected callout and the next one; the canvas takes the room back when it hides.
     func calloutBarFlow() async {
-        let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
-        defer { d.removeObject(forKey: "newEditorUI") }
         Settings.returnToSelect = true
         guard let ed = await openEditor(Self.sampleImage(1000, 700)), let bar = ed.debugCalloutBar, let cards = ed.debugCards else {
             check(false, "the new editor opens with a callout style bar"); return

@@ -85,28 +85,18 @@ extension FlowsSelfTest {
         type("a"); drag(ed, CGPoint(x: 100, y: 500), CGPoint(x: 300, y: 400))
         type("v"); click(ed, CGPoint(x: 200, y: 450))
         if let r = ed.debugEditorRibbon {
-            // The new editor: Arrow Heads in the ribbon's Arrange group.
+            // Arrow Heads in the ribbon's Arrange group.
             chooseRibbon(r.formatting.arrowHeads, ArrowStyle(rawValue: 1)!.title)
             check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "Arrow Heads restyles the selected arrow")
-        } else if let arrows = allViews(DefaultableSegmentedControl.self, in: content).first(where: { !$0.isHidden && $0.segmentCount == ArrowStyle.allCases.count }) {
-            arrows.selectedSegment = 1
-            _ = arrows.target?.perform(arrows.action, with: arrows)
-            check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "choosing another arrow style restyles the selected arrow")
-        } else { check(false, "the options bar shows arrow styles for a selected arrow") }
+        }
 
         // Align from the top toolbar's Align menu (it replaced the Arrange popover).
         type("r"); drag(ed, CGPoint(x: 500, y: 100), CGPoint(x: 600, y: 160))
         type("v")
         type("a", mods: .command)
-        let alignMenu: NSMenu
-        if let r = ed.debugEditorRibbon {
-            check(r.formatting.align.isEnabled, "with several objects selected Align is enabled")
-            alignMenu = r.formatting.align.menu!()
-        } else {
-            let bar = ed.debugTopBar
-            check(bar.debugControls.align.isEnabled, "with several objects selected the Align button is enabled")
-            alignMenu = bar.debugAlignMenu
-        }
+        let align = ed.debugEditorRibbon!.formatting.align
+        check(align.isEnabled, "with several objects selected Align is enabled")
+        let alignMenu = align.menu!()
         if let i = alignMenu.items.firstIndex(where: { $0.title == ArrangeAction.alignTop.title }) {
             alignMenu.performActionForItem(at: i)
         } else { check(false, "the Align menu has Align Top") }
@@ -177,8 +167,8 @@ extension FlowsSelfTest {
         await sleep(0.6)
         guard let lib = LibraryWindowController.shared, let content = lib.window?.contentView else { check(false, "the home window opens"); return }
         lib.reload()
-        if lib.debugModern {
-            // The new look: capture buttons in a ribbon-style bar, cards, day groups, the status menu's icons.
+        do {
+            // Capture buttons in a ribbon-style bar, cards, day groups, the status menu's icons.
             check(lib.debugCaptureItems.map(\.title) == ["Area", "Window", "Fullscreen"] && lib.debugCaptureItems[0].isOn,
                   "it has Area / Window / Fullscreen buttons, Area as the main one")
             check(lib.debugCaptureItems.allSatisfy { $0.showsShortcut && $0.shortcut != nil }, "each capture button shows its shortcut")
@@ -191,9 +181,6 @@ extension FlowsSelfTest {
                 check(items.count >= 15 && items.allSatisfy { $0.image != nil }, "every status menu item has an icon (\(items.filter { $0.image == nil }.map(\.title)))")
                 check(app.debugStatusItem.button?.image?.isTemplate == true, "the menu bar mark is a template image")
             }
-        } else {
-            let segments = allViews(NSSegmentedControl.self, in: content).first { $0.segmentCount == 3 }
-            check((0..<3).compactMap { segments?.label(forSegment: $0) } == ["Area", "Window", "Fullscreen"], "it has Area / Window / Fullscreen buttons")
         }
         guard let collection = allViews(NSCollectionView.self, in: content).first,
               let search = allViews(NSSearchField.self, in: content).first else { check(false, "it lists screenshots and has a search field"); return }

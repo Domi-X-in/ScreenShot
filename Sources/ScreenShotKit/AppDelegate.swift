@@ -17,9 +17,8 @@ import AppKit
         NSApp.mainMenu = buildMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        // The new look's viewfinder mark (ROADMAP, Fase 6 · R7); a template image, so macOS tints it for the menu bar.
-        statusItem.button?.image = Settings.newEditorUI ? Self.statusMark()
-            : NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "ScreenShot")
+        // The viewfinder mark of the icon family (ROADMAP, Fase 6 · R7); a template image, so macOS tints it for the menu bar.
+        statusItem.button?.image = Self.statusMark()
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -82,10 +81,9 @@ import AppKit
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         // The home window: capture buttons and every screenshot (the Library).
-        let newLook = Settings.newEditorUI
         let open = item("Open ScreenShot", #selector(showLibrary))
         open.keyEquivalent = "l"
-        open.image = newLook ? Icons.image(.photo, size: 16) : NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: nil)
+        open.image = Icons.image(.photo, size: 16)
         menu.addItem(open)
         menu.addItem(.separator())
         let order: [HotkeyAction?] = [.fullscreen, .area, .repeatArea, .delayed, nil, .anyWindow, .activeWindow, nil,
@@ -95,7 +93,7 @@ import AppKit
             let item = NSMenuItem(title: a.title, action: #selector(runAction(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = a.rawValue
-            if newLook { item.image = Icons.image(Self.icon(for: a), size: 16) }
+            item.image = Icons.image(Self.icon(for: a), size: 16)
             if let s = HotKeyCenter.shared.shortcut(for: a), s.key.count == 1 {
                 item.keyEquivalent = s.key.lowercased()
                 item.keyEquivalentModifierMask = s.nsModifiers
@@ -118,10 +116,8 @@ import AppKit
         menu.addItem(prefs)
         let quit = NSMenuItem(title: "Quit ScreenShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
-        if newLook {
-            for (i, icon) in [(clipboard, IconName.paste), (openImage, .openImage), (welcome, .guide), (update, .updates), (prefs, .prefs), (quit, .power)] {
-                i.image = Icons.image(icon, size: 16)
-            }
+        for (i, icon) in [(clipboard, IconName.paste), (openImage, .openImage), (welcome, .guide), (update, .updates), (prefs, .prefs), (quit, .power)] {
+            i.image = Icons.image(icon, size: 16)
         }
     }
 

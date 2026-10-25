@@ -238,14 +238,13 @@ import ScreenCaptureKit
             ("color-zoom-info", colorZoomInfoFlow),
             ("callout-editing", calloutEditingFlow),
             ("style-sync", styleSyncFlow),
-            ("formatting", formattingFlow),
-            ("toolbar", toolbarFlow),
             ("ribbon-editor", ribbonEditorFlow),
             ("ribbon-formatting", ribbonFormattingFlow),
             ("notifications", notificationsFlow),
             ("callout-bar", calloutBarFlow),
             ("ribbon-r6", ribbonR6Flow),
             ("welcome", welcomeFlow),
+            ("accessibility", accessibilityFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),
@@ -253,9 +252,7 @@ import ScreenCaptureKit
         ]
         // SCREENSHOT_SELFTEST_FLOWS=<flow name> runs one flow; any other value runs them all.
         let pick = flows.contains { $0.0 == only } ? only : nil
-        // These drive the old formatting bar's own controls; the new editor's ribbon has its own flows.
-        let oldBarOnly: Set<String> = Settings.newEditorUI ? ["formatting", "toolbar"] : []
-        for (name, f) in flows where (pick == nil || pick == name) && !oldBarOnly.contains(name) {
+        for (name, f) in flows where pick == nil || pick == name {
             flow = name
             await f()
             await closeAllEditors()

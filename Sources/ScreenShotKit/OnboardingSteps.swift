@@ -3,9 +3,9 @@ import QuartzCore
 
 private typealias DT = DesignTokens
 
-// The welcome guide in the new look (ROADMAP, Fase 6 · R8): three steps — Welcome (what the app does, with a short
+// The welcome guide (ROADMAP, Fase 6 · R8): three steps — Welcome (what the app does, with a short
 // looping demo), Set up (Screen Recording, where screenshots go and what happens after each one, light or dark) and
-// Ready (the shortcuts and the first capture). The window, navigation and resume-after-relaunch are the old guide's.
+// Ready (the shortcuts and the first capture). The window, navigation and resume-after-relaunch are in Onboarding.swift.
 
 // MARK: - Window chrome
 
@@ -174,14 +174,14 @@ final class StepTabs: NSView {
 // MARK: - Shared page pieces
 
 extension OnboardingPage {
-    /// A plain headline in the design's ink (the new guide has no gradient titles).
+    /// A plain headline in the design's ink.
     @discardableResult
-    func modernTitle(_ s: String, y: CGFloat, size: CGFloat) -> NSTextField {
+    func pageTitle(_ s: String, y: CGFloat, size: CGFloat) -> NSTextField {
         text(s, y: y, size: size, weight: .bold, color: DT.color(.ink), width: 700)
     }
 
     @discardableResult
-    func modernText(_ s: String, y: CGFloat, size: CGFloat = 14, width: CGFloat = 520, color: NSColor = DT.color(.ink2)) -> NSTextField {
+    func pageText(_ s: String, y: CGFloat, size: CGFloat = 14, width: CGFloat = 520, color: NSColor = DT.color(.ink2)) -> NSTextField {
         text(s, y: y, size: size, color: color, width: width)
     }
 }
@@ -216,8 +216,8 @@ final class WelcomeStep: OnboardingPage {
         icon.image = Icons.image(.statusMark, size: 34, color: DT.color(.accent), stroke: 2)
         mark.addSubview(icon)
         addSubview(mark)
-        let title = modernTitle("Welcome to ScreenShot", y: 128, size: 32)
-        let sub = modernText("Capture anything on your screen, mark it up beautifully and share it in seconds.", y: 178, size: 15, width: 480)
+        let title = pageTitle("Welcome to ScreenShot", y: 128, size: 32)
+        let sub = pageText("Capture anything on your screen, mark it up beautifully and share it in seconds.", y: 178, size: 15, width: 480)
         let features: [(FeatureIllustration.Kind, String, String)] = [
             (.capture, "Capture anything", "Drag over any part of the screen, a window, or a long scrolling page."),
             (.edit, "Mark it up", "The editor opens with arrows, text, blur, callouts and more."),
@@ -414,8 +414,8 @@ final class SetupStep: OnboardingPage {
     private var parts: [NSView] = []
 
     override func build() {
-        let title = modernTitle("Set up ScreenShot", y: 46, size: 28)
-        let sub = modernText("Three quick choices. You can change any of them later in Preferences.", y: 88)
+        let title = pageTitle("Set up ScreenShot", y: 46, size: 28)
+        let sub = pageText("Three quick choices. You can change any of them later in Preferences.", y: 88)
         let card = GuidePanel(frame: CGRect(x: (bounds.width - 700) / 2, y: 128, width: 700, height: 340))
         addSubview(card)
         func number(_ n: Int, y: CGFloat) {
@@ -703,8 +703,8 @@ final class ReadyStep: OnboardingPage {
         mark.image = Icons.image(.check, size: 34, color: DT.color(.accent), stroke: 3)
         check.addSubview(mark)
         addSubview(check)
-        let title = modernTitle("You’re all set!", y: 124, size: 30)
-        let sub = modernText("These shortcuts work from any app. Change them anytime in Preferences › Hotkeys, or use the camera icon in the menu bar.",
+        let title = pageTitle("You’re all set!", y: 124, size: 30)
+        let sub = pageText("These shortcuts work from any app. Change them anytime in Preferences › Hotkeys, or use the camera icon in the menu bar.",
                              y: 168, width: 540)
         let shortcuts: [(HotkeyAction, IconName, String, String)] = [
             (.area, .capArea, "Area", "Drag over the screen"), (.fullscreen, .capFull, "Fullscreen", "The whole display"),

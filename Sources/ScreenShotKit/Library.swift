@@ -23,28 +23,22 @@ import Vision
     private let countLabel = NSTextField(labelWithString: "")
     private var all: [LibraryItem] = []
     private var shown: [LibraryItem] = []
-    /// The grid's sections: one untitled section in the old look; Today, Yesterday… in the new one.
+    /// The grid's sections: Today, Yesterday, Earlier this week…
     private var sections: [(title: String, items: [LibraryItem])] = []
     private let index = TextIndex.shared
-    /// The new look (ROADMAP, Fase 6 · R7): cards, a ribbon-style bar and screenshots grouped by day.
-    private let modern = Settings.newEditorUI
     private var captureItems: [RibbonItem] = []
 
     init() {
-        let modernLook = Settings.newEditorUI
-        let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: modernLook ? 1180 : 980, height: modernLook ? 760 : 680),
-                           styleMask: modernLook ? [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
-                               : [.titled, .closable, .resizable, .miniaturizable],
+        let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1180, height: 760),
+                           styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
                            backing: .buffered, defer: false)
         win.title = "ScreenShot"
-        if modernLook {
-            // The cards draw the title bar; an empty unified toolbar centers the window's buttons on the title card.
-            win.titleVisibility = .hidden
-            win.titlebarAppearsTransparent = true
-            win.titlebarSeparatorStyle = .none
-            win.toolbarStyle = .unified
-            win.toolbar = NSToolbar(identifier: "home")
-        }
+        // The cards draw the title bar; an empty unified toolbar centers the window's buttons on the title card.
+        win.titleVisibility = .hidden
+        win.titlebarAppearsTransparent = true
+        win.titlebarSeparatorStyle = .none
+        win.toolbarStyle = .unified
+        win.toolbar = NSToolbar(identifier: "home")
         win.minSize = NSSize(width: 820, height: 380)
         win.isReleasedWhenClosed = false
         win.center()
@@ -56,79 +50,6 @@ import Vision
     }
 
     required init?(coder: NSCoder) { fatalError() }
-
-    private func build() {
-        if modern { buildModern(); return }
-        guard let content = window?.contentView else { return }
-        search.placeholderString = "Search names, dates and text in screenshots"
-        search.delegate = self
-        search.setAccessibilityLabel("Search screenshots")
-        sizeSlider.controlSize = .small
-        sizeSlider.target = self
-        sizeSlider.action = #selector(sizeChanged)
-        sizeSlider.doubleValue = UserDefaults.standard.double(forKey: "libraryThumbSize").nonZero ?? 180
-        sizeSlider.toolTip = "Thumbnail size"
-        sizeSlider.setAccessibilityLabel("Thumbnail size")
-        sizeSlider.widthAnchor.constraint(equalToConstant: 120).isActive = true
-        countLabel.textColor = .secondaryLabelColor
-        countLabel.font = .systemFont(ofSize: 12)
-        let small = NSImageView(image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!)
-        let big = NSImageView(image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!.withSymbolConfiguration(.init(pointSize: 16, weight: .regular))!)
-        for i in [small, big] { i.contentTintColor = .secondaryLabelColor }
-        // Captures start from here too, so the window works as the app's home. Captures leave the app's own windows out.
-        let captures = NSSegmentedControl(images: [
-            NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "Area")!,
-            NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Window")!,
-            NSImage(systemSymbolName: "rectangle.inset.filled", accessibilityDescription: "Fullscreen")!,
-        ], trackingMode: .momentary, target: self, action: #selector(capture(_:)))
-        for (i, (label, action)) in [("Area", HotkeyAction.area), ("Window", .anyWindow), ("Fullscreen", .fullscreen)].enumerated() {
-            captures.setLabel(label, forSegment: i)
-            captures.setImageScaling(.scaleProportionallyDown, forSegment: i)
-            let keys = HotKeyCenter.shared.shortcut(for: action).map { " (\($0.display))" } ?? ""
-            captures.setToolTip("\(label) screenshot\(keys)", forSegment: i)
-        }
-        captures.setAccessibilityLabel("Take a screenshot")
-        func iconButton(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
-            let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: self, action: action)
-            b.bezelStyle = .rounded
-            b.toolTip = tip
-            return b
-        }
-        let finder = iconButton("folder", "Show the Screenshots folder in Finder", #selector(showFolder))
-        let other = iconButton("doc.badge.plus", "Open another image…", #selector(openOther))
-        let prefs = iconButton("gearshape", "Preferences…", #selector(openPreferences))
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let bar = NSStackView(views: [captures, search, countLabel, spacer, small, sizeSlider, big, finder, other, prefs])
-        bar.spacing = 10
-        bar.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
-        search.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
-
-        layout.minimumInteritemSpacing = 14
-        layout.minimumLineSpacing = 18
-        layout.sectionInset = NSEdgeInsets(top: 14, left: 16, bottom: 16, right: 16)
-        collection.collectionViewLayout = layout
-        collection.dataSource = self
-        collection.delegate = self
-        collection.isSelectable = true
-        collection.backgroundColors = [Theme.dynamic(light: NSColor(hex: 0xF4F5F8), dark: NSColor(hex: 0x1D1E24))]
-        collection.register(LibraryCell.self, forItemWithIdentifier: LibraryCell.id)
-        let scroll = NSScrollView()
-        scroll.documentView = collection
-        scroll.hasVerticalScroller = true
-
-        for v in [bar, scroll] as [NSView] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            content.addSubview(v)
-        }
-        NSLayoutConstraint.activate([
-            bar.topAnchor.constraint(equalTo: content.topAnchor), bar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            bar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: bar.bottomAnchor), scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-        ])
-        applySize()
-    }
 
     @objc func reload() {
         let folder = Settings.saveFolder
@@ -145,14 +66,15 @@ import Vision
     private func filter() {
         let q = search.stringValue
         shown = all.filter { $0.matches(q, text: index.text(for: $0.url)) }
-        sections = modern ? LibraryItem.sections(shown) : [("", shown)]
+        sections = LibraryItem.sections(shown)
         countLabel.stringValue = q.isEmpty ? "\(all.count) screenshots" : "\(shown.count) of \(all.count)"
         collection.reloadData()
     }
 
-    // MARK: The new look
+    // MARK: Layout
 
-    private func buildModern() {
+    /// Cards on the window's background: the title card, a ribbon-style bar and the day-grouped grid.
+    private func build() {
         guard let win = window else { return }
         let content = CanvasBackground()
         win.contentView = content
@@ -194,6 +116,7 @@ import Vision
         let searchGroup = HomeToolbarGroup(title: "Search", content: searchStack, flexible: true)
 
         sizeSlider.controlSize = .small
+        sizeSlider.trackFillColor = DesignTokens.color(.accent)
         sizeSlider.target = self
         sizeSlider.action = #selector(sizeChanged)
         sizeSlider.doubleValue = UserDefaults.standard.double(forKey: "libraryThumbSize").nonZero ?? 220
@@ -273,7 +196,6 @@ import Vision
     var debugShownCount: Int { shown.count }
     var debugSectionTitles: [String] { sections.map(\.title) }
     var debugCaptureItems: [RibbonItem] { captureItems }
-    var debugModern: Bool { modern }
     func debugOpen(at indexPath: IndexPath) { collectionView(collection, didSelectItemsAt: [indexPath]) }
     #endif
 
@@ -286,21 +208,9 @@ import Vision
 
     private func applySize() {
         let w = CGFloat(sizeSlider.doubleValue)
-        // The new cells have a name and a size/time line under the picture.
-        layout.itemSize = NSSize(width: w, height: (w * (modern ? 0.62 : 0.68) + (modern ? 52 : 38)).rounded())
+        // A name and a size/time line under the picture.
+        layout.itemSize = NSSize(width: w, height: (w * 0.62 + 52).rounded())
         layout.invalidateLayout()
-    }
-
-    @objc private func showFolder() { NSWorkspace.shared.open(Settings.saveFolder) }
-
-    @objc private func openOther() { AppLogic.shared.chooseFile() }
-
-    @objc private func openPreferences() { (NSApp.delegate as? AppDelegate)?.showPreferences() }
-
-    @objc private func capture(_ sender: NSSegmentedControl) {
-        let actions: [HotkeyAction] = [.area, .anyWindow, .fullscreen]
-        guard actions.indices.contains(sender.selectedSegment) else { return }
-        AppLogic.shared.run(actions[sender.selectedSegment])
     }
 
     // MARK: Collection view
@@ -313,7 +223,7 @@ import Vision
 
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let cell = collectionView.makeItem(withIdentifier: LibraryCell.id, for: indexPath) as! LibraryCell
-        cell.configure(sections[indexPath.section].items[indexPath.item], modern: modern)
+        cell.configure(sections[indexPath.section].items[indexPath.item])
         return cell
     }
 
@@ -468,29 +378,28 @@ final class TextIndex: @unchecked Sendable {
     }
 }
 
-/// A thumbnail with the file's date under it.
+/// A thumbnail with the file's name, pixel size and time under it.
 final class LibraryCell: NSCollectionViewItem {
     static let id = NSUserInterfaceItemIdentifier("LibraryCell")
     private static let cache = NSCache<NSURL, NSImage>()
     private let thumb = NSImageView()
     private let caption = NSTextField(labelWithString: "")
-    /// The new look's second line: pixel size and time.
+    /// The second line: pixel size and time.
     private let meta = NSTextField(labelWithString: "")
     private static let sizes = NSCache<NSURL, NSValue>()
     private var url: URL?
-    private var modern = false
 
     override func loadView() {
         let v = NSView()
         v.wantsLayer = true
         thumb.imageScaling = .scaleProportionallyUpOrDown
         thumb.wantsLayer = true
-        thumb.layer?.cornerRadius = 8
+        thumb.layer?.cornerRadius = 7
         thumb.layer?.masksToBounds = true
         thumb.layer?.borderWidth = 1
-        thumb.layer?.borderColor = NSColor.separatorColor.cgColor
-        caption.font = .systemFont(ofSize: 11)
-        caption.textColor = .secondaryLabelColor
+        thumb.layer?.borderColor = DesignTokens.color(.line).cgColor
+        caption.font = .systemFont(ofSize: 12, weight: .medium)
+        caption.textColor = DesignTokens.color(.ink)
         caption.alignment = .center
         caption.lineBreakMode = .byTruncatingMiddle
         // The picture gives way to the caption, never the other way round.
@@ -498,6 +407,7 @@ final class LibraryCell: NSCollectionViewItem {
         thumb.setContentHuggingPriority(.init(1), for: .vertical)
         caption.setContentCompressionResistancePriority(.required, for: .vertical)
         meta.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        meta.textColor = DesignTokens.color(.ink3)
         meta.lineBreakMode = .byTruncatingTail
         meta.setContentCompressionResistancePriority(.required, for: .vertical)
         let text = NSStackView(views: [caption, meta])
@@ -518,26 +428,15 @@ final class LibraryCell: NSCollectionViewItem {
         view = v
     }
 
-    func configure(_ item: LibraryItem, modern: Bool = false) {
+    func configure(_ item: LibraryItem) {
         url = item.url
-        self.modern = modern
-        meta.isHidden = !modern
-        if modern {
-            // Name, then "1520 × 950 · 10:42".
-            caption.stringValue = item.url.deletingPathExtension().lastPathComponent
-            caption.font = .systemFont(ofSize: 12, weight: .medium)
-            caption.textColor = DesignTokens.color(.ink)
-            meta.textColor = DesignTokens.color(.ink3)
-            let time = item.date.formatted(date: .omitted, time: .shortened)
-            if let s = Self.sizes.object(forKey: item.url as NSURL)?.sizeValue {
-                meta.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(time)"
-            } else {
-                meta.stringValue = time
-            }
-            thumb.layer?.cornerRadius = 7
-            thumb.layer?.borderColor = DesignTokens.color(.line).cgColor
+        // Name, then "1520 × 950 · 10:42".
+        caption.stringValue = item.url.deletingPathExtension().lastPathComponent
+        let time = item.date.formatted(date: .omitted, time: .shortened)
+        if let s = Self.sizes.object(forKey: item.url as NSURL)?.sizeValue {
+            meta.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(time)"
         } else {
-            caption.stringValue = item.date.formatted(date: .abbreviated, time: .shortened)
+            meta.stringValue = time
         }
         view.toolTip = item.url.lastPathComponent
         view.setAccessibilityElement(true)
@@ -562,7 +461,7 @@ final class LibraryCell: NSCollectionViewItem {
                 if let pixels { Self.sizes.setObject(NSValue(size: pixels), forKey: u as NSURL) }
                 if self.url == u {
                     self.thumb.image = img
-                    if self.modern, let pixels {
+                    if let pixels {
                         self.meta.stringValue = "\(Int(pixels.width)) × \(Int(pixels.height)) · " + item.date.formatted(date: .omitted, time: .shortened)
                     }
                 }

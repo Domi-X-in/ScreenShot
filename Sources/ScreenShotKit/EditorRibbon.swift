@@ -1,6 +1,6 @@
 import AppKit
 
-/// The editor's ribbon (ROADMAP, Fase 6), shown with `Settings.newEditorUI`: Clipboard, Font, Paragraph, Color, Shapes,
+/// The editor's ribbon (ROADMAP, Fase 6): Clipboard, Font, Paragraph, Color, Shapes,
 /// Tools and Arrange, then a contextual group for the tool in hand, all wired to the editor's commands; plus the title
 /// bar's commands (Copy image, Save, Pin, Undo, Redo).
 @MainActor final class EditorRibbon {

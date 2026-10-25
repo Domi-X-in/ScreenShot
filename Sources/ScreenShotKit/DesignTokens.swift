@@ -45,7 +45,7 @@ enum DesignTokens {
         .accentHover: (0xFF6E26FF, 0xFF6E26FF),
         .accentPressed: (0xD94800FF, 0xD94800FF),
         .accentSoft: (0xFF550029, 0xFF55001C),
-        .accentText: (0xFF6A1FFF, 0xC24100FF),
+        .accentText: (0xFF7A33FF, 0xB33C00FF),
         .dot: (0x2A2B31FF, 0xD0D0D6FF),
         .info: (0x6EA4FFFF, 0x1F63D6FF),
         .infoBackground: (0x6EA4FF1F, 0x1F63D617),

@@ -194,4 +194,24 @@ final class CalloutStyleBar: CardView {
     }
 
     var current: CalloutStyle? { items.first { $0.value.isOn }?.key }
+
+    /// Right-click a design: make it the default for new callouts (and pick it now), or go back to Box.
+    func defaultsMenu(for style: CalloutStyle) -> NSMenu {
+        let m = NSMenu(title: "Callout Default")
+        let isDefault = ToolStyle.loadDefaults().callout == style
+        m.addItem(ClosureMenuItem("Set “\(style.title)” as Default", checked: isDefault) { [weak self] in
+            ToolStyle.updateDefaults { $0.callout = style }
+            self?.onPick?(style)
+        })
+        m.addItem(.separator())
+        m.addItem(ClosureMenuItem("Reset to Original Default") { ToolStyle.updateDefaults { $0.callout = ToolStyle().callout } })
+        return m
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let p = convert(event.locationInWindow, from: nil)
+        let hit = hitTest(p).flatMap { v in sequence(first: v, next: \.superview).first { $0 is RibbonButton } } as? RibbonButton
+        guard let style = items.first(where: { $0.value === hit?.item })?.key else { return nil }
+        return defaultsMenu(for: style)
+    }
 }

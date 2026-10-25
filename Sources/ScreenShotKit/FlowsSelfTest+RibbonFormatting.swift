@@ -22,9 +22,6 @@ extension FlowsSelfTest {
     /// The new editor's Font, Paragraph, Color and Arrange groups and its contextual groups, used through their
     /// commands and menus (the old formatting bar's `formatting` and `toolbar` flows, for the ribbon).
     func ribbonFormattingFlow() async {
-        let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
-        defer { d.removeObject(forKey: "newEditorUI") }
         Settings.returnToSelect = true
         guard let ed = await openEditor(Self.sampleImage(1000, 700)), let r = ed.debugEditorRibbon else { check(false, "the new editor opens"); return }
         let v = ed.shotView, f = r.formatting, store = ed.formatting
@@ -45,7 +42,6 @@ extension FlowsSelfTest {
         }
         func shapes() -> ShotView.ShapeStyleState { v.shapeStyleState }
 
-        check(ed.debugTopBarShown == false, "the new editor has no floating formatting bar")
         check(!f.bold.isEnabled && !f.family.isEnabled && !f.size.isEnabled && !f.hAlign.isEnabled, "with no text, Font and Paragraph are off")
         check(!f.strike.isEnabled && !f.bullets.isEnabled && !f.numbering.isEnabled && !f.changeCase.isEnabled && !f.fontOutline.isEnabled,
               "with no text, Strikethrough, Bullets, Numbering, Change Case and Font Outline are off too")

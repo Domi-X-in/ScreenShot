@@ -8,11 +8,21 @@ Download `ScreenShot-<version>.zip` (versions are dates: `261023.1` is the first
 
 ## First launch
 
-A welcome guide opens the first time: what the app does (with a live demo of a capture being marked up), an animation of the menu bar icon and its menu (Open ScreenShot) and of ⇧⌘2 starting a capture, Screen Recording permission with a status that turns green when it's granted, the Screenshots folder and what happens after each capture, Light / Dark / System appearance with live previews, the shortcuts, and a button to take the first screenshot. If macOS quits the app to apply the permission, the guide resumes where it was. **Welcome Guide…** in the menu bar menu opens it again.
+A three-step welcome guide opens the first time:
+
+1. **Welcome**: what the app does, in three cards (Capture anything, Mark it up, Always one click away) that light up in turn.
+2. **Set up**: Screen Recording permission with a status that turns green when it's granted, the Screenshots folder and what happens after each capture (open the editor, copy, save), and Light / Dark / System with live previews.
+3. **Ready**: your capture shortcuts and a button to take the first screenshot.
+
+The step names in the footer jump between steps; Skip goes to the last one. If macOS quits the app to apply the permission, the guide resumes on the step it was on. With macOS's **Reduce Motion** on, nothing animates. **Welcome Guide…** in the menu bar menu opens it again.
+
+![Welcome guide](docs/screenshots/welcome-2-dark.png)
 
 ## Home window
 
-**Open ScreenShot** (first item in the menu bar menu, ⌘L) opens the app's home window: Area, Window and Fullscreen capture buttons, every screenshot in the Library with search, and buttons for the folder, opening another image and Preferences. Opening the app again from Finder or Spotlight shows it too.
+**Open ScreenShot** (first item in the menu bar menu, ⌘L) opens the app's home window, made of floating cards like the editor: a ribbon-style bar with Area, Window and Fullscreen capture buttons (each with its shortcut), Open Image and Show Folder, search, the thumbnail size and Preferences; below it every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. Opening the app again from Finder or Spotlight shows it too.
+
+![Home window](docs/screenshots/home-dark.png)
 
 ## Build and run
 
@@ -24,7 +34,7 @@ A welcome guide opens the first time: what the app does (with a live demo of a c
 open build/ScreenShot.app
 ```
 
-Only the Command Line Tools are needed (SwiftPM, no Xcode). The app lives in the menu bar (camera icon).
+Only the Command Line Tools are needed (SwiftPM, no Xcode). The app lives in the menu bar (viewfinder icon).
 On first use, macOS asks for **Screen Recording** permission. Automatic scrolling capture also needs **Accessibility**.
 The bundle is signed ad hoc with its designated requirement pinned to the bundle id, so the permissions survive rebuilds.
 
@@ -50,15 +60,14 @@ The bundle is signed ad hoc with its designated requirement pinned to the bundle
 
 REA's `decode_interface_builder` decoded all 17 compiled storyboards (3,431 objects), and `assetutil` listed the asset catalog. This is what the app copies from them:
 
-- **Editor** (Main.storyboard `MainWindowController`): unified toolbar with Copy (Esc or ⌘C) · Save (⌘S) · Pin to Screen (⌘P), drag-out handle, tool strip, **Crop** text button, adjust buttons (Resize ( ⇧+] ), Recognize Text or QR (⌘O), Reset Selection (Esc)), and the info cells "#FFFFFF / Tab to copy", "W×Hpx / Selection Size", "NN% / Zoom". Below the canvas is a per-tool options row: color, size, arrow style, solid/dash, fill (transparent/translucent/opaque), Blur/Erase, font (sans/goofy), counter shape, PX/PT.
-- **Colors**: `clrMain` #FF0C01 (selection accent), `clrToolbarLabel` #282828/#D0D0D0 and `clrToolbarInfo` #747474/#A2A2A2 (light/dark).
+- **Editor** (Main.storyboard `MainWindowController`): the commands and wording (Copy (Esc or ⌘C) · Save (⌘S) · Pin to Screen (⌘P), drag-out, Resize ( ⇧+] ), Recognize Text or QR (⌘O)), and the info cells "#FFFFFF / Tab to copy", "W×Hpx / Selection Size", "NN% / Zoom". The layout itself is this app's own Office-style redesign (see **Editor** below).
 - **Preferences** (Preferences.storyboard): icon tabs General · Hotkeys · Advanced in a 520-pt window, right-aligned labels and controls from x=238, with the same wording ("After screenshot: Show Copy Save", "After Area Crop, show: Thumbnail / Editor", "Window Screenshot Background", …).
 - **Pin** (Pin.storyboard): hover bar with drag-out, Edit and Copy, a close button, and the menu Edit · Copy · 50% · 100% · 200% · Semi-transparent · Close.
 - **Thumbnail** (Preview.storyboard, 267×270): close button, grip, draggable preview, and the Edit · Copy · Save · OCR · Pin row.
 
-Icons are SF Symbols. Shottr's own icon artwork is not copied.
+Icons are this app's own family (`Icons.swift`: 1.5 pt strokes on a 24 pt grid); the floating thumbnail and pins still use SF Symbols. Shottr's own icon artwork is not copied.
 
-To check the UI without Screen Recording permission, run the binary with `SCREENSHOT_SNAPSHOT_DIR=<dir> SCREENSHOT_SNAPSHOT_IMAGE=<png>`. It renders the editor, preferences, pin and thumbnail to PNG files, then quits.
+To check the UI without Screen Recording permission, run the binary with `SCREENSHOT_SNAPSHOT_DIR=<dir> SCREENSHOT_SNAPSHOT_IMAGE=<png>`. It renders the editor (light or dark with `SCREENSHOT_SNAPSHOT_APPEARANCE`), its panels and ribbon widths, the home window, preferences, pin, thumbnail, icon sheet and the welcome guide to PNG files, then quits.
 
 ## Editable saves and the recent strip
 
@@ -70,57 +79,59 @@ To check the UI without Screen Recording permission, run the binary with `SCREEN
 
 ## Color, size and zoom (Shottr's info boxes)
 
-The bottom bar shows three cells that stay visible on any screen width. Each opens a panel when clicked, as in Shottr:
+The editor's bottom bar shows three cells that stay visible on any screen width. Each opens a panel when clicked, as in Shottr:
 - **Color** (`colorBoxClicked:`): **Tab** copies the pixel color under the cursor, **Shift+Tab** the darkest color within 20 px (text color), and **C** in the Crop tool the average color of the selection. The **Color Format** menu chooses what gets copied: HEX `#FFC200`, HEX `FFC200`, CSS `rgba(255, 194, 0, 1)`, RGB `(1.00, 0.76, 0.00)`, Android `0xFFFFC200`, UIColor, C# `Color.fromArgb()`, or OKLCH.
-- **Size** (`sizeBoxClicked:`, also the toolbar's Resize button and ⇧]): **Resize Image** with linked width × height fields, presets 25% / 33% / 50% / 1× / 2× / 4×, and **Show Size in Logical Points** (shortcut **P**). Resizing can be undone.
+- **Size** (`sizeBoxClicked:`, also ⇧]): **Resize Image** with linked width × height fields, presets 25% / 33% / 50% / 1× / 2× / 4×, and **Show Size in Logical Points** (shortcut **P**). Resizing can be undone.
 - **Zoom** (`zoomBoxClicked:`): − / 100% / +, plus Fit to Window. Preferences › Advanced adds **Zoom with mouse wheel** and **Default zoom level: Prefer 100%**.
 
-## Look and feel
+## Editor
 
-![Before and after](docs/ui-before-after.png)
+![Editor](docs/screenshots/editor-dark.png)
 
-- **Canvas:** a dot grid that adapts to light and dark mode. The screenshot floats on a soft shadow, and transparent pixels show a checkerboard.
-- **Toolbar:** custom palettes (`Theme.swift`) with tools grouped as select · draw · text · shapes · effects · counter/ruler. The active tool gets a glowing red-orange pill (built around Shottr's #FF0C01), and other buttons highlight on hover and press. Crop is a pill button.
-- **Options card:** floats over the bottom of the canvas, with a ringed color swatch, a live size readout and the color/size/zoom cells.
-- **Recent strip:** shadowed tiles that lift on hover, "2m ago" captions, the current file outlined in the accent, and a dashed "Library" tile.
+The editor is a set of floating cards on a dotted canvas, dark or light, with **#FF5500** as the accent (selection, the active tool, focus).
+
+- **Title card:** the window buttons, Copy image, Save, Pin, the drag-out handle, and Undo / Redo. Drag it to move the window.
+- **Ribbon** (as in Microsoft Office): **Clipboard** (Paste, Cut, Copy, Format painter), **Font** (family, size you can type, grow / shrink, bold, italic, underline, strikethrough, change case, text direction), **Paragraph** (horizontal and vertical alignment with Justify, bullets, numbering), **Color** (Shape Fill, Shape Outline with weight and dashes, Font Color, Font Outline, with Office's palette), **Shapes** (Select, Freehand, Line, Arrow, Rectangle, Oval, Callout, Counter, Text Box), **Tools** (Highlighter, Blur, Spotlight, Magnifier, Ruler, Crop, OCR / QR, Image Area Selection) and **Arrange** (Arrange, Align, Rotate, Flip, arrow heads, line style). The tool in hand adds a contextual group at the end with its own options (blur mode, counter shape, crop mode, ruler units, lens). As the window narrows, groups fold from right to left into single buttons that open a flyout; a folded group still shows the active tool in the accent.
+- **Callout styles:** a narrow bar beside the canvas with the five designs, shown while the Callout tool is in hand or a callout is selected.
+- **Bottom bar:** messages in four states (info: the tool's hint; success, which fades; warning and error, which stay until closed), the color / size / zoom cells, and Backdrop.
+- **Recent strip:** the newest captures, the current one outlined in the accent, and the Library tile.
 - **Capture overlay:** accent selection with white corner brackets, a frosted size pill, a double-line crosshair, and a circular loupe with a pixel grid and a color readout.
-- **Toasts:** a ✓ / ⚠ / working icon picked from the message, in a frosted capsule that springs in.
-- **Preferences:** an app header with the icon and version.
-- **Appearance** (Preferences › General): System follows macOS; Light or Dark sets ScreenShot's windows only, takes effect immediately, and is remembered.
+- **Appearance** (Preferences › General, or the welcome guide): System follows macOS; Light or Dark sets ScreenShot's windows only, takes effect immediately, and is remembered.
 
 ## Backdrop, Cut Out and other Shottr tools
 
-- **Backdrop** (button at the right of the options card, `K` toggles): 10 color presets; Solid, Color Blend, Vertical, Diagonal, Radial or Mesh gradient, or the screenshot itself blurred; aspect ratio Auto, 1:1, 4:3, 3:2, 16:9, Twitter/X, Facebook, YouTube, LinkedIn or Pinterest; sliders for padding, shadow, inset (a frosted frame), outer and inner corner radius. With the Select tool, drag the background to move the screenshot inside it; **Recenter** puts it back. **Set as Default** makes `K` use that look everywhere. Files saved with the old backdrop presets still open.
-- **Cut Out** (`⇧X`, or the Crop / Cut Out switch): drag up or down over rows, or sideways over columns, then Enter. The strip is removed, the two sides join, and annotations past it move with the image.
+- **Backdrop** (button at the right of the bottom bar, `K` toggles): 10 color presets; Solid, Color Blend, Vertical, Diagonal, Radial or Mesh gradient, or the screenshot itself blurred; aspect ratio Auto, 1:1, 4:3, 3:2, 16:9, Twitter/X, Facebook, YouTube, LinkedIn or Pinterest; sliders for padding, shadow, inset (a frosted frame), outer and inner corner radius. With the Select tool, drag the background to move the screenshot inside it; **Recenter** puts it back. **Set as Default** makes `K` use that look everywhere. Files saved with the old backdrop presets still open.
+- **Cut Out** (`⇧X`, or Crop's mode in the ribbon): drag up or down over rows, or sideways over columns, then Enter. The strip is removed, the two sides join, and annotations past it move with the image.
 - **Autoadjust** (Crop, `F`): shrinks the selection (or the whole image) to the content, dropping edges that are one flat color.
 - **Imprint Size** (Crop, `I`): stamps a dashed outline and "W × H px" on the image.
 - **Measure:** hold `1` for the distances across the area under the pointer, or `2` for its bounding box; a quick tap picks the Ruler.
-- **OCR of an area:** with a Crop selection, ⌘O reads only that part. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
-- **Hand-drawn style** for arrows, lines, rectangles and ovals (Clean / Hand-Drawn switch in the options bar).
+- **OCR of an area:** with a Crop or Image Area selection, ⌘O (or Read Text in the Selection group) reads only that part. Image Area Selection also copies, blurs or crops to the area. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
+- **Hand-drawn style** for arrows, lines, rectangles and ovals (Shape Outline › Dashes › Hand-Drawn).
 - **Blinking GIF** (File › Save Blinking GIF, `⇧⌘G`): a looping two-frame GIF that shows the screenshot with and without the annotations.
 - **Capture settings:** hide the menu bar icon (open the app again to get Preferences); mouse pointer Auto (fullscreen only) / Include / Exclude; save Retina screenshots at 1×; window background None / Desktop wallpaper / Color; maximum scrolling capture height; turn `screenshot://` links on or off.
 
 ## Shapes like in PowerPoint
 
-- **Text formatting toolbar** (Word's Font and Paragraph groups, above the canvas): font family (each shown in its own font), size (Word's list, or type any value such as 13.5), Grow / Shrink Font, Bold, Italic, Underline, Align Left / Center / Right, vertical alignment (in shapes), and text direction (90°, 270°, stacked). It follows the text you're typing or the text object you select, shows mixed selections blank like Word, applies at once, undoes step by step, and is saved with the file. Shortcuts while typing: ⌘B ⌘I ⌘U, ⌘L ⌘E ⌘R, ⌘⇧> ⌘⇧<, ⌘] ⌘[. Details: [docs/text-formatting.md](docs/text-formatting.md).
+- **Text formatting** (the ribbon's Font and Paragraph groups): font family (each shown in its own font), size (Word's list, or type any value such as 13.5), Grow / Shrink Font, Bold, Italic, Underline, Strikethrough, Change Case (Sentence case, lowercase, UPPERCASE, Capitalize Each Word, tOGGLE cASE), Font Outline, Align Left / Center / Right / Justify, vertical alignment (in shapes), bullets, numbering, and text direction (90°, 270°, stacked). It follows the text you're typing or the text object you select, shows mixed selections blank like Word, applies at once, undoes step by step, and is saved with the file. Shortcuts while typing: ⌘B ⌘I ⌘U, ⌘L ⌘E ⌘R ⌘J, ⌘⇧> ⌘⇧<, ⌘] ⌘[. Details: [docs/text-formatting.md](docs/text-formatting.md).
 - **Typing:** in a text box, callout or shape, **Return** starts a new line; **Esc** or a click outside finishes. With **Preferences › Advanced › After drawing: Switch back to Select** (on by default), each drawing tool makes one shape and hands back to Select, as in PowerPoint; finishing a text or callout with a click outside or Esc does the same. Counter stays on, for numbering several in a row.
-- **Custom colors** (the eyedropper button in the color palette) open the color panel next to the editor, and apply to the selected object or, while typing, to the bubble or shape (or to the selected letters).
+- **Format painter** (Clipboard › Format): copies a selected object's look (color, outline, fill, dashes, arrow, callout design and text format); the next click applies it to another object.
+- **Custom colors** (More Colors… in the color palette) open the color panel next to the editor, and apply to the selected object or, while typing, to the bubble or shape (or to the selected letters).
 - **Text in shapes:** select a rectangle or oval and press **Return** (or double-click it) to type inside; the text is centered and wraps to the shape. Styling the text leaves the outline's color and width alone. A shape with text or fill can be grabbed from anywhere inside it.
-- **Arrange** (menu bar › Arrange, the Arrange button in the options bar, or right-click an object): Align Left / Center / Right / Top / Middle / Bottom, Distribute Horizontally / Vertically (three or more objects, equal gaps), Bring to Front ⇧⌘F, Bring Forward ⌥⇧⌘F, Send Backward ⌥⇧⌘B, Send to Back ⇧⌘B. One selected object aligns to the screenshot.
+- **Arrange** (menu bar › Arrange, the ribbon's Arrange group, or right-click an object): Align Left / Center / Right / Top / Middle / Bottom, Distribute Horizontally / Vertically (three or more objects, equal gaps), Bring to Front ⇧⌘F, Bring Forward ⌥⇧⌘F, Send Backward ⌥⇧⌘B, Send to Back ⇧⌘B. One selected object aligns to the screenshot.
 - **Smart guides:** when you move, draw or resize a shape, its edges and center snap to the edges and centers of the other objects and of the screenshot, and a pink guide shows what lines up. Hold ⌘ while dragging to place freely; Arrange › Snap to Guides turns it off.
 - **Room for everything:** objects placed past the screenshot's edges (a pasted image, an arrow, a box) grow the picture to include them, so copying and saving keep them. The new area is transparent (white in JPEG) and shows a checkerboard in the editor.
 
 ## Option defaults
 
-New annotations start from **defaults**. The built-in ones include **Professional · Box** for the Callout, red, size 4, the shaped arrow, a solid line, no fill, Blur, Sans, the circle counter, px, an oval lens at 2×. Picking an option affects the current editor only. To make an option the default, **right-click** it (callout design, arrow, line, fill, blur mode, font, counter shape, ruler units, lens shape and zoom) and choose **Set “…” as Default**. Right-clicking the color swatch or the size slider does the same for color and size. A small accent dot marks each control's default, and **Reset to Original Default** restores the built-in one.
+New annotations start from **defaults**. The built-in ones include **Professional · Box** for the Callout, red, size 4, the shaped arrow, a solid line, no fill, Blur, Sans, the circle counter, px, an oval lens at 2×. Picking an option affects the current editor only. To make one the default: each option menu in the ribbon's contextual group (arrow heads, blur mode, counter shape, ruler units, lens shape and zoom…) ends with **Set “…” as Default**; Shape Fill and Shape Outline have **Set as Default Fill** and **Set as Default Outline** (color, weight and dashes); right-click a design in the callout style bar for **Set “…” as Default** and **Reset to Original Default**.
 
 ## Editor shortcuts
 
 `A` arrow · `R` rectangle · `O` oval · `L` line · `D` freehand · `T` text · `H` highlighter · `B` blur · `C` counter · `S` spotlight · `M` magnifier · `1`/`2` ruler (tap) or measure (hold) · `X` crop (Enter applies it) · `⇧X` cut out · `F` autoadjust · `I` imprint size · `V` select · `K` backdrop
-Select (`V`, first button in the tool strip): click to select, Shift-click to add/remove, drag on empty space to select several, ⌘A selects all. Drag to move the selection, ⌥-drag duplicates it, arrow keys nudge (Shift ×10), Delete removes it, ⌘D duplicates, ⌘C/⌘V copy and paste it. A single selected box (rectangle, oval, blur, highlight, spotlight, magnifier, image) gets 8 resize handles, and Shift on a corner keeps proportions (always for images). Arrows, lines and rulers get endpoint handles. Options-bar changes apply to every selected object.
-Callout (`E`, after Text in the tool strip): press on what you want to point at and drag to where the bubble goes, then type. A plain click places the bubble up and to the right. Drag the white tip dot to re-aim the pointer anywhere. Dragging the bubble moves it while the tip stays on its target. Double-click to edit the text, which supports per-letter color, size and font like Text. Designs in the options bar: **Professional · Box** (solid, tapered pointer, shadow), **Professional · Card** (white card with colored border), **Informal · Speech** (rounded bubble with a swooping tail), **Fun · Thought** (cloud with a bubble trail), **Fun · Shout** (comic starburst whose spike reaches the target).
-Blur (`B`): Shottr's four conceal types from the options bar. **Blur** is an averaging mosaic over the area, **Blur Text** applies it only to the text lines Vision finds inside the area, **Erase** fills with the dominant surrounding color, and **Erase Text** fills only the text lines. Regions re-conceal what is under them when moved.
-Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: factor, lensX/lensY, border, connector line); drag the lens to move it, pinch/scroll/`+`/`−` over a selected magnifier to zoom (1.25×–8×), oval or rect shape in the options bar.
+Select (`V`, first button in Shapes): click to select, Shift-click to add/remove, drag on empty space to select several, ⌘A selects all. Drag to move the selection, ⌥-drag duplicates it, arrow keys nudge (Shift ×10), Delete removes it, ⌘D duplicates, ⌘C/⌘V copy and paste it. A single selected box (rectangle, oval, blur, highlight, spotlight, magnifier, image) gets 8 resize handles, and Shift on a corner keeps proportions (always for images). Arrows, lines and rulers get endpoint handles. Ribbon changes apply to every selected object.
+Callout (`E`): press on what you want to point at and drag to where the bubble goes, then type. A plain click places the bubble up and to the right. Drag the white tip dot to re-aim the pointer anywhere. Dragging the bubble moves it while the tip stays on its target. Double-click to edit the text, which supports per-letter color, size and font like Text. Designs in the callout style bar: **Professional · Box** (solid, tapered pointer, shadow), **Professional · Card** (white card with colored border), **Informal · Speech** (rounded bubble with a swooping tail), **Fun · Thought** (cloud with a bubble trail), **Fun · Shout** (comic starburst whose spike reaches the target).
+Blur (`B`): Shottr's four conceal types from the Blur group. **Blur** is an averaging mosaic over the area, **Blur Text** applies it only to the text lines Vision finds inside the area, **Erase** fills with the dominant surrounding color, and **Erase Text** fills only the text lines. Regions re-conceal what is under them when moved.
+Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: factor, lensX/lensY, border, connector line); drag the lens to move it, pinch/scroll/`+`/`−` over a selected magnifier to zoom (1.25×–8×), oval or rect shape in the Magnifier group.
 `Tab` copies the color under the cursor · pinch, ⌘-scroll or ⌘=/⌘−/⌘0 zoom · `Esc` copies and closes (configurable) · `⌘C` copy · `⌘S` save · `⌘⇧S` save as · `⌘P` pin · `⌘Z`/`⌘⇧Z` undo/redo · `⌫` deletes the selected object · arrow keys nudge it · `Shift` constrains angles and squares.
 
 ## Default global shortcuts

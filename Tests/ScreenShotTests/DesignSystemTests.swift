@@ -123,6 +123,30 @@ struct DesignTokenTests {
         }
     }
 
+    /// A see-through tint as it shows on the surface under it.
+    func over(_ top: NSColor, _ bottom: NSColor) -> NSColor {
+        let t = top.usingColorSpace(.sRGB)!, b = bottom.usingColorSpace(.sRGB)!
+        let a = t.alphaComponent
+        return NSColor(srgbRed: t.redComponent * a + b.redComponent * (1 - a), green: t.greenComponent * a + b.greenComponent * (1 - a),
+                       blue: t.blueComponent * a + b.blueComponent * (1 - a), alpha: 1)
+    }
+
+    @Test("text on the soft tints is at least 4.5:1: lit step names, choice pills, messages", arguments: [true, false])
+    func tintedContrast(dark: Bool) {
+        let mode = dark ? "dark" : "light"
+        for surface in [Role.chrome, .panel] {
+            let soft = over(c(.accentSoft, dark), c(surface, dark))
+            for text in [Role.accentText, .ink] {
+                let ratio = DesignTokens.contrast(c(text, dark), soft)
+                #expect(ratio >= 4.5, "\(mode) \(text.rawValue) on accentSoft over \(surface.rawValue): \(ratio)")
+            }
+            for bg in [Role.infoBackground, .successBackground, .warningBackground, .errorBackground] {
+                let ratio = DesignTokens.contrast(c(.ink, dark), over(c(bg, dark), c(surface, dark)))
+                #expect(ratio >= 4.5, "\(mode) ink on \(bg.rawValue) over \(surface.rawValue): \(ratio)")
+            }
+        }
+    }
+
     @Test("labels and icons on the accent are readable") func onAccent() {
         #expect(DesignTokens.contrast(DesignTokens.onAccent, c(.accent, true)) >= 4.5)
         #expect(DesignTokens.contrast(.white, c(.accent, true)) >= 3, "white tool icon on the selected tool")

@@ -5,9 +5,6 @@ extension FlowsSelfTest {
     /// R6's new commands in the new editor, used through the ribbon: Strikethrough, a typed Font Size that keeps the
     /// text open, Change Case, Justify, Bullets, Numbering, Font Outline, Copy Format and Image Area Selection.
     func ribbonR6Flow() async {
-        let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
-        defer { d.removeObject(forKey: "newEditorUI") }
         Settings.returnToSelect = true
         guard let ed = await openEditor(Self.sampleImage(1000, 700)), let r = ed.debugEditorRibbon else { check(false, "the new editor opens"); return }
         let v = ed.shotView, f = r.formatting, store = ed.formatting

@@ -2,16 +2,14 @@ import AppKit
 
 #if SCREENSHOT_SELFTESTS
 extension FlowsSelfTest {
-    /// R8's welcome guide in the new look: three steps with their names in the footer, Continue/Back/Skip and the step
+    /// The welcome guide (R8): three steps with their names in the footer, Continue/Back/Skip and the step
     /// names as navigation, the page remembered for a relaunch, the setup choices written to the settings, and nothing
     /// moving under Reduce Motion.
     func welcomeFlow() async {
         let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
         let wasDone = d.object(forKey: Keys.onboardingDone), wasLook = Settings.appearance
         let after = [Keys.afterShow, Keys.afterCopy, Keys.afterSave].map { ($0, d.bool(forKey: $0)) }
         defer {
-            d.removeObject(forKey: "newEditorUI")
             if let wasDone { d.set(wasDone, forKey: Keys.onboardingDone) } else { d.removeObject(forKey: Keys.onboardingDone) }
             d.set(0, forKey: Keys.onboardingPage)
             for (k, v) in after { d.set(v, forKey: k) }
@@ -24,7 +22,7 @@ extension FlowsSelfTest {
         OnboardingWindowController.show()
         guard let ob = OnboardingWindowController.shared, let win = ob.window else { check(false, "the guide opens"); return }
         await sleep(0.2)
-        check(ob.modern && ob.pageCount == 3 && ob.debugStepTitles == ["Welcome", "Set up", "Ready"], "three steps: Welcome, Set up, Ready")
+        check(ob.pageCount == 3 && ob.debugStepTitles == ["Welcome", "Set up", "Ready"], "three steps: Welcome, Set up, Ready")
         check(win.frame.size.width >= 860 && ob.currentPage is WelcomeStep, "it opens on Welcome in the bigger window")
         check(ob.debugContinueTitle == "Get Started" && !ob.debugBackShown && ob.debugSkipShown, "Welcome: Get Started and Skip, no Back")
         if let w = ob.currentPage as? WelcomeStep {

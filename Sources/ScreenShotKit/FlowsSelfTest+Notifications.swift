@@ -5,18 +5,15 @@ extension FlowsSelfTest {
     /// The new editor's bottom bar: the tool's hint as info, messages in four states (success fades, warnings and errors
     /// stay), actions and dismissing, toasts routed into the bar, the restyled readouts, Backdrop and recent strip.
     func notificationsFlow() async {
-        let d = UserDefaults.standard
-        d.set(true, forKey: "newEditorUI")
-        defer { d.removeObject(forKey: "newEditorUI") }
         guard let ed = await openEditor(Self.sampleImage(900, 600)), let status = ed.debugEditorStatus, let r = ed.debugEditorRibbon else {
             check(false, "the new editor opens with its status bar"); return
         }
         let bar = status.notices, v = ed.shotView
 
         check(status.window === ed.window && abs(status.frame.height - DesignTokens.Metrics.statusBarHeight) < 0.5, "a 44 pt status bar across the window")
-        check(bar.current == nil && bar.shownKind == .info && bar.shownText == StatusBar.hint(for: v.tool, cutOut: false), "the tool's hint shows as info")
+        check(bar.current == nil && bar.shownKind == .info && bar.shownText == EditorStatusBar.hint(for: v.tool, cutOut: false), "the tool's hint shows as info")
         type("u")
-        check(bar.shownText == StatusBar.hint(for: .ruler, cutOut: false), "picking the Ruler changes the hint")
+        check(bar.shownText == EditorStatusBar.hint(for: .ruler, cutOut: false), "picking the Ruler changes the hint")
         check(!bar.debugCloseShown, "a hint has no close button")
 
         // Success: Copy Full Image.
@@ -26,7 +23,7 @@ extension FlowsSelfTest {
         type("m")
         check(bar.shownText == "Copied to the clipboard", "a new hint doesn't push a message away")
         await sleep(3.3)
-        check(bar.current == nil && bar.shownText == StatusBar.hint(for: .magnifier, cutOut: false), "success fades after 3 s and the hint comes back")
+        check(bar.current == nil && bar.shownText == EditorStatusBar.hint(for: .magnifier, cutOut: false), "success fades after 3 s and the hint comes back")
 
         // Warning and error from Toast, which the new editor routes into the bar.
         Toast.show("No text detected in the selected area")
@@ -57,13 +54,7 @@ extension FlowsSelfTest {
         let panel = NSApp.windows.first { !before.contains(ObjectIdentifier($0)) && $0.isVisible }
         check(panel != nil, "Backdrop opens its panel")
         panel?.close()
-        check(ed.debugRecent.modern, "the recent strip uses the new look")
         await closeAllEditors()
-
-        // The old editor keeps Toast's HUD.
-        d.removeObject(forKey: "newEditorUI")
-        guard !Settings.newEditorUI, let old = await openEditor(Self.sampleImage(500, 300)) else { return }
-        check(!old.notify(NotificationBar.Notice(.info, "x")) && old.debugEditorStatus == nil, "the old editor has no notification bar")
     }
 }
 #endif

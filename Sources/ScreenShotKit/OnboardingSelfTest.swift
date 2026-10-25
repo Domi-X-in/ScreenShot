@@ -3,8 +3,8 @@ import ScreenCaptureKit
 
 #if SCREENSHOT_SELFTESTS
 /// Walks through the welcome guide. With SCREENSHOT_SELFTEST_ONBOARDING set, checks the flow (PASS/FAIL lines); with
-/// SCREENSHOT_ONBOARDING_SHOTS=<dir> it also captures the real window on every page (needs Screen Recording), the demo
-/// page at three moments of its animation. The user's guide settings are put back before quitting.
+/// SCREENSHOT_ONBOARDING_SHOTS=<dir> it also captures the real window on every step (needs Screen Recording), Welcome
+/// at three moments of its feature loop. The user's guide settings are put back before quitting.
 @MainActor enum OnboardingSelfTest {
     static func runIfRequested() -> Bool {
         let env = ProcessInfo.processInfo.environment
@@ -34,11 +34,7 @@ import ScreenCaptureKit
                 check(ob.index == i && d.integer(forKey: Keys.onboardingPage) == i, "Continue goes to page \(i + 1) and remembers it")
                 if let shots {
                     // Animated scenes are captured at several moments of their loop.
-                    let moments: [Double] = switch ob.currentPage {
-                    case is DemoPage: [1.2, 2.1, 3.9]
-                    case is MenuBarPage: [1.75, 2.45, 3.3, 5.6, 7.7]
-                    default: [2.2]
-                    }
+                    let moments: [Double] = ob.currentPage is WelcomeStep ? [1.2, 3.9, 6.5] : [1.2]
                     var waited = 0.0
                     for (n, t) in moments.enumerated() {
                         try? await Task.sleep(for: .seconds(t - waited))
@@ -48,25 +44,23 @@ import ScreenCaptureKit
                 } else {
                     try? await Task.sleep(for: .seconds(0.3))
                 }
-                if let look = ob.currentPage as? AppearancePage {
-                    look.debugChoose("light")
-                    check(Settings.appearance == "light" && look.selectedValue == "light" && NSApp.appearance?.name == .aqua,
-                          "picking Light applies it to the app and marks the card")
-                    check(win.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua, "the guide itself stays dark")
-                    look.debugChoose("system")
-                    check(Settings.appearance == "system" && look.selectedValue == "system", "picking System follows macOS again")
-                }
-                if let folder = ob.currentPage as? FolderPage {
-                    check(folder.shownPath == (Settings.saveFolder.path as NSString).abbreviatingWithTildeInPath, "the folder page shows the Screenshots folder")
+                if let setup = ob.currentPage as? SetupStep {
+                    setup.chooseLook("light")
+                    check(Settings.appearance == "light" && setup.looks.first { $0.value == "light" }?.card.isSelected == true && NSApp.appearance?.name == .aqua,
+                          "picking Light applies it to the app and marks the preview")
+                    check(win.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .aqua, "the guide follows the app's look")
+                    setup.chooseLook("system")
+                    check(Settings.appearance == "system", "picking System follows macOS again")
+                    check(setup.shownPath == (Settings.saveFolder.path as NSString).abbreviatingWithTildeInPath, "Set up shows the Screenshots folder")
                 }
             }
-            check(ob.currentPage is DonePage, "the last page is the send-off")
+            check(ob.currentPage is ReadyStep, "the last step is Ready")
             ob.pressContinue()
             check(d.bool(forKey: Keys.onboardingDone) && !win.isVisible, "Finish closes the guide and marks it done")
-            d.set(2, forKey: Keys.onboardingPage)
+            d.set(1, forKey: Keys.onboardingPage)
             d.set(false, forKey: Keys.onboardingDone)
             OnboardingWindowController.show()
-            check(OnboardingWindowController.shared?.index == 2, "reopening resumes on the page it was on (after macOS restarts the app)")
+            check(OnboardingWindowController.shared?.index == 1, "reopening resumes on the step it was on (after macOS restarts the app)")
             OnboardingWindowController.shared?.window?.orderOut(nil)
             restore()
             Settings.applyAppearance()

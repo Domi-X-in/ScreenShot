@@ -508,3 +508,39 @@ final class ClosureMenuItem: NSMenuItem {
     /// The Text group's caption-free summary, for tests.
     var visibleContextualGroup: RibbonGroup? { contextualGroups.first { !$0.isHidden } }
 }
+
+/// Word and PowerPoint's Text Direction menu, mapped onto the editor's text orientations.
+enum TextDirection: String, CaseIterable {
+    case angleCounterclockwise, angleClockwise, vertical, rotateUp, rotateDown, horizontal
+
+    var title: String {
+        switch self {
+        case .angleCounterclockwise: "Angle Counterclockwise"
+        case .angleClockwise: "Angle Clockwise"
+        case .vertical: "Vertical Text"
+        case .rotateUp: "Rotate Text Up"
+        case .rotateDown: "Rotate Text Down"
+        case .horizontal: "Horizontal"
+        }
+    }
+
+    /// The orientation it sets; nil for the angled options, which have no orientation yet.
+    var orientation: TextOrientation? {
+        switch self {
+        case .angleCounterclockwise, .angleClockwise: nil
+        case .vertical: .stacked
+        case .rotateUp: .rotate270
+        case .rotateDown: .rotate90
+        case .horizontal: .horizontal
+        }
+    }
+
+    init(_ o: TextOrientation?) {
+        switch o {
+        case .stacked: self = .vertical
+        case .rotate270: self = .rotateUp
+        case .rotate90: self = .rotateDown
+        default: self = .horizontal
+        }
+    }
+}

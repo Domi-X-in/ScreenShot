@@ -1,14 +1,10 @@
 import AppKit
 import UniformTypeIdentifiers
 
-/// Screenshot editor window, laid out after Shottr's Main.storyboard window (MainWindowController + ViewController):
-/// a unified toolbar with actions, drag-out, tool strip, Crop, adjust buttons and info cells, plus a per-tool options bar.
+/// Screenshot editor window (ROADMAP, Fase 6): floating cards for the title bar (Copy, Save, Pin, Drag, Undo/Redo), the
+/// Office-style ribbon, the canvas with the callout style bar beside it, the notification and readout bar, and the
+/// recent captures.
 @MainActor final class EditorWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
-    /// Tool palette, in groups: select · draw · text · shapes · effects · counting/measuring.
-    static let tools: [Tool] = [.select, .arrow, .line, .freehand, .text, .callout, .rect, .oval, .highlighter,
-                                .blur, .spotlight, .magnifier, .counter, .ruler]
-    static let toolGroups = [1, 3, 2, 3, 3, 2]
-
     /// The document on screen; thumbnails swap it in place.
     var doc: EditorDocument { shotView.doc }
     let shotView: ShotView
@@ -16,48 +12,21 @@ import UniformTypeIdentifiers
     private var visited: [URL: EditorDocument] = [:]
     private var autosaveTimer: Timer?
     private let saveQueue = DispatchQueue(label: "screenshot.autosave")
-    private lazy var toolPalette = IconPalette(
-        items: Self.tools.map { .init(symbol: $0.symbol, tooltip: "\($0.title)  \($0.key == "1" ? "1 or 2" : $0.key)") },
-        groups: Self.toolGroups, mode: .select, itemWidth: 29)
-    // Shottr: Copy (Esc or ⌘C) · Save (⌘S) · Pin to Screen (⌘P)
-    private let actionsPalette = IconPalette(items: [
-        .init(symbol: "doc.on.doc", tooltip: "Copy (Esc or ⌘C)"), .init(symbol: "square.and.arrow.down", tooltip: "Save (⌘S)"),
-        .init(symbol: "pin", tooltip: "Pin to Screen (⌘P)"),
-    ], mode: .momentary)
-    // Shottr's adjust group, limited to what this app implements: Resize, Recognize Text or QR, Reset Selection.
-    private let adjustPalette = IconPalette(items: [
-        .init(symbol: "arrow.up.left.and.down.right.magnifyingglass", tooltip: "Resize ( ⇧+] )"),
-        .init(symbol: "text.viewfinder", tooltip: "Recognize Text or QR (⌘O) · only the selected area when using Crop"), .init(symbol: "arrow.uturn.backward", tooltip: "Reset Selection (Esc)"),
-    ], mode: .momentary)
-    private lazy var cropButton = PillButton(title: "Crop", symbol: "crop", tooltip: "Crop (X) — Enter applies it") { [weak self] in self?.cropClicked() }
     private let info = InfoCellsView()
-    private lazy var statusBar = StatusBar(info: info)
-    private let options = ToolOptions()
-    private lazy var recent = RecentStrip(modern: editorRibbon != nil)
-    /// The new editor's bottom bar: messages, readouts and Backdrop.
+    private let recent = RecentStrip()
+    /// The bottom bar: messages, readouts and Backdrop.
     private lazy var editorStatus = EditorStatusBar(info: info)
-    /// The new editor's floating cards (R5b) and the callout style bar beside the canvas.
+    /// The floating cards (R5b) and the callout style bar beside the canvas.
     private var cards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)?
     private lazy var calloutBar = CalloutStyleBar()
     private var canvasNextToBar: NSLayoutConstraint?
     private var canvasAtEdge: NSLayoutConstraint?
     /// The zoom the picture had when the callout bar came in fitted, so it can fit again when the bar leaves.
     private var calloutBarHeldZoom: CGFloat?
-    /// The formatting store and the top toolbar (Word's Font and Paragraph, PowerPoint's Shape Styles, Arrange, Align).
+    /// The formatting store the ribbon's Font, Paragraph, Color and Arrange groups read and write.
     let formatting = FormattingController()
-    private lazy var ribbon = FormattingRibbon(controller: formatting)
-    private lazy var topBar = EditorToolbar(ribbon: ribbon, options: options)
-    /// The Office-style ribbon and trimmed title bar (ROADMAP, Fase 6), only with `Settings.newEditorUI` for now.
-    private(set) var editorRibbon: EditorRibbon?
-
-    private enum Item {
-        static let actions = NSToolbarItem.Identifier("actions")
-        static let dragOut = NSToolbarItem.Identifier("dragOut")
-        static let tools = NSToolbarItem.Identifier("tools")
-        static let crop = NSToolbarItem.Identifier("crop")
-        static let adjust = NSToolbarItem.Identifier("adjust")
-        static let info = NSToolbarItem.Identifier("info")
-    }
+    /// The Office-style ribbon and the title card's actions (ROADMAP, Fase 6).
+    private(set) var editorRibbon: EditorRibbon!
 
     init(image: CGImage, scale: CGFloat, state: EditState? = nil, url: URL? = nil) {
         shotView = ShotView(doc: Self.makeDocument(image: image, scale: scale, state: state, url: url))
@@ -72,13 +41,11 @@ import UniformTypeIdentifiers
         super.init(window: win)
         win.delegate = self
         shotView.controller = self
-        if Settings.newEditorUI {
-            editorRibbon = EditorRibbon(editor: self)
-            // The cards draw the title bar: the system's is see-through, and its empty toolbar only sets its height so
-            // the window's buttons center on the title card.
-            win.titlebarAppearsTransparent = true
-            win.titlebarSeparatorStyle = .none
-        }
+        editorRibbon = EditorRibbon(editor: self)
+        // The cards draw the title bar: the system's is see-through, and its empty toolbar only sets its height so
+        // the window's buttons center on the title card.
+        win.titlebarAppearsTransparent = true
+        win.titlebarSeparatorStyle = .none
         buildControls()
         buildLayout()
         let toolbar = NSToolbar(identifier: "editor")
@@ -96,33 +63,20 @@ import UniformTypeIdentifiers
     // MARK: Controls
 
     private func buildControls() {
-        toolPalette.onSelect = { [weak self] i in self?.toolChanged(i) }
-        actionsPalette.onSelect = { [weak self] i in self?.actionClicked(i) }
-        adjustPalette.onSelect = { [weak self] i in self?.adjustClicked(i) }
-
         info.onColorBox = { [weak self] in self?.showColorPanel(from: $0) }
         info.onSizeBox = { [weak self] in self?.showResizePanel(from: $0) }
         info.onZoomBox = { [weak self] in self?.showZoomPanel(from: $0) }
 
-        options.onChange = { [weak self] style in self?.shotView.setStyle(style) }
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { LibraryWindowController.show() }
-        statusBar.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
-        if editorRibbon != nil { editorStatus.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) } }
-        options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
-        options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
-        if editorRibbon == nil { topBar.shotView = shotView }
-        options.onCutOutMode = { [weak self] on in
-            self?.shotView.cutOutMode = on
-            self?.window?.makeFirstResponder(self?.shotView)
-        }
+        editorStatus.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
     }
 
-    /// The new editor (R5b): floating cards on the window's background, 10 pt from the edges and from each other.
+    /// Floating cards (R5b) on the window's background, 10 pt from the edges and from each other.
     /// Title card (with the window's buttons), ribbon, then the callout style bar and the canvas side by side, the
     /// status bar and the recent strip.
-    private func buildCardLayout(_ r: EditorRibbon) {
-        guard let win = window else { return }
+    private func buildLayout() {
+        guard let win = window, let r = editorRibbon else { return }
         let content = CanvasBackground()
         win.contentView = content
         let m = DesignTokens.Metrics.self
@@ -206,117 +160,21 @@ import UniformTypeIdentifiers
         }
     }
 
-    private func buildLayout() {
-        guard let win = window else { return }
-        if let r = editorRibbon { buildCardLayout(r); return }
-        let content = NSView()
-        win.contentView = content
-        // The canvas paints its dot background over whatever it is asked to redraw; keep that inside it, and keep the
-        // toolbar above it (views don't clip to their bounds by default since macOS 14).
-        shotView.clipsToBounds = true
-        // The new editor has no floating formatting card: Font, Paragraph, Color and Arrange are in the ribbon.
-        let floating: [NSView] = editorRibbon == nil ? [shotView, topBar, statusBar, recent] : [shotView, editorStatus, recent]
-        for v in floating {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            content.addSubview(v)
-        }
-        shotView.topInset = editorRibbon == nil ? 10 + EditorToolbar.height : 10
-        // With the new editor the ribbon runs full width under the title bar, and the canvas starts below it.
-        var top = content.safeAreaLayoutGuide.topAnchor
-        if let ribbonView = editorRibbon?.view {
-            ribbonView.translatesAutoresizingMaskIntoConstraints = false
-            content.addSubview(ribbonView)
-            NSLayoutConstraint.activate([
-                ribbonView.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
-                ribbonView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-                ribbonView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-                ribbonView.heightAnchor.constraint(equalToConstant: DesignTokens.Metrics.ribbonHeight),
-            ])
-            top = ribbonView.bottomAnchor
-        }
-        if editorRibbon == nil {
-            NSLayoutConstraint.activate([
-                // Both cards float over the canvas: the toolbar at the top, hugging its content, the status bar at the bottom.
-                topBar.topAnchor.constraint(equalTo: top, constant: 8),
-                topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
-                topBar.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
-                topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
-            ])
-        }
-        if editorRibbon == nil {
-            NSLayoutConstraint.activate([
-                shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
-                statusBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
-                statusBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
-                statusBar.bottomAnchor.constraint(equalTo: recent.topAnchor, constant: -10),
-                statusBar.heightAnchor.constraint(equalToConstant: ToolbarShell.barHeight),
-            ])
-        } else {
-            // The new status bar is a full-width band between the canvas and the recent strip, not a floating card.
-            NSLayoutConstraint.activate([
-                shotView.bottomAnchor.constraint(equalTo: editorStatus.topAnchor),
-                editorStatus.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-                editorStatus.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-                editorStatus.bottomAnchor.constraint(equalTo: recent.topAnchor),
-                editorStatus.heightAnchor.constraint(equalToConstant: DesignTokens.Metrics.statusBarHeight),
-            ])
-        }
-        NSLayoutConstraint.activate([
-            shotView.topAnchor.constraint(equalTo: top),
-            shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            recent.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            recent.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            recent.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            recent.heightAnchor.constraint(equalToConstant: 84),
-        ])
-        win.initialFirstResponder = shotView
-    }
-
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        // The new editor's toolbar stays empty: it only gives the title bar the height the title card is centered on.
-        if editorRibbon != nil { return [] }
-        return [Item.actions, Item.dragOut, .flexibleSpace, Item.tools, Item.crop, Item.adjust, .flexibleSpace]
+        // The toolbar stays empty: it only gives the title bar the height the title card is centered on.
+        []
     }
 
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        let item = NSToolbarItem(itemIdentifier: id)
-        switch id {
-        case Item.actions: item.view = actionsPalette; item.label = "Actions"
-        case Item.dragOut:
-            let drag = DragOutView { [weak self] in self?.rendered().map { ($0, self?.doc.scale ?? 2) } }
-            item.view = drag
-            item.label = "Drag"
-        case Item.tools: item.view = toolPalette; item.label = "Tools"
-        case Item.crop: item.view = cropButton; item.label = "Crop"
-        case Item.adjust: item.view = adjustPalette; item.label = "Adjust"
-        case Item.info: item.view = info; item.label = "Info"
-        default: return nil
-        }
-        // When the window is narrow, the adjust buttons overflow first and the info cells stay.
-        switch id {
-        // The tool strip never overflows; on narrow windows the info cells go before Crop and the actions.
-        case Item.tools: item.visibilityPriority = .user
-        case Item.actions, Item.crop: item.visibilityPriority = .high
-        case Item.adjust, Item.dragOut: item.visibilityPriority = .low
-        default: break
-        }
-        return item
-    }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [] }
 
     private func sizeWindow() {
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
         // The new editor's cards: title 6+40, ribbon, canvas, status, strip, with 10 pt gaps and margins.
-        let chrome: CGFloat = editorRibbon == nil ? 52 + 18 + 68 + 84 + EditorToolbar.height
-            : 6 + 40 + 10 + DesignTokens.Metrics.ribbonHeight + 10 + 10 + DesignTokens.Metrics.statusBarHeight + 10 + 84 + 10 + 32
+        let chrome: CGFloat = 6 + 40 + 10 + DesignTokens.Metrics.ribbonHeight + 10 + 10 + DesignTokens.Metrics.statusBarHeight + 10 + 84 + 10 + 32
         var w = max(1380, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
@@ -329,16 +187,8 @@ import UniformTypeIdentifiers
     // MARK: State sync
 
     func syncToolbar() {
-        toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
-        cropButton.isOn = shotView.tool == .crop
-        options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, cutOut: shotView.cutOutMode)
-        if editorRibbon == nil {
-            statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
-        } else {
-            editorStatus.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
-                                area: shotView.selectingArea)
-        }
-        if editorRibbon == nil { topBar.update() }
+        editorStatus.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode,
+                            area: shotView.selectingArea)
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
                              canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
         updateCalloutBar()
@@ -418,12 +268,9 @@ import UniformTypeIdentifiers
         present(panel, from: anchor)
     }
 
-    /// Shows a message in the new editor's notification bar. Returns false for the old editor (which uses Toast's HUD).
-    @discardableResult
-    func notify(_ notice: NotificationBar.Notice) -> Bool {
-        guard editorRibbon != nil else { return false }
+    /// Shows a message in the notification bar.
+    func notify(_ notice: NotificationBar.Notice) {
         editorStatus.notices.show(notice)
-        return true
     }
 
     func toggleSizeUnits() {
@@ -457,31 +304,8 @@ import UniformTypeIdentifiers
         window?.makeFirstResponder(shotView)
     }
 
-    private func toolChanged(_ i: Int) {
-        guard i >= 0, i < Self.tools.count else { return }
-        shotView.tool = Self.tools[i]
-        window?.makeFirstResponder(shotView)
-    }
-
-    private func actionClicked(_ i: Int) {
-        switch i {
-        case 0: copyImage()
-        case 1: saveImage()
-        default: pinImage()
-        }
-    }
-
     private func cropClicked() {
         if shotView.tool == .crop { shotView.applyCropIfAny() } else { shotView.beginCrop() }
-        window?.makeFirstResponder(shotView)
-    }
-
-    private func adjustClicked(_ i: Int) {
-        switch i {
-        case 0: showResizePanel()
-        case 1: ocrImage()
-        default: shotView.resetSelection()
-        }
         window?.makeFirstResponder(shotView)
     }
 
@@ -590,23 +414,16 @@ import UniformTypeIdentifiers
 
     /// Whether keyboard focus is in the formatting toolbar (its size box), so text being typed stays open.
     func isFormattingControl(_ responder: NSResponder) -> Bool {
-        if let r = editorRibbon { return r.view.owns(responder) }
-        return topBar.owns(responder)
+        editorRibbon?.view.owns(responder) ?? false
     }
 
     #if SCREENSHOT_SELFTESTS
-    var debugRibbon: FormattingRibbon { ribbon }
-    var debugOptions: ToolOptions { options }
-    var debugTopBar: EditorToolbar { topBar }
-    var debugStatusBar: StatusBar { statusBar }
     var debugEditorRibbon: EditorRibbon? { editorRibbon }
-    var debugEditorStatus: EditorStatusBar? { editorRibbon == nil ? nil : editorStatus }
+    var debugEditorStatus: EditorStatusBar? { editorStatus }
     var debugCards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)? { cards }
-    var debugCalloutBar: CalloutStyleBar? { cards == nil ? nil : calloutBar }
-    /// Whether the old floating formatting bar is in the window.
-    var debugTopBarShown: Bool { editorRibbon == nil }
-    /// Shape Fill's palette: the ribbon's in the new editor, the formatting bar's otherwise.
-    var debugFillControl: ColorSplitButton { editorRibbon?.formatting.fillPalette ?? topBar.fill }
+    var debugCalloutBar: CalloutStyleBar? { calloutBar }
+    /// Shape Fill's palette in the ribbon.
+    var debugFillControl: ColorSplitButton { editorRibbon.formatting.fillPalette }
     #endif
 
     /// Shottr's "Default zoom level: Prefer 100%"; otherwise the image fits the window.
@@ -616,7 +433,7 @@ import UniformTypeIdentifiers
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        if editorRibbon != nil { syncToolbar() } // Paste follows what the clipboard holds now
+        syncToolbar() // Paste follows what the clipboard holds now
         recent.currentURL = doc.fileURL
         recent.reload()
     }
@@ -798,6 +615,7 @@ final class InfoCellsView: NSView {
             sizeValue.widthAnchor.constraint(greaterThanOrEqualToConstant: 70),
             zoomValue.widthAnchor.constraint(greaterThanOrEqualToConstant: 38),
         ])
+        applyStyle()
         setColor(nil)
     }
 
@@ -819,8 +637,8 @@ final class InfoCellsView: NSView {
         return v
     }
 
-    /// The new editor's look: the design tokens' readout and caption type and colors, hairline dividers.
-    func applyModernStyle() {
+    /// The design tokens' readout and caption type and colors, hairline dividers.
+    private func applyStyle() {
         for l in [colorValue, sizeValue, zoomValue] {
             l.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
             l.textColor = DesignTokens.color(.ink)
@@ -922,67 +740,6 @@ final class DragOutView: NSView, NSDraggingSource {
     }
 }
 
-// MARK: - Status bar
-
-/// The bottom bar: a hint for the tool in hand, Shottr's info cells (color under the pointer · Tab copies it, image
-/// size, zoom) and the Backdrop button. Shape and text controls live in the top toolbar.
-final class StatusBar: ToolbarShell {
-    var onBackdropPanel: ((NSView) -> Void)?
-    private var backdropButton: PillButton!
-    private let hint = ToolbarShell.label("", size: 11, weight: .regular)
-
-    init(info: NSView) {
-        super.init(frame: .zero)
-        backdropButton = PillButton(title: "Backdrop", symbol: "rectangle.inset.filled",
-                                    tooltip: "Backdrop: background, aspect ratio, padding, shadow (K toggles)") { [weak self] in
-            guard let self else { return }
-            self.onBackdropPanel?(self.backdropButton)
-        }
-        // The hint gives way first on narrow windows.
-        hint.setContentCompressionResistancePriority(.init(1), for: .horizontal)
-        hint.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        // Shottr's info cells (color · size · zoom) sit here, always visible even on narrow screens.
-        info.setContentCompressionResistancePriority(.required, for: .horizontal)
-        info.setContentHuggingPriority(.required, for: .horizontal)
-        backdropButton.setContentHuggingPriority(.required, for: .horizontal)
-        let row = NSStackView(views: [hint, Self.divider(), info, backdropButton])
-        row.spacing = Self.spacing
-        row.distribution = .fill
-        row.alignment = .centerY
-        embed(row)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(tool: Tool, backdrop: Backdrop, cutOut: Bool) {
-        backdropButton.isOn = backdrop.isOn
-        hint.stringValue = Self.hint(for: tool, cutOut: cutOut)
-        hint.toolTip = hint.stringValue
-    }
-
-    /// A tip for the tool in hand.
-    static func hint(for tool: Tool, cutOut: Bool, area: Bool = false) -> String {
-        if tool == .crop && area { return "Drag over an area · ⌘C or Enter copies it · Esc clears the selection" }
-        return switch tool {
-        case .counter: "Type digits to renumber · drag the bubble tip to point it"
-        case .crop where cutOut: "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
-        case .crop: "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
-        case .ruler: "Drag to measure · Shift snaps to 45° · hold 1 or 2 anywhere to measure what's under the pointer"
-        case .select: "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
-        case .text: "Click to type · double-click text to edit"
-        case .spotlight: "Everything outside the spotlights gets dimmed"
-        case .callout: "Press on the target, drag to place the bubble, type · drag the tip to re-aim"
-        case .image: "Drag to move · pinch or scroll over it to resize"
-        case .magnifier: "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
-        default: "Shift constrains · Tab copies the color under the cursor"
-        }
-    }
-
-    #if SCREENSHOT_SELFTESTS
-    var debugHint: String { hint.stringValue }
-    #endif
-}
-
 /// One auto-save: a snapshot taken on the main thread, encoded and written on the save queue.
 /// Nothing in it is mutated after creation, and the document is only touched back on the main thread.
 private final class AutosaveJob: @unchecked Sendable {
@@ -1014,7 +771,7 @@ private final class AutosaveJob: @unchecked Sendable {
     }
 }
 
-/// Field editor for annotation text. The options bar owns colors: the color panel's changeColor: is ignored here, and
+/// Field editor for annotation text. The ribbon owns colors: the color panel's changeColor: is ignored here, and
 /// the text never pushes its letters' color into the panel (the panel would announce it as a pick, and the bubble or
 /// shape would take it, e.g. black after deleting all the text).
 final class AnnotationFieldEditor: NSTextView {
