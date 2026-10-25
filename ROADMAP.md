@@ -142,12 +142,25 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Lecturas de color, tamaño y zoom con la tipografía y colores del diseño (misma función y paneles); Fondo como botón con borde (acento suave cuando está activo); tira de recientes con el anillo #FF5500 en la captura actual, hover neutro e icono de Biblioteca nuevo.
   - [x] Capturas: `docs/screenshots/r5-editor-dark.png` y `r5-editor-light.png`.
   - [x] Verificado: 103 tests unitarios; flujo nuevo `notifications` (19 comprobaciones: ayuda, éxito que se desvanece, aviso que se queda, cerrar, error, acción, desvío de Toast sin HUD, Fondo, lecturas, tira); `panels` encuentra Fondo en los dos editores. FLOWS 366/0 y FLOWS-NEWUI 261/0.
+- [ ] **R5b · Editor en tarjetas flotantes** (cambio de diseño del 25-oct-2026, sobre lo hecho en R3–R5; con `newEditorUI`). El diseño pasó de franjas a todo el ancho a tarjetas separadas:
+  - [ ] Tokens: `Metrics.cardInset` y `cardGap` (10 pt), radio de tarjeta 12 pt (el mismo en todas las esquinas, también la cinta), borde fino `line` y sombra de tarjeta (0 6 18, 25 % en oscuro; más suave en claro). Una vista `CardView` reutilizable (fondo `chrome`, borde, radio, sombra, recorte opcional).
+  - [ ] Ventana: fondo `canvas` con 10 pt de margen y 10 pt entre tarjetas. Orden de arriba abajo: barra de título, cinta, fila central (barra lateral + lienzo), barra inferior, tira de recientes.
+  - [ ] Barra de título como tarjeta: los semáforos de la ventana dentro de la tarjeta (barra de título transparente, sin `NSToolbar`, los botones estándar de la ventana recolocados) y las acciones (Copiar imagen, Guardar, Fijar, Arrastrar, Deshacer/Rehacer). Riesgo: macOS coloca los semáforos; hay que comprobar pantalla completa, ventana estrecha y el arrastre de la ventana desde la tarjeta.
+  - [ ] Cinta como tarjeta (radio 12, borde, sombra); los paneles desplegables siguen saliendo por debajo.
+  - [ ] Lienzo como tarjeta con las esquinas recortadas a 12 pt (la imagen, la cuadrícula de puntos y el zoom quedan dentro).
+  - [ ] Barra lateral de estilos de globo: tarjeta vertical de 44 pt a la izquierda del lienzo con botones de 32 pt (Speech, Box, Thought, Shout en el diseño). Sustituye a "Diseño" del grupo contextual Texto de R4, que se quita de ahí.
+  - [ ] Barra inferior (notificaciones, lecturas, Fondo) y tira de recientes como tarjetas.
+  - [ ] Pruebas: medidas y separación de tarjetas en `ribbon-editor` y `notifications` (hoy comprueban que el lienzo empieza justo bajo la cinta); barra lateral con clics reales (elegir estilo, estilo seleccionado, se aplica al globo seleccionado y al siguiente); semáforos funcionales; `FLOWS-NEWUI` en verde; capturas claro/oscuro, ancho y estrecho.
+  - [ ] Pendiente de decidir antes de empezar:
+    1. **Cuándo se ve la barra lateral.** En el diseño aparece aunque la herramienta activa es la Flecha. Opción recomendada: solo con la herramienta Globo o con un globo seleccionado (el lienzo gana 54 pt el resto del tiempo). Alternativa: siempre visible, como en el diseño.
+    2. **Color del estilo seleccionado.** El diseño lo marca en azul (#5B8DEF); la regla del sistema reserva #FF5500 para "lo que está activo". Recomendado: el acento suave naranja, como el resto de la cinta.
+    3. **Estilo "Card".** La app tiene 5 diseños de globo (Box, Card, Speech, Thought, Shout) y el diseño muestra 4. Recomendado: mostrar los 5.
 - [ ] **R6 · Funciones nuevas del diseño** (PR pequeños): tachado, justificado, viñetas, numeración, cambiar mayúsculas/minúsculas, contorno de fuente, copiar formato, cortar/copiar/pegar objetos, OCR/QR y selección de área de imagen como herramientas del editor.
-- [ ] **R7 · Puntos de entrada**: nuevo icono de la barra de menús, menú de estado con iconos, ventana de inicio con barra tipo cinta y agrupación por día.
+- [ ] **R7 · Puntos de entrada**: nuevo icono de la barra de menús, menú de estado con iconos, ventana de inicio con barra tipo cinta y agrupación por día, en tarjetas como el editor (R5b).
 - [ ] **R8 · Guía de bienvenida de 3 pasos**: Bienvenida con bucle animado, Configuración (permiso, carpeta, tema), Listo (atajos y primera captura); se mantiene la reanudación tras reiniciar y "Reducir movimiento".
 - [ ] **R9 · Cierre**: quitar `newEditorUI` y el código viejo, revisar tema claro y accesibilidad, actualizar `docs/screenshots`, README y esta hoja de ruta, versión de prueba con `release.sh`.
 
-Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2.
+Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 
 ---
 
