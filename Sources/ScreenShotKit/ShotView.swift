@@ -164,7 +164,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     /// instead of re-fitting it, so nothing jumps and text being typed keeps its size. `restoreFit` returns to fitting
     /// the canvas (when the bar leaves and the zoom is still the one it held). Text being edited stays open.
     func keepPictureStill(restoreFit: Bool = false, _ change: () -> Void) {
-        guard let window else { change(); return }
+        // Before the window is on screen and laid out there is no picture to hold (the fit of an empty canvas is 2%).
+        guard let window, window.isVisible, bounds.width > 100, bounds.height > 100 else { change(); return }
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let anchorInWindow = convert(center, to: nil)
         let imagePoint = toImage(center)
@@ -207,6 +208,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         let at = convert(event.locationInWindow, from: nil)
         if resizeSelectedImage(by: 1 + event.magnification, at: at) { return }
         if changeMagnifierFactor(by: 1 + event.magnification, at: at) { return }
+        if changeCounterSize(by: 1 + event.magnification, at: at) { return }
         setZoom(zoom * (1 + event.magnification), around: at)
     }
 
@@ -220,6 +222,9 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             return
         } else if changeMagnifierFactor(by: 1 + (event.hasPreciseScrollingDeltas ? event.scrollingDeltaY * 0.01 : event.scrollingDeltaY * 0.1),
                                         at: convert(event.locationInWindow, from: nil)) {
+            return
+        } else if changeCounterSize(by: 1 + (event.hasPreciseScrollingDeltas ? event.scrollingDeltaY * 0.01 : event.scrollingDeltaY * 0.1),
+                                    at: convert(event.locationInWindow, from: nil)) {
             return
         } else if zoomOverride != nil {
             pan.x += event.scrollingDeltaX
@@ -1264,6 +1269,27 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     // MARK: Counters
 
+    /// Pinch or scroll over a selected counter: it grows or shrinks (its size is its width, 1–20; S M L XL in the side bar).
+    private func changeCounterSize(by multiplier: CGFloat, at viewPoint: CGPoint?) -> Bool {
+        guard let i = selectedCounterIndex else { return false }
+        if let vp = viewPoint, !doc.objects[i].hit(toImage(vp)) { return false }
+        let w = min(20, max(1, doc.objects[i].width * multiplier))
+        guard abs(w - doc.objects[i].width) > 0.001 else { return true }
+        if Date().timeIntervalSince(lastFactorEdit) > 0.8 { pushUndo() }
+        lastFactorEdit = Date()
+        doc.objects[i].width = (w * 100).rounded() / 100
+        style.width = doc.objects[i].width
+        controller?.syncToolbar()
+        markChanged()
+        needsDisplay = true
+        return true
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    /// What a pinch or scroll over the selected counter does.
+    func debugResizeCounter(by multiplier: CGFloat) -> Bool { changeCounterSize(by: multiplier, at: nil) }
+    #endif
+
     private var selectedCounterIndex: Int? {
         guard let id = selectedID, let i = doc.objects.firstIndex(where: { $0.id == id }), doc.objects[i].kind == .counter else { return nil }
         return i
@@ -1702,6 +1728,11 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         if let editor = tf.currentEditor() as? NSTextView {
             var attrs: [NSAttributedString.Key: Any] = [.font: o.font.font(size: fontSize * zoom), .foregroundColor: o.baseTextColor]
+            // A new text or callout starts in the format picked before typing, or in the default family.
+            if o.text.isEmpty, (o.kind == .text || o.kind == .callout), let next = nextTextAttributes(zoom: zoom) {
+                attrs.merge(next) { $1 }
+                if let f = next[.font] as? NSFont { tf.font = f }
+            }
             if o.holdsTextInShape {
                 let para = NSMutableParagraphStyle()
                 para.alignment = .center
@@ -1845,7 +1876,67 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
             return SelectedTextTarget(view: self, id: id)
         }
         let texts = doc.objects.filter { selection.contains($0.id) && ShapeKinds.holdsText($0) }.map(\.id)
-        return texts.isEmpty ? nil : MultiSelectedTextTarget(view: self, ids: texts)
+        if !texts.isEmpty { return MultiSelectedTextTarget(view: self, ids: texts) }
+        if textField == nil, selection.isEmpty, tool == .text || tool == .callout { return NextTextTarget(view: self) }
+        return nil
+    }
+
+    // MARK: The next text's format
+
+    /// What the next text starts with, set from the Font and Paragraph groups before typing (in image pixels).
+    private(set) var nextTextTyping: [NSAttributedString.Key: Any]?
+
+    /// The next text's format before anything was picked: the default family (or the built-in face) at the size of
+    /// the style.
+    private var nextTextBase: [NSAttributedString.Key: Any] {
+        let size = max(12, style.width * 6)
+        let font = style.family.map { TextFormatting.font(family: $0, size: size, bold: false, italic: false) } ?? style.font.font(size: size)
+        return [.font: font, .foregroundColor: style.color]
+    }
+
+    var nextTextFormatState: TextFormatState {
+        var s = TextFormatting.state(of: NSAttributedString(), selection: NSRange(location: 0, length: 0), typing: nextTextTyping ?? nextTextBase,
+                                     scale: 1, defaultAlign: .left)
+        s.supportsVerticalAlign = false
+        s.supportsOrientation = false
+        return s
+    }
+
+    func applyNextTextFormat(_ change: FormatChange) {
+        guard !change.rewritesText, !change.isContainer else { NSSound.beep(); return }
+        if case let .color(c) = change {
+            // The font color of new texts is the style's color, as the Font Color button sets it with nothing typed.
+            var s = style
+            s.color = c
+            setStyle(s)
+            return
+        }
+        var typing = nextTextTyping ?? nextTextBase
+        TextFormatting.apply(change, to: NSMutableAttributedString(), selection: NSRange(location: 0, length: 0), typing: &typing,
+                             scale: 1, defaultAlign: .left)
+        nextTextTyping = typing
+        controller?.syncToolbar()
+    }
+
+    /// Font › Set as Default: new texts start in this family, in every editor.
+    func setDefaultFamily(_ family: String) {
+        ToolStyle.updateDefaults { $0.family = family }
+        style.family = family
+        if var t = nextTextTyping, let f = t[.font] as? NSFont {
+            let traits = NSFontManager.shared.traits(of: f)
+            t[.font] = TextFormatting.font(family: family, size: f.pointSize, bold: traits.contains(.boldFontMask), italic: traits.contains(.italicFontMask))
+            nextTextTyping = t
+        }
+        controller?.syncToolbar()
+    }
+
+    /// The next text's letter format at the screen's zoom, without its color (a callout's text keeps its own).
+    private func nextTextAttributes(zoom z: CGFloat) -> [NSAttributedString.Key: Any]? {
+        guard nextTextTyping != nil || style.family != nil else { return nil }
+        var a = nextTextTyping ?? nextTextBase
+        a[.foregroundColor] = nil
+        if let f = a[.font] as? NSFont { a[.font] = NSFont(descriptor: f.fontDescriptor, size: f.pointSize * z) ?? f }
+        return a
     }
 
     /// The field editor of the text being typed, focused again with its selection if a toolbar control took the focus.

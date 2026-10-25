@@ -1,7 +1,7 @@
 import AppKit
 
 /// The editor's ribbon (ROADMAP, Fase 6): Clipboard, Font, Paragraph, Color, Shapes,
-/// Tools and Arrange, then a contextual group for the tool in hand, all wired to the editor's commands; plus the title
+/// Tools and Arrange, all wired to the editor's commands (each tool's own options are in the side bar); plus the title
 /// bar's commands (Copy image, Save, Pin, Undo, Redo).
 @MainActor final class EditorRibbon {
     let view: RibbonView
@@ -82,7 +82,7 @@ import AppKit
                 .rows([Array(e.prefix(4)), Array(e.suffix(2)) + [.item(ocr), .item(areaSelect)]]),
             ]),
             formatting.arrangeGroup,
-        ] + formatting.contextualGroups
+        ]
         view = RibbonView(groups: groups)
     }
 

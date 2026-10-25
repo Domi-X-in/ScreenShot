@@ -32,6 +32,10 @@ import AppKit
     var showsShortcut = false
     /// A field you can type in (Font Size): a click on its text opens an editor, Return sends what was typed here.
     var onTextEntry: ((String) -> Void)?
+    /// A short text drawn in place of an icon on a small button ("2×", "px", "M"): choices that read better as text.
+    var glyph: String?
+    /// The right-click menu (the side bar's "Set as Default"); nil for none.
+    var contextMenu: (() -> NSMenu?)?
 
     var isEnabled = true { didSet { if isEnabled != oldValue { changed() } } }
     /// A toggle that is on (Bold) or a choice that is current.

@@ -106,17 +106,20 @@ extension FlowsSelfTest {
 
 #if SCREENSHOT_SELFTESTS
 extension FlowsSelfTest {
-    /// The callout style bar beside the canvas: only with callouts, the five designs, the current one lit, a click
-    /// restyling the selected callout and the next one; the canvas takes the room back when it hides.
+    /// The side bar beside the canvas with callouts: the five designs, the current one lit, a click restyling the
+    /// selected callout and the next one; the canvas takes the room back when it hides.
     func calloutBarFlow() async {
         Settings.returnToSelect = true
-        guard let ed = await openEditor(Self.sampleImage(1000, 700)), let bar = ed.debugCalloutBar, let cards = ed.debugCards else {
-            check(false, "the new editor opens with a callout style bar"); return
+        guard let ed = await openEditor(Self.sampleImage(1000, 700)), let cards = ed.debugCards else {
+            check(false, "the editor opens with its cards"); return
         }
+        let bar = ed.debugOptionsBar, o = ed.shapeOptions
         let v = ed.shotView
-        type("a")
+        func design(_ c: CalloutStyle) -> RibbonItem { o.callouts[c.rawValue] }
+        var current: CalloutStyle? { CalloutStyle.allCases.first { design($0).isOn } }
+        type("v")
         ed.window?.layoutIfNeeded()
-        check(bar.isHidden && abs(cards.canvas.frame.minX - 10) < 0.5, "with the Arrow the bar hides and the canvas uses the room")
+        check(bar.isHidden && abs(cards.canvas.frame.minX - 10) < 0.5, "with Select and nothing selected the bar hides and the canvas uses the room")
         let zoomBefore = v.zoomPercent
         let spot = v.convert(v.viewPoint(forImage: CGPoint(x: 500, y: 350)), to: nil)
         type("e")
@@ -126,24 +129,26 @@ extension FlowsSelfTest {
         let spotAfter = v.convert(v.viewPoint(forImage: CGPoint(x: 500, y: 350)), to: nil)
         check(v.zoomPercent == zoomBefore && abs(spot.x - spotAfter.x) < 1 && abs(spot.y - spotAfter.y) < 1,
               "the picture stays still as the bar comes in (zoom \(zoomBefore)% → \(v.zoomPercent)%, \(spot) → \(spotAfter))")
-        check(bar.items.count == CalloutStyle.allCases.count, "all five callout designs (\(bar.items.count))")
-        check(bar.current == v.displayedStyle.callout, "the current design is lit")
-        bar.items[.thought]?.action?()
-        check(v.style.callout == .thought && bar.current == .thought, "picking Thought sets it for the next callout and lights it")
+        check(bar.sections.map(\.id) == ["callout"] && bar.buttons.count == CalloutStyle.allCases.count, "all five callout designs (\(bar.buttons.count))")
+        check(current == v.displayedStyle.callout, "the current design is lit")
+        design(.thought).action?()
+        check(v.style.callout == .thought && current == .thought, "picking Thought sets it for the next callout and lights it")
         drag(ed, CGPoint(x: 500, y: 300), CGPoint(x: 650, y: 180)); await sleep(0.15)
         type("Hi"); key("esc")
         guard let callout = v.doc.objects.last, callout.kind == .callout else { check(false, "a callout was drawn"); return }
         check(callout.calloutStyle == .thought, "the new callout is a thought bubble")
         check(!bar.isHidden && v.selection == [callout.id], "with the callout selected the bar stays")
-        bar.items[.shout]?.action?()
-        check(v.doc.objects.last?.calloutStyle == .shout && bar.current == .shout, "picking Shout restyles the selected callout")
+        design(.shout).action?()
+        check(v.doc.objects.last?.calloutStyle == .shout && current == .shout, "picking Shout restyles the selected callout")
         type("z", mods: .command)
         check(v.doc.objects.last?.calloutStyle == .thought, "⌘Z undoes it")
-        key("esc"); type("r")
+        key("esc"); type("h")
         ed.window?.layoutIfNeeded()
-        check(bar.isHidden, "another tool hides the bar again")
+        check(bar.isHidden, "a tool without options (Highlighter) hides the bar again")
         check(v.fitsWindow && v.zoomPercent == zoomBefore, "and the picture fits the canvas again (\(v.zoomPercent)%)")
-        if let b = bar.items[.box] { check(RibbonButton(b).toolTip == CalloutStyle.box.title, "each design has its name as a tooltip") }
+        type("e")
+        check(bar.buttons.first?.toolTip == "Callout Design: \(CalloutStyle.box.title)", "each design has its name as a tooltip (\(bar.buttons.first?.toolTip ?? "-"))")
+        type("v")
     }
 }
 #endif

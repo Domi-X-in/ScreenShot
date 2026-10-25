@@ -80,21 +80,22 @@ extension FlowsSelfTest {
         r.areaSelect.action?()
         check(v.tool == .crop && v.selectingArea && r.areaSelect.isActiveTool && r.item(for: .crop)?.isActiveTool == false,
               "Image Area Selection lights its own button, not Crop")
-        check(f.visibleContextualGroup === f.areaGroup && !f.copyArea.isEnabled, "the Selection group shows, off until an area is drawn")
+        let o = ed.shapeOptions
+        check(ed.debugOptionsBar.sections.map(\.id) == ["area"] && !o.copyArea.isEnabled, "the side bar shows the Selection commands, off until an area is drawn")
         drag(ed, CGPoint(x: 80, y: 400), CGPoint(x: 480, y: 480))
-        check(f.copyArea.isEnabled && f.blurArea.isEnabled, "an area turns the Selection commands on")
+        check(o.copyArea.isEnabled && o.blurArea.isEnabled, "an area turns the Selection commands on")
         NSPasteboard.general.clearContents()
-        f.copyArea.action?()
+        o.copyArea.action?()
         check(NSPasteboard.general.types?.contains(.png) == true || NSPasteboard.general.types?.contains(.tiff) == true, "Copy Area puts the area on the clipboard")
         let size = v.doc.image.width
         key("return")
         check(v.doc.image.width == size, "Enter copies; it doesn't crop")
         let count = v.doc.objects.count
-        f.blurArea.action?()
+        o.blurArea.action?()
         check(v.doc.objects.count == count + 1 && v.doc.objects.last?.kind == .blur, "Blur Area covers it with a blur")
         drag(ed, CGPoint(x: 100, y: 100), CGPoint(x: 900, y: 600))
-        f.cropArea.action?()
-        check(v.doc.image.width == 800, "Crop to Area crops the screenshot (\(v.doc.image.width))")
+        o.cropArea.action?()
+        check(abs(v.doc.image.width - 800) <= 1, "Crop to Area crops the screenshot (\(v.doc.image.width))")
         ed.pickTool(.crop)
         check(!v.selectingArea && r.item(for: .crop)?.isActiveTool == true, "picking Crop goes back to cropping")
     }

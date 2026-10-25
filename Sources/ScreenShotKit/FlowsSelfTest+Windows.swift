@@ -84,11 +84,8 @@ extension FlowsSelfTest {
         // Options bar on a selection: the arrow style control restyles the selected arrow.
         type("a"); drag(ed, CGPoint(x: 100, y: 500), CGPoint(x: 300, y: 400))
         type("v"); click(ed, CGPoint(x: 200, y: 450))
-        if let r = ed.debugEditorRibbon {
-            // Arrow Heads in the ribbon's Arrange group.
-            chooseRibbon(r.formatting.arrowHeads, ArrowStyle(rawValue: 1)!.title)
-            check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "Arrow Heads restyles the selected arrow")
-        }
+        ed.shapeOptions.heads[1].action?() // Arrow Heads in the side bar
+        check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "Arrow Heads restyles the selected arrow")
 
         // Align from the top toolbar's Align menu (it replaced the Arrange popover).
         type("r"); drag(ed, CGPoint(x: 500, y: 100), CGPoint(x: 600, y: 160))

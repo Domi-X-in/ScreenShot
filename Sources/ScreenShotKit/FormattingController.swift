@@ -89,6 +89,17 @@ import AppKit
     func applyFormat(_ change: FormatChange) { view?.applyEditingFormat(change, to: id) }
 }
 
+/// The text about to be typed: with the Text or Callout tool in hand and nothing typed yet, Font and Paragraph set the
+/// format the next text starts with (Word's pending format at an empty caret).
+@MainActor final class NextTextTarget: TextFormattingTarget {
+    private weak var view: ShotView?
+
+    init(view: ShotView) { self.view = view }
+
+    var formatState: TextFormatState { view?.nextTextFormatState ?? .inactive }
+    func applyFormat(_ change: FormatChange) { view?.applyNextTextFormat(change) }
+}
+
 /// A selected text, callout or shape with text (not being typed): changes apply to all of its text.
 @MainActor final class SelectedTextTarget: TextFormattingTarget {
     private weak var view: ShotView?

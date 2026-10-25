@@ -91,8 +91,23 @@ The editor's bottom bar shows three cells that stay visible on any screen width.
 The editor is a set of floating cards on a dotted canvas, dark or light, with **#FF5500** as the accent (selection, the active tool, focus).
 
 - **Title card:** the window buttons, Copy image, Save, Pin, the drag-out handle, and Undo / Redo. Drag it to move the window.
-- **Ribbon** (as in Microsoft Office): **Clipboard** (Paste, Cut, Copy, Format painter), **Font** (family, size you can type, grow / shrink, bold, italic, underline, strikethrough, change case, text direction), **Paragraph** (horizontal and vertical alignment with Justify, bullets, numbering), **Color** (Shape Fill, Shape Outline with weight and dashes, Font Color, Font Outline, with Office's palette), **Shapes** (Select, Freehand, Line, Arrow, Rectangle, Oval, Callout, Counter, Text Box), **Tools** (Highlighter, Blur, Spotlight, Magnifier, Ruler, Crop, OCR / QR, Image Area Selection) and **Arrange** (Arrange, Align, Rotate, Flip, arrow heads, line style). The tool in hand adds a contextual group at the end with its own options (blur mode, counter shape, crop mode, ruler units, lens). As the window narrows, groups fold from right to left into single buttons that open a flyout; a folded group still shows the active tool in the accent.
-- **Callout styles:** a narrow bar beside the canvas with the five designs, shown while the Callout tool is in hand or a callout is selected.
+- **Ribbon** (as in Microsoft Office): **Clipboard** (Paste, Cut, Copy, Format painter), **Font** (family, size you can type, grow / shrink, bold, italic, underline, strikethrough, change case, text direction), **Paragraph** (horizontal and vertical alignment with Justify, bullets, numbering), **Color** (Shape Fill, Shape Outline with weight and dashes, Font Color, Font Outline, with Office's palette), **Shapes** (Select, Freehand, Line, Arrow, Rectangle, Oval, Callout, Counter, Text Box), **Tools** (Highlighter, Blur, Spotlight, Magnifier, Ruler, Crop, OCR / QR, Image Area Selection) and **Arrange** (Arrange, Align, Rotate, Flip). With the Text or Callout tool in hand and nothing typed yet, Font and Paragraph set the format the next text starts with. As the window narrows, groups fold from right to left into single buttons that open a flyout; a folded group still shows the active tool in the accent.
+- **Side bar:** a narrow bar beside the canvas with the options of the tool in hand or the selected objects, and nothing else:
+
+  | Tool or object | Side bar |
+  |---|---|
+  | Arrow | arrow heads, line style (solid or hand-drawn), weight |
+  | Line, Rectangle, Oval | line style (solid, dashed, hand-drawn), weight |
+  | Freehand | weight |
+  | Counter | shape (circle, square, bubble), size (S, M, L, XL) |
+  | Callout | the five designs |
+  | Blur | Blur, Blur Text, Erase, Erase Text |
+  | Magnifier | lens shape, zoom, weight |
+  | Ruler | px or pt, weight |
+  | Crop | Crop or Cut Out, Autoadjust, Imprint Size |
+  | Image Area Selection | Copy Area, Read Text, Crop to Area, Blur Area |
+
+  With several objects selected it shows only what they share. Highlighter, Spotlight, Text and Select have none, and the canvas takes the room.
 - **Bottom bar:** messages in four states (info: the tool's hint; success, which fades; warning and error, which stay until closed), the color / size / zoom cells, and Backdrop.
 - **Recent strip:** the newest captures, the current one outlined in the accent, and the Library tile.
 - **Capture overlay:** accent selection with white corner brackets, a frosted size pill, a double-line crosshair, and a circular loupe with a pixel grid and a color readout.
@@ -101,11 +116,11 @@ The editor is a set of floating cards on a dotted canvas, dark or light, with **
 ## Backdrop, Cut Out and other Shottr tools
 
 - **Backdrop** (button at the right of the bottom bar, `K` toggles): 10 color presets; Solid, Color Blend, Vertical, Diagonal, Radial or Mesh gradient, or the screenshot itself blurred; aspect ratio Auto, 1:1, 4:3, 3:2, 16:9, Twitter/X, Facebook, YouTube, LinkedIn or Pinterest; sliders for padding, shadow, inset (a frosted frame), outer and inner corner radius. With the Select tool, drag the background to move the screenshot inside it; **Recenter** puts it back. **Set as Default** makes `K` use that look everywhere. Files saved with the old backdrop presets still open.
-- **Cut Out** (`⇧X`, or Crop's mode in the ribbon): drag up or down over rows, or sideways over columns, then Enter. The strip is removed, the two sides join, and annotations past it move with the image.
+- **Cut Out** (`⇧X`, or Cut Out in Crop's side bar): drag up or down over rows, or sideways over columns, then Enter. The strip is removed, the two sides join, and annotations past it move with the image.
 - **Autoadjust** (Crop, `F`): shrinks the selection (or the whole image) to the content, dropping edges that are one flat color.
 - **Imprint Size** (Crop, `I`): stamps a dashed outline and "W × H px" on the image.
 - **Measure:** hold `1` for the distances across the area under the pointer, or `2` for its bounding box; a quick tap picks the Ruler.
-- **OCR of an area:** with a Crop or Image Area selection, ⌘O (or Read Text in the Selection group) reads only that part. Image Area Selection also copies, blurs or crops to the area. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
+- **OCR of an area:** with a Crop or Image Area selection, ⌘O (or Read Text in the side bar) reads only that part. Image Area Selection also copies, blurs or crops to the area. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
 - **Hand-drawn style** for arrows, lines, rectangles and ovals (Shape Outline › Dashes › Hand-Drawn).
 - **Blinking GIF** (File › Save Blinking GIF, `⇧⌘G`): a looping two-frame GIF that shows the screenshot with and without the annotations.
 - **Capture settings:** hide the menu bar icon (open the app again to get Preferences); mouse pointer Auto (fullscreen only) / Include / Exclude; save Retina screenshots at 1×; window background None / Desktop wallpaper / Color; maximum scrolling capture height; turn `screenshot://` links on or off.
@@ -123,15 +138,16 @@ The editor is a set of floating cards on a dotted canvas, dark or light, with **
 
 ## Option defaults
 
-New annotations start from **defaults**. The built-in ones include **Professional · Box** for the Callout, red, size 4, the shaped arrow, a solid line, no fill, Blur, Sans, the circle counter, px, an oval lens at 2×. Picking an option affects the current editor only. To make one the default: each option menu in the ribbon's contextual group (arrow heads, blur mode, counter shape, ruler units, lens shape and zoom…) ends with **Set “…” as Default**; Shape Fill and Shape Outline have **Set as Default Fill** and **Set as Default Outline** (color, weight and dashes); right-click a design in the callout style bar for **Set “…” as Default** and **Reset to Original Default**.
+New annotations start from **defaults**. The built-in ones include **Professional · Box** for the Callout, red, size 4, the shaped arrow, a solid line, no fill, Blur, Sans, the circle counter, px, an oval lens at 2×. Picking an option affects the current editor only. To make one the default, **right-click** it in the side bar (callout design, arrow heads, line style, counter shape and size, blur mode, lens, zoom, units) and choose **Set “…” as Default**, or **Reset to Original Default**; Weight's menu has **Set as Default Weight**. Shape Fill and Shape Outline have **Set as Default Fill** and **Set as Default Outline** (color, weight and dashes), and the Font menu has **Set “…” as Default Font** for new texts.
 
 ## Editor shortcuts
 
 `A` arrow · `R` rectangle · `O` oval · `L` line · `D` freehand · `T` text · `H` highlighter · `B` blur · `C` counter · `S` spotlight · `M` magnifier · `1`/`2` ruler (tap) or measure (hold) · `X` crop (Enter applies it) · `⇧X` cut out · `F` autoadjust · `I` imprint size · `V` select · `K` backdrop
 Select (`V`, first button in Shapes): click to select, Shift-click to add/remove, drag on empty space to select several, ⌘A selects all. Drag to move the selection, ⌥-drag duplicates it, arrow keys nudge (Shift ×10), Delete removes it, ⌘D duplicates, ⌘C/⌘V copy and paste it. A single selected box (rectangle, oval, blur, highlight, spotlight, magnifier, image) gets 8 resize handles, and Shift on a corner keeps proportions (always for images). Arrows, lines and rulers get endpoint handles. Ribbon changes apply to every selected object.
-Callout (`E`): press on what you want to point at and drag to where the bubble goes, then type. A plain click places the bubble up and to the right. Drag the white tip dot to re-aim the pointer anywhere. Dragging the bubble moves it while the tip stays on its target. Double-click to edit the text, which supports per-letter color, size and font like Text. Designs in the callout style bar: **Professional · Box** (solid, tapered pointer, shadow), **Professional · Card** (white card with colored border), **Informal · Speech** (rounded bubble with a swooping tail), **Fun · Thought** (cloud with a bubble trail), **Fun · Shout** (comic starburst whose spike reaches the target).
-Blur (`B`): Shottr's four conceal types from the Blur group. **Blur** is an averaging mosaic over the area, **Blur Text** applies it only to the text lines Vision finds inside the area, **Erase** fills with the dominant surrounding color, and **Erase Text** fills only the text lines. Regions re-conceal what is under them when moved.
-Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: factor, lensX/lensY, border, connector line); drag the lens to move it, pinch/scroll/`+`/`−` over a selected magnifier to zoom (1.25×–8×), oval or rect shape in the Magnifier group.
+Callout (`E`): press on what you want to point at and drag to where the bubble goes, then type. A plain click places the bubble up and to the right. Drag the white tip dot to re-aim the pointer anywhere. Dragging the bubble moves it while the tip stays on its target. Double-click to edit the text, which supports per-letter color, size and font like Text. Designs in the side bar: **Professional · Box** (solid, tapered pointer, shadow), **Professional · Card** (white card with colored border), **Informal · Speech** (rounded bubble with a swooping tail), **Fun · Thought** (cloud with a bubble trail), **Fun · Shout** (comic starburst whose spike reaches the target).
+Blur (`B`): Shottr's four conceal types from the side bar. **Blur** is an averaging mosaic over the area, **Blur Text** applies it only to the text lines Vision finds inside the area, **Erase** fills with the dominant surrounding color, and **Erase Text** fills only the text lines. Regions re-conceal what is under them when moved.
+Magnifier (`M`): drag over an area to create a lens (Shottr's ObjMagnifier: factor, lensX/lensY, border, connector line); drag the lens to move it, pinch/scroll/`+`/`−` over a selected magnifier to zoom (1.25×–8×), oval or rect shape in the side bar.
+Counter (`C`): circle, square or bubble and S / M / L / XL in the side bar; pinch or scroll over a selected counter to resize it.
 `Tab` copies the color under the cursor · pinch, ⌘-scroll or ⌘=/⌘−/⌘0 zoom · `Esc` copies and closes (configurable) · `⌘C` copy · `⌘S` save · `⌘⇧S` save as · `⌘P` pin · `⌘Z`/`⌘⇧Z` undo/redo · `⌫` deletes the selected object · arrow keys nudge it · `Shift` constrains angles and squares.
 
 ## Default global shortcuts

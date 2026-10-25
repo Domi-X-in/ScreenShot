@@ -110,7 +110,13 @@ final class RibbonButton: NSView, NSTextFieldDelegate {
         switch item.kind {
         case .small:
             let iconX = item.hasChevron ? 6 : (b.width - 16) / 2
-            if let icon = item.icon { drawIcon(icon, size: 16, color: ink, at: CGPoint(x: iconX, y: (b.height - 16) / 2)) }
+            if let icon = item.icon {
+                drawIcon(icon, size: 16, color: ink, at: CGPoint(x: iconX, y: (b.height - 16) / 2))
+            } else if let glyph = item.glyph {
+                let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: ink]
+                let size = (glyph as NSString).size(withAttributes: attrs)
+                (glyph as NSString).draw(at: CGPoint(x: (b.width - size.width) / 2, y: (b.height - size.height) / 2), withAttributes: attrs)
+            }
             if item.hasChevron { drawIcon(.chev, size: 9, color: chevronInk, at: CGPoint(x: b.width - 15, y: (b.height - 9) / 2)) }
         case .label:
             if let icon = item.icon { drawIcon(icon, size: 16, color: ink, at: CGPoint(x: 6, y: (b.height - 16) / 2)) }
@@ -147,6 +153,8 @@ final class RibbonButton: NSView, NSTextFieldDelegate {
         }
         drawFocusRing(in: b, radius: radius)
     }
+
+    override func menu(for event: NSEvent) -> NSMenu? { item.contextMenu?() ?? super.menu(for: event) }
 
     private func drawIcon(_ name: IconName, size: CGFloat, color: NSColor, at p: CGPoint) {
         Icons.image(name, size: size, color: color).draw(in: CGRect(origin: p, size: CGSize(width: size, height: size)))

@@ -22,12 +22,15 @@ RibbonFormatting (view)  ──applyFormat / state──▶  FormattingControlle
   and its `TextFormatState`, exposes `applyFormat(_:)` and `getFormatAtSelection()`, and calls `onChange` after every
   focus, selection or caret change and every command. Also maps Word's shortcuts to commands (`change(for:)`).
 - **`TextFormattingTarget`** — the one interface a text implements to use the ribbon: `formatState` and
-  `applyFormat(_:)` (one undoable step). Two adapters today:
+  `applyFormat(_:)` (one undoable step). The adapters:
   - `EditingTextTarget`: the text being typed (field editor). Character changes go to the selection or the caret's
     pending format; alignment to the paragraphs; container changes to the object. Undo is the text's own history, so
     ⌘Z steps back one format at a time while typing.
   - `SelectedTextTarget`: a selected text, callout or shape with text. Changes apply to all of its text; undo is the
     document's.
+  - `NextTextTarget`: the text about to be typed, with the Text or Callout tool in hand and nothing typed or selected.
+    Changes go to a pending format (`ShotView.nextTextTyping`) that the next new text starts with, like Word's format at
+    an empty caret; Font › **Set “…” as Default Font** stores the family in the default style (`ToolStyle.family`).
 - **`RibbonFormatting`** (`RibbonFormatting.swift`) — the ribbon's Font, Paragraph, Color and Arrange groups. It only
   shows the store's state and sends it commands. Buttons and menus never take keyboard focus, so the text keeps its
   selection; the size field does take it while you type a size, and the editor keeps the text open and gives the focus

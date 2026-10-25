@@ -30,6 +30,8 @@ enum IconName: String, CaseIterable {
     case gPaste, gFonts, gParagraph, gColors, gShapes, gTools, gArrange
     // Callout styles (the side bar)
     case calloutBox, calloutCard, calloutSpeech, calloutThought, calloutShout
+    // Side bar choices
+    case counterSquare, counterBubble, blurText, erase, eraseText
     // Status menu and home window
     case statusMark, capFull, capArea, capRepeat, capTimer, capWindow, capActive, capScroll, capScrollManual
     case openImage, guide, updates, prefs, power, search, folder, photo
@@ -180,6 +182,13 @@ enum Icons {
         case .calloutSpeech: IconParts(stroke: "M7 4h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-6l-4 4v-4a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z")
         case .calloutThought: IconParts(stroke: e(12, 10, 9, 6) + c(7, 18.5, 1.5) + c(4.5, 21, 1))
         case .calloutShout: IconParts(stroke: "M12 2.5l2 4.2 4.5-2.2-1.2 4.8 4.7 1.2-4.2 2.6 2.5 4.2-4.8-.6L14.5 21 12 17.2 9.5 21l-1-4.3-4.8.6 2.5-4.2L2 10.5l4.7-1.2-1.2-4.8 4.5 2.2z")
+        // Side bar choices
+        case .counterSquare: IconParts(stroke: r(3.5, 3.5, 17, 17, 3) + "M10.5 9.5L12.5 8v8M10.5 16h4")
+        case .counterBubble: IconParts(stroke: "M12.5 3.5a7.5 7.5 0 1 1-3.6 14.1L4 19.5l1.9-4.6A7.5 7.5 0 0 1 12.5 3.5z" + "M11 8.5L13 7v8M11 15h4")
+        case .blurText: IconParts(stroke: l(4, 18.5, 20, 18.5), fill: r(4, 5, 3.5, 3.5, 0.6) + r(8.5, 5, 3.5, 3.5, 0.6) + r(13, 5, 3.5, 3.5, 0.6) + r(17.5, 5, 2.5, 3.5, 0.6)
+                                    + r(4, 10.5, 3.5, 3.5, 0.6) + r(8.5, 10.5, 3.5, 3.5, 0.6) + r(13, 10.5, 2.5, 3.5, 0.6))
+        case .erase: IconParts(stroke: "M14 4.5l5.5 5.5-9.5 9.5H6.5l-3-3a1.5 1.5 0 0 1 0-2.1zM8.5 10l5.5 5.5" + l(10.5, 19.5, 20.5, 19.5))
+        case .eraseText: IconParts(stroke: l(4, 6, 20, 6) + l(4, 11, 12, 11) + l(4, 16, 9, 16), fill: r(13.5, 9, 7, 11, 1.5))
         // Status menu and home window
         case .statusMark: IconParts(stroke: ocrCorners + c(12, 12, 3.5))
         case .capFull: IconParts(stroke: r(2.5, 4, 19, 13, 2) + l(9, 20.5, 15, 20.5) + "M7 9.5V8h2M17 9.5V8h-2M7 11.5V13h2M17 11.5V13h-2")

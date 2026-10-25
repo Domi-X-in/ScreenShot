@@ -38,18 +38,10 @@ final class ClosureMenuItem: NSMenuItem {
     /// The Office palettes (theme colors, standard, recent, No Fill, More Colors…); their own controls aren't shown.
     let fillPalette = ColorSplitButton(.fill), outlinePalette = ColorSplitButton(.outline), fontPalette = ColorSplitButton(.font)
     // Arrange
-    let arrange: RibbonItem, align: RibbonItem, rotate: RibbonItem, flip: RibbonItem, arrowHeads: RibbonItem, lineStyle: RibbonItem
-    // Contextual: text, callout, counter, blur, crop, ruler, magnifier
-    let editText: RibbonItem, textFace: RibbonItem, counterShape: RibbonItem, blurMode: RibbonItem
-    let cropMode: RibbonItem, autoadjust: RibbonItem, imprint: RibbonItem, rulerUnits: RibbonItem, lensShape: RibbonItem, lensZoom: RibbonItem
-    // Image Area Selection
-    let copyArea: RibbonItem, cropArea: RibbonItem, readArea: RibbonItem, blurArea: RibbonItem
+    let arrange: RibbonItem, align: RibbonItem, rotate: RibbonItem, flip: RibbonItem
     let fontOutlinePalette = ColorSplitButton(.outline)
 
     let fontGroup: RibbonGroup, paragraphGroup: RibbonGroup, colorGroup: RibbonGroup, arrangeGroup: RibbonGroup
-    let textGroup: RibbonGroup, counterGroup: RibbonGroup, blurGroup: RibbonGroup, cropGroup: RibbonGroup, rulerGroup: RibbonGroup, magnifierGroup: RibbonGroup
-    let areaGroup: RibbonGroup
-    var contextualGroups: [RibbonGroup] { [textGroup, counterGroup, blurGroup, cropGroup, areaGroup, rulerGroup, magnifierGroup] }
 
     /// For the Clipboard group and the tool lights.
     var selectingArea: Bool { shotView?.selectingArea ?? false }
@@ -89,23 +81,6 @@ final class ClosureMenuItem: NSMenuItem {
         align = item("align", .label, "Align", .align)
         rotate = item("rotate", .label, "Rotate", .rotate)
         flip = item("flip", .label, "Flip", .flip)
-        arrowHeads = item("arrowHeads", .small, "Arrow Heads", .arrowEnd)
-        lineStyle = item("lineStyle", .small, "Line Style", .lineSolid)
-        editText = item("editText", .label, "Edit Text", .textbox, shortcut: "↩")
-        textFace = item("textFace", .label, "Face", .fontFill)
-        counterShape = item("counterShape", .label, "Shape", .counter)
-        blurMode = item("blurMode", .label, "Mode", .blur)
-        cropMode = item("cropMode", .label, "Mode", .crop)
-        autoadjust = item("autoadjust", .label, "Autoadjust", .capArea, shortcut: "F")
-        imprint = item("imprint", .label, "Imprint Size", .ruler, shortcut: "I")
-        rulerUnits = item("rulerUnits", .label, "Units", .ruler)
-        lensShape = item("lensShape", .label, "Lens", .magnifier)
-        lensZoom = item("lensZoom", .label, "Zoom", .growFont)
-        copyArea = item("copyArea", .label, "Copy Area", .copy, shortcut: "⌘C")
-        cropArea = item("cropArea", .label, "Crop to Area", .crop)
-        readArea = item("readArea", .label, "Read Text", .ocr, shortcut: "⌘O")
-        blurArea = item("blurArea", .label, "Blur Area", .blur)
-
         fontGroup = RibbonGroup("font", title: "Font", compactTitle: "Fonts", compactIcon: .gFonts, columns: [
             .rows([[.item(family), .item(size), .item(grow), .item(shrink)],
                    [.item(bold), .item(italic), .item(underline), .item(strike), .divider, .item(orientation), .item(changeCase)]]),
@@ -119,25 +94,7 @@ final class ClosureMenuItem: NSMenuItem {
         arrangeGroup = RibbonGroup("arrange", title: "Arrange", compactTitle: "Arrange", compactIcon: .gArrange, columns: [
             .rows([[.item(arrange)], [.item(align)]]),
             .rows([[.item(rotate)], [.item(flip)]]),
-            .rows([[.item(arrowHeads)], [.item(lineStyle)]]),
         ])
-        textGroup = RibbonGroup("textOptions", title: "Text", compactTitle: "Text", compactIcon: .textbox, columns: [
-            .rows([[.item(editText)], [.item(textFace)]]),
-        ])
-        counterGroup = RibbonGroup("counterOptions", title: "Counter", compactTitle: "Counter", compactIcon: .counter, columns: [.rows([[.item(counterShape)]])])
-        blurGroup = RibbonGroup("blurOptions", title: "Blur", compactTitle: "Blur", compactIcon: .blur, columns: [.rows([[.item(blurMode)]])])
-        cropGroup = RibbonGroup("cropOptions", title: "Crop", compactTitle: "Crop", compactIcon: .crop, columns: [
-            .rows([[.item(cropMode)], [.item(autoadjust)], [.item(imprint)]]),
-        ])
-        areaGroup = RibbonGroup("areaOptions", title: "Selection", compactTitle: "Selection", compactIcon: .areaSelect, columns: [
-            .rows([[.item(copyArea)], [.item(readArea)]]),
-            .rows([[.item(cropArea)], [.item(blurArea)]]),
-        ])
-        rulerGroup = RibbonGroup("rulerOptions", title: "Ruler", compactTitle: "Ruler", compactIcon: .ruler, columns: [.rows([[.item(rulerUnits)]])])
-        magnifierGroup = RibbonGroup("magnifierOptions", title: "Magnifier", compactTitle: "Magnifier", compactIcon: .magnifier, columns: [
-            .rows([[.item(lensShape)], [.item(lensZoom)]]),
-        ])
-        for g in contextualGroups { g.isHidden = true }
         wire()
         controller.addObserver { [weak self] s in self?.show(s) }
         show(controller.state)
@@ -155,14 +112,6 @@ final class ClosureMenuItem: NSMenuItem {
         v.setStyle(s)
     }
 
-    /// Right-click-free defaults: the last item of each option menu makes the current choice the default.
-    private func defaultItem(_ title: String, _ change: @escaping (inout ToolStyle) -> Void) -> NSMenuItem {
-        ClosureMenuItem("Set “\(title)” as Default") {
-            ToolStyle.updateDefaults(change)
-            Toast.show("“\(title)” is now the default")
-        }
-    }
-
     private func wire() {
         // Font
         family.menu = { [weak self] in
@@ -172,6 +121,13 @@ final class ClosureMenuItem: NSMenuItem {
                 let f = name == TextFormatting.systemFamily ? NSFont.systemFont(ofSize: 13) : (NSFont(name: name, size: 13) ?? .systemFont(ofSize: 13))
                 i.attributedTitle = NSAttributedString(string: name, attributes: [.font: f])
                 m.addItem(i)
+            }
+            if let current = self?.format.family {
+                m.addItem(.separator())
+                m.addItem(ClosureMenuItem("Set “\(current)” as Default Font") {
+                    self?.shotView?.setDefaultFamily(current)
+                    Toast.show("New texts start in \(current)")
+                })
             }
             return m
         }
@@ -255,79 +211,11 @@ final class ClosureMenuItem: NSMenuItem {
         align.menu = { [weak self] in self?.alignMenu() ?? NSMenu() }
         rotate.menu = { [weak self] in self?.transformMenu("Rotate", [.rotateRight, .rotateLeft]) ?? NSMenu() }
         flip.menu = { [weak self] in self?.transformMenu("Flip", [.flipVertical, .flipHorizontal]) ?? NSMenu() }
-        arrowHeads.menu = { [weak self] in
-            let m = NSMenu(title: "Arrow Heads")
-            let icons: [ArrowStyle: IconName] = [.tapered: .arrowFilled, .line: .arrowEnd, .double: .arrowBoth]
-            let current = self?.shotView?.displayedStyle.arrow
-            for a in ArrowStyle.allCases {
-                m.addItem(ClosureMenuItem(a.title, icon: icons[a], checked: current == a) { self?.setOption { $0.arrow = a } })
-            }
-            if let current, let item = self?.defaultItem(current.title, { $0.arrow = current }) { m.addItem(.separator()); m.addItem(item) }
-            return m
-        }
-        lineStyle.menu = { [weak self] in
-            let m = NSMenu(title: "Line Style")
-            guard let self, let v = self.shotView else { return m }
-            let st = v.shapeStyleState
-            let icons: [DashStyle: IconName] = [.solid: .lineSolid, .dashed: .lineDash, .handDrawn: .freehand]
-            for d in DashStyle.allCases {
-                let ok = d == .dashed ? st.dashEnabled : st.sketchEnabled
-                m.addItem(ClosureMenuItem(d.title, icon: icons[d], checked: st.dash == d, enabled: ok) { [weak v] in v?.applyDash(d) })
-            }
-            return m
-        }
-        // Contextual options
-        editText.action = { [weak self] in self?.shotView?.editSelectedText(nil) }
-        textFace.menu = { [weak self] in self?.optionMenu("Face", TextFont.allCases, title: \.title, get: \.font) { $0.font = $1 } ?? NSMenu() }
-        counterShape.menu = { [weak self] in self?.optionMenu("Shape", CounterShape.allCases, title: \.title, get: \.counterShape) { $0.counterShape = $1 } ?? NSMenu() }
-        blurMode.menu = { [weak self] in self?.optionMenu("Mode", BlurMode.allCases, title: \.title, get: \.blur) { $0.blur = $1 } ?? NSMenu() }
-        rulerUnits.menu = { [weak self] in
-            self?.optionMenu("Units", [false, true], title: { $0 ? "Points (pt)" : "Pixels (px)" }, get: \.rulerInPoints) { $0.rulerInPoints = $1 } ?? NSMenu()
-        }
-        lensShape.menu = { [weak self] in self?.optionMenu("Lens", LensShape.allCases, title: \.title, get: \.lensShape) { $0.lensShape = $1 } ?? NSMenu() }
-        lensZoom.menu = { [weak self] in
-            self?.optionMenu("Zoom", Self.zoomSteps, title: { "\($0.formatted())×" }, get: \.magnification) { $0.magnification = $1 } ?? NSMenu()
-        }
-        cropMode.menu = { [weak self] in
-            let m = NSMenu(title: "Crop Mode")
-            let cut = self?.shotView?.cutOutMode ?? false
-            m.addItem(ClosureMenuItem("Crop · keep the selected area", icon: .crop, checked: !cut) { self?.setCutOut(false) })
-            m.addItem(ClosureMenuItem("Cut Out · remove a strip and join the rest", icon: .cut, checked: cut) { self?.setCutOut(true) })
-            return m
-        }
-        autoadjust.action = { [weak self] in self?.shotView?.autoadjustSelection() }
-        imprint.action = { [weak self] in self?.shotView?.imprintSelectionSize() }
-        copyArea.action = { [weak self] in self?.shotView?.copyArea() }
-        cropArea.action = { [weak self] in self?.shotView?.cropToArea() }
-        readArea.action = { [weak self] in self?.editor?.ocrImage() }
-        blurArea.action = { [weak self] in self?.shotView?.blurArea() }
     }
 
     static let alignIcons: [TextAlign: (IconName, String)] = [.left: (.alignLeft, "⌘L"), .center: (.alignCenter, "⌘E"),
                                                              .right: (.alignRight, "⌘R"), .justified: (.justify, "⌘J")]
     static let vAlignIcons: [VerticalAlign: IconName] = [.top: .vTop, .middle: .vMiddle, .bottom: .vBottom]
-
-    private func setCutOut(_ on: Bool) {
-        guard let v = shotView else { return }
-        v.cutOutMode = on
-        v.window?.makeFirstResponder(v)
-        editor?.syncToolbar()
-    }
-
-    /// One option of the tool in hand as a menu, with the current choice checked and a "Set as Default" item.
-    private func optionMenu<T: Equatable>(_ name: String, _ values: [T], title: (T) -> String, get: (ToolStyle) -> T,
-                                          set: @escaping (inout ToolStyle, T) -> Void) -> NSMenu {
-        let m = NSMenu(title: name)
-        let current = shotView.map { get($0.displayedStyle) }
-        for value in values {
-            m.addItem(ClosureMenuItem(title(value), checked: current == value) { [weak self] in self?.setOption { set(&$0, value) } })
-        }
-        if let current {
-            m.addItem(.separator())
-            m.addItem(defaultItem(title(current)) { set(&$0, current) })
-        }
-        return m
-    }
 
     private func transformMenu(_ title: String, _ actions: [TransformAction]) -> NSMenu {
         let m = NSMenu(title: title)
@@ -426,7 +314,7 @@ final class ClosureMenuItem: NSMenuItem {
         return [weight, dashes, setDefault, .separator()]
     }
 
-    private static func lineSample(width: CGFloat) -> NSImage {
+    static func lineSample(width: CGFloat) -> NSImage {
         let img = NSImage(size: NSSize(width: 36, height: 14), flipped: false) { r in
             NSColor.black.setFill()
             let h = max(1, min(r.height, width / 2))
@@ -485,28 +373,8 @@ final class ClosureMenuItem: NSMenuItem {
         align.isEnabled = units >= 1
         rotate.isEnabled = st.canTransform
         flip.isEnabled = st.canTransform
-        let kind = v.selectedKind ?? v.tool
-        arrowHeads.isEnabled = kind == .arrow
-        lineStyle.isEnabled = st.dashEnabled || st.sketchEnabled
-
-        let textLike = v.styleTargets.contains { $0.kind == .text || $0.kind == .callout || $0.holdsTextInShape }
-        textGroup.isHidden = !(kind == .text || kind == .callout || (textLike && v.selection.count == 1))
-        editText.isEnabled = v.selection.count == 1 && textLike && !v.isEditingText
-        counterGroup.isHidden = kind != .counter
-        blurGroup.isHidden = kind != .blur
-        cropGroup.isHidden = v.tool != .crop || v.selectingArea
-        areaGroup.isHidden = !(v.tool == .crop && v.selectingArea)
-        let hasArea = v.cropSelection != nil
-        for i in [copyArea, cropArea, readArea, blurArea] { i.isEnabled = hasArea }
-        autoadjust.isEnabled = !v.cutOutMode
-        imprint.isEnabled = !v.cutOutMode
-        cropMode.isOn = v.cutOutMode
-        rulerGroup.isHidden = kind != .ruler
-        magnifierGroup.isHidden = kind != .magnifier
     }
 
-    /// The Text group's caption-free summary, for tests.
-    var visibleContextualGroup: RibbonGroup? { contextualGroups.first { !$0.isHidden } }
 }
 
 /// Word and PowerPoint's Text Direction menu, mapped onto the editor's text orientations.

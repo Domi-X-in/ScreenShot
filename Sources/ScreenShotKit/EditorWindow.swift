@@ -16,13 +16,14 @@ import UniformTypeIdentifiers
     private let recent = RecentStrip()
     /// The bottom bar: messages, readouts and Backdrop.
     private lazy var editorStatus = EditorStatusBar(info: info)
-    /// The floating cards (R5b) and the callout style bar beside the canvas.
+    /// The floating cards (R5b) and the side bar of shape options beside the canvas (R10).
     private var cards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)?
-    private lazy var calloutBar = CalloutStyleBar()
+    private lazy var optionsBar = ShapeOptionsBar()
+    private(set) lazy var shapeOptions = ShapeOptions(editor: self)
     private var canvasNextToBar: NSLayoutConstraint?
     private var canvasAtEdge: NSLayoutConstraint?
-    /// The zoom the picture had when the callout bar came in fitted, so it can fit again when the bar leaves.
-    private var calloutBarHeldZoom: CGFloat?
+    /// The zoom the picture had when the side bar came in fitted, so it can fit again when the bar leaves.
+    private var optionsBarHeldZoom: CGFloat?
     /// The formatting store the ribbon's Font, Paragraph, Color and Arrange groups read and write.
     let formatting = FormattingController()
     /// The Office-style ribbon and the title card's actions (ROADMAP, Fase 6).
@@ -93,19 +94,13 @@ import UniformTypeIdentifiers
         canvas.embed(shotView)
         status.embed(editorStatus)
         strip.embed(recent)
-        calloutBar.isHidden = true
-        calloutBar.onPick = { [weak self] style in
-            guard let v = self?.shotView else { return }
-            var s = v.displayedStyle
-            s.callout = style
-            v.setStyle(s)
-        }
-        for v in [title, ribbon, calloutBar, canvas, status, strip] as [NSView] {
+        optionsBar.isHidden = true
+        for v in [title, ribbon, optionsBar, canvas, status, strip] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
         shotView.topInset = 10
-        let nextToBar = canvas.leadingAnchor.constraint(equalTo: calloutBar.trailingAnchor, constant: m.cardGap)
+        let nextToBar = canvas.leadingAnchor.constraint(equalTo: optionsBar.trailingAnchor, constant: m.cardGap)
         let atEdge = canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset)
         canvasNextToBar = nextToBar
         canvasAtEdge = atEdge
@@ -118,10 +113,10 @@ import UniformTypeIdentifiers
             title.heightAnchor.constraint(equalToConstant: m.titleBarHeight),
             ribbon.topAnchor.constraint(equalTo: title.bottomAnchor, constant: m.cardGap),
             ribbon.heightAnchor.constraint(equalToConstant: m.ribbonHeight),
-            calloutBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset),
-            calloutBar.widthAnchor.constraint(equalToConstant: m.sideBarWidth),
-            calloutBar.topAnchor.constraint(equalTo: ribbon.bottomAnchor, constant: m.cardGap),
-            calloutBar.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -m.cardGap),
+            optionsBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset),
+            optionsBar.widthAnchor.constraint(equalToConstant: m.sideBarWidth),
+            optionsBar.topAnchor.constraint(equalTo: ribbon.bottomAnchor, constant: m.cardGap),
+            optionsBar.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -m.cardGap),
             atEdge,
             canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m.cardInset),
             canvas.topAnchor.constraint(equalTo: ribbon.bottomAnchor, constant: m.cardGap),
@@ -135,16 +130,18 @@ import UniformTypeIdentifiers
         win.initialFirstResponder = shotView
     }
 
-    /// Shows the callout style bar while the Callout tool is in hand or a callout is selected; the canvas takes its room
+    /// Shows the side bar while the tool in hand or the selection has options of its own; the canvas takes its room
     /// otherwise.
-    private func updateCalloutBar() {
+    private func updateOptionsBar() {
         guard cards != nil else { return }
         let v = shotView
-        let shows = (v.selectedKind ?? v.tool) == .callout || v.styleTargets.contains { $0.kind == .callout }
-        calloutBar.show(current: v.displayedStyle.callout)
-        guard shows == calloutBar.isHidden else { return }
+        let sections = shapeOptions.sections()
+        shapeOptions.update()
+        optionsBar.show(sections)
+        let shows = !sections.isEmpty
+        guard shows == optionsBar.isHidden else { return }
         let toggle = {
-            self.calloutBar.isHidden = !shows
+            self.optionsBar.isHidden = !shows
             self.canvasAtEdge?.isActive = !shows
             self.canvasNextToBar?.isActive = shows
         }
@@ -152,10 +149,11 @@ import UniformTypeIdentifiers
         if shows {
             let wasFitted = v.fitsWindow
             v.keepPictureStill(toggle)
-            calloutBarHeldZoom = wasFitted ? v.currentZoom : nil
+            optionsBarHeldZoom = wasFitted ? v.currentZoom : nil
         } else {
-            let refit = calloutBarHeldZoom.map { abs($0 - v.currentZoom) < 0.0001 } ?? false
-            calloutBarHeldZoom = nil
+            // Refit if the picture still fits (⌘0) or still has the zoom it had when the bar came in fitted.
+            let refit = v.fitsWindow || (optionsBarHeldZoom.map { abs($0 - v.currentZoom) < 0.0001 } ?? false)
+            optionsBarHeldZoom = nil
             v.keepPictureStill(restoreFit: refit, toggle)
         }
     }
@@ -191,7 +189,7 @@ import UniformTypeIdentifiers
                             area: shotView.selectingArea)
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
                              canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
-        updateCalloutBar()
+        updateOptionsBar()
         // The formatting toolbar follows focus, selection and the caret.
         formatting.attach(shotView.formattingTarget())
         updateInfo()
@@ -421,7 +419,7 @@ import UniformTypeIdentifiers
     var debugEditorRibbon: EditorRibbon? { editorRibbon }
     var debugEditorStatus: EditorStatusBar? { editorStatus }
     var debugCards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)? { cards }
-    var debugCalloutBar: CalloutStyleBar? { calloutBar }
+    var debugOptionsBar: ShapeOptionsBar { optionsBar }
     /// Shape Fill's palette in the ribbon.
     var debugFillControl: ColorSplitButton { editorRibbon.formatting.fillPalette }
     #endif

@@ -186,6 +186,8 @@ struct ToolStyle: Equatable {
     var blur: BlurMode = .blur
     var font: TextFont = .sans
     var counterShape: CounterShape = .circle
+    /// The font family new texts start with (Font › Set as Default); nil for the built-in face.
+    var family: String?
     var rulerInPoints = false
     var lensShape: LensShape = .oval
     var magnification: CGFloat = 2
@@ -212,15 +214,18 @@ struct ToolStyle: Equatable {
         if let v = d["lensShape"] as? Int, let x = LensShape(rawValue: v) { s.lensShape = x }
         if let v = d["magnification"] as? Double, v >= 1.25 { s.magnification = CGFloat(v) }
         if let v = d["callout"] as? Int, let x = CalloutStyle(rawValue: v) { s.callout = x }
+        if let v = d["family"] as? String { s.family = v }
         return s
     }
 
     func saveAsDefaults() {
-        UserDefaults.standard.set([
+        var d: [String: Any] = [
             "color": color.rgbaHex, "width": Double(width), "arrow": arrow.rawValue, "dashed": dashed, "sketch": sketch, "fill": fill.rawValue,
             "blur": blur.rawValue, "font": font.rawValue, "counterShape": counterShape.rawValue, "rulerInPoints": rulerInPoints,
             "lensShape": lensShape.rawValue, "magnification": Double(magnification), "callout": callout.rawValue,
-        ] as [String: Any], forKey: Self.defaultsKey)
+        ]
+        if let family { d["family"] = family }
+        UserDefaults.standard.set(d, forKey: Self.defaultsKey)
     }
 
     /// Changes one default and keeps the rest.
