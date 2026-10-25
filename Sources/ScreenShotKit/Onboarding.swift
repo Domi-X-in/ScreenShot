@@ -17,9 +17,17 @@ import QuartzCore
         shared?.go(to: page ?? UserDefaults.standard.integer(forKey: Keys.onboardingPage), animated: false)
     }
 
-    static let size = CGSize(width: 780, height: 540)
-    private let pages: [OnboardingPage.Type] = [WelcomePage.self, DemoPage.self, MenuBarPage.self, PermissionPage.self, FolderPage.self,
-                                                 AppearancePage.self, ShortcutsPage.self, DonePage.self]
+    /// The new look (ROADMAP, Fase 6 · R8): three steps instead of eight, the editor's colors and cards.
+    let modern = Settings.newEditorUI
+    static var size: CGSize { Settings.newEditorUI ? CGSize(width: 860, height: 580) : CGSize(width: 780, height: 540) }
+    private lazy var pages: [OnboardingPage.Type] = modern ? [WelcomeStep.self, SetupStep.self, ReadyStep.self]
+        : [WelcomePage.self, DemoPage.self, MenuBarPage.self, PermissionPage.self, FolderPage.self,
+           AppearancePage.self, ShortcutsPage.self, DonePage.self]
+    /// The new look's footer: Back, the three step names, Skip and Continue.
+    private lazy var steps = StepTabs(titles: ["Welcome", "Set up", "Ready"]) { [weak self] i in self?.go(to: i) }
+    private lazy var modernBack = PlainButton(title: "Back") { [weak self] in self?.go(to: (self?.index ?? 1) - 1) }
+    private lazy var modernSkip = PlainButton(title: "Skip") { [weak self] in self?.go(to: (self?.pages.count ?? 1) - 1) }
+    private lazy var modernNext = AccentButton(title: "Continue") { [weak self] in self?.advance() }
     private(set) var index = -1
     private let stage = NSView()
     private var current: OnboardingPage?
@@ -35,8 +43,8 @@ import QuartzCore
         win.titleVisibility = .hidden
         win.isMovableByWindowBackground = true
         win.isReleasedWhenClosed = false
-        // Always dark: the aurora and glows are designed for it, whatever the app's appearance.
-        win.appearance = NSAppearance(named: .darkAqua)
+        // The old guide is always dark (its aurora and glows are designed for it); the new one follows the app's look.
+        if !Settings.newEditorUI { win.appearance = NSAppearance(named: .darkAqua) }
         win.title = "Welcome to ScreenShot"
         win.center()
         super.init(window: win)
@@ -47,6 +55,7 @@ import QuartzCore
     required init?(coder: NSCoder) { fatalError() }
 
     private func build() {
+        if modern { buildModern(); return }
         guard let content = window?.contentView else { return }
         let aurora = AuroraView(frame: content.bounds)
         aurora.autoresizingMask = [.width, .height]
@@ -81,7 +90,7 @@ import QuartzCore
         UserDefaults.standard.set(i, forKey: Keys.onboardingPage)
         let page = pages[i].init(frame: stage.bounds)
         page.owner = self
-        if animated {
+        if animated && !OnboardingPage.reduceMotion {
             let t = CATransition()
             t.type = .push
             t.subtype = forward ? .fromRight : .fromLeft
@@ -95,11 +104,41 @@ import QuartzCore
         current = page
         page.play()
 
+        if modern {
+            steps.selected = i
+            modernBack.isHidden = i == 0
+            modernSkip.isHidden = i == pages.count - 1
+            modernNext.title = page.continueTitle
+            return
+        }
         dots.selected = i
         back.isHidden = i == 0
         skip.isHidden = i == pages.count - 1
         next.title = page.continueTitle
         next.isHidden = page.hidesContinue
+    }
+
+    /// The new look: a dotted background, the page, and a footer with Back, the step names, Skip and Continue.
+    private func buildModern() {
+        guard let win = window else { return }
+        let size = Self.size
+        let content = DottedBackground(frame: CGRect(origin: .zero, size: size))
+        win.contentView = content
+        stage.frame = CGRect(x: 0, y: 64, width: size.width, height: size.height - 64)
+        stage.wantsLayer = true
+        content.addSubview(stage)
+        let footer = FooterBar(frame: CGRect(x: 0, y: 0, width: size.width, height: 64))
+        content.addSubview(footer)
+        modernBack.frame.origin = CGPoint(x: 20, y: 16)
+        steps.frame = CGRect(x: (size.width - steps.frame.width) / 2, y: 20, width: steps.frame.width, height: 24)
+        modernNext.frame = CGRect(x: size.width - 20 - modernNext.frame.width, y: 16, width: modernNext.frame.width, height: 32)
+        modernSkip.frame.origin = CGPoint(x: modernNext.frame.minX - 6 - modernSkip.frame.width, y: 16)
+        for v in [modernBack, steps, modernSkip, modernNext] as [NSView] { footer.addSubview(v) }
+        modernNext.onResize = { [weak self] in
+            guard let self else { return }
+            self.modernNext.frame.origin.x = size.width - 20 - self.modernNext.frame.width
+            self.modernSkip.frame.origin.x = self.modernNext.frame.minX - 6 - self.modernSkip.frame.width
+        }
     }
 
     /// Ends the guide; `capture` starts an area screenshot right after, so the first one is one click away.
@@ -123,6 +162,12 @@ import QuartzCore
     }
 
     #if SCREENSHOT_SELFTESTS
+    var debugStepTitles: [String] { steps.titles }
+    var debugContinueTitle: String { modern ? modernNext.title : next.title }
+    var debugBackShown: Bool { modern ? !modernBack.isHidden : !back.isHidden }
+    var debugSkipShown: Bool { modern ? !modernSkip.isHidden : !skip.isHidden }
+    func pressSkip() { modern ? modernSkip.onClick() : skip.performClick(nil) }
+    func pressStep(_ i: Int) { steps.onPick(i) }
     var pageCount: Int { pages.count }
     var currentPage: OnboardingPage? { current }
     func pressContinue() { advance() }
@@ -134,6 +179,9 @@ import QuartzCore
 /// One page of the guide: a flipped canvas laid out top-down; `play` runs its entrance animation.
 class OnboardingPage: NSView {
     weak var owner: OnboardingWindowController?
+    /// macOS's Reduce Motion (or a test forcing it): no page transitions, entrance animations or looping demos.
+    nonisolated(unsafe) static var forceReduceMotion = false
+    static var reduceMotion: Bool { forceReduceMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     var continueTitle: String { "Continue" }
     var hidesContinue: Bool { false }
 
@@ -199,6 +247,7 @@ class OnboardingPage: NSView {
 
     /// Fades a view in while it rises a little, after `delay`.
     func rise(_ v: NSView, delay: CFTimeInterval, distance: CGFloat = 16) {
+        guard !Self.reduceMotion else { return }
         v.wantsLayer = true
         guard let l = v.layer else { return }
         let start = CACurrentMediaTime() + delay
@@ -220,6 +269,7 @@ class OnboardingPage: NSView {
 
     /// Springy pop from small to full size.
     func pop(_ v: NSView, delay: CFTimeInterval) {
+        guard !Self.reduceMotion else { return }
         v.wantsLayer = true
         guard let l = v.layer else { return }
         // Scale around the center.

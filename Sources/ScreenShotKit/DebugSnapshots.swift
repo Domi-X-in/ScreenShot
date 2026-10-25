@@ -187,6 +187,14 @@ import AppKit
             w.orderFront(nil)
             return w
         }))
+        // The welcome guide, one shot per page (the new look has three, the old one eight).
+        for i in 0..<(Settings.newEditorUI ? 3 : 8) {
+            steps.append(("welcome-\(i + 1)", {
+                OnboardingPage.forceReduceMotion = true // every part in place, no entrance animation half done
+                OnboardingWindowController.show(from: i)
+                return OnboardingWindowController.shared?.window
+            }))
+        }
 
         func next(_ i: Int) {
             guard i < steps.count else { NSApp.terminate(nil); return }
