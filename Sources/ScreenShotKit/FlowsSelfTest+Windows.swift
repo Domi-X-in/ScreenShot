@@ -83,7 +83,11 @@ extension FlowsSelfTest {
         // Options bar on a selection: the arrow style control restyles the selected arrow.
         type("a"); drag(ed, CGPoint(x: 100, y: 500), CGPoint(x: 300, y: 400))
         type("v"); click(ed, CGPoint(x: 200, y: 450))
-        if let arrows = allViews(DefaultableSegmentedControl.self, in: content).first(where: { !$0.isHidden && $0.segmentCount == ArrowStyle.allCases.count }) {
+        if let r = ed.debugEditorRibbon {
+            // The new editor: Arrow Heads in the ribbon's Arrange group.
+            chooseRibbon(r.formatting.arrowHeads, ArrowStyle(rawValue: 1)!.title)
+            check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "Arrow Heads restyles the selected arrow")
+        } else if let arrows = allViews(DefaultableSegmentedControl.self, in: content).first(where: { !$0.isHidden && $0.segmentCount == ArrowStyle.allCases.count }) {
             arrows.selectedSegment = 1
             _ = arrows.target?.perform(arrows.action, with: arrows)
             check(v.doc.objects.last?.arrowStyle == ArrowStyle(rawValue: 1), "choosing another arrow style restyles the selected arrow")
@@ -93,9 +97,15 @@ extension FlowsSelfTest {
         type("r"); drag(ed, CGPoint(x: 500, y: 100), CGPoint(x: 600, y: 160))
         type("v")
         type("a", mods: .command)
-        let bar = ed.debugTopBar
-        check(bar.debugControls.align.isEnabled, "with several objects selected the Align button is enabled")
-        let alignMenu = bar.debugAlignMenu
+        let alignMenu: NSMenu
+        if let r = ed.debugEditorRibbon {
+            check(r.formatting.align.isEnabled, "with several objects selected Align is enabled")
+            alignMenu = r.formatting.align.menu!()
+        } else {
+            let bar = ed.debugTopBar
+            check(bar.debugControls.align.isEnabled, "with several objects selected the Align button is enabled")
+            alignMenu = bar.debugAlignMenu
+        }
         if let i = alignMenu.items.firstIndex(where: { $0.title == ArrangeAction.alignTop.title }) {
             alignMenu.performActionForItem(at: i)
         } else { check(false, "the Align menu has Align Top") }

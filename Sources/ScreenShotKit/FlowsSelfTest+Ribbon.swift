@@ -18,7 +18,10 @@ extension FlowsSelfTest {
         check(!ids.contains("tools") && !ids.contains("crop") && !ids.contains("adjust"), "the tools left the title bar")
         check(r.view.window === win && r.view.frame.height == DesignTokens.Metrics.ribbonHeight, "the ribbon sits in the window, 94 pt tall")
         check(abs(r.view.frame.minY - v.frame.maxY) < 1, "the canvas starts under the ribbon (ribbon \(r.view.frame), canvas \(v.frame))")
-        check(r.groups.map(\.id) == ["clipboard", "shapes", "tools"], "Clipboard, Shapes and Tools (\(r.groups.map(\.id)))")
+        let shown = r.groups.filter { !$0.isHidden }.map(\.id)
+        check(Array(shown.prefix(7)) == ["clipboard", "font", "paragraph", "color", "shapes", "tools", "arrange"],
+              "the design's seven groups in order, then at most one contextual group (\(shown))")
+        check(shown.count <= 8, "only the tool in hand's options group shows")
 
         func button(_ item: RibbonItem) -> RibbonButton? {
             let roots: [NSView?] = [win.contentView, win.contentView?.superview] + (win.toolbar?.items.map(\.view) ?? [])

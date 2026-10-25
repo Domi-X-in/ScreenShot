@@ -18,6 +18,10 @@ import AppKit
     private(set) var state = TextFormatState.inactive
     /// The toolbar listens here; it's called after every focus, selection or caret change and every applied command.
     var onChange: ((TextFormatState) -> Void)?
+    /// More listeners (the new editor's ribbon), called after `onChange`.
+    private var observers: [(TextFormatState) -> Void] = []
+
+    func addObserver(_ f: @escaping (TextFormatState) -> Void) { observers.append(f) }
 
     /// Called when focus or selection changes: the active text, or nil when nothing editable is focused.
     func attach(_ t: TextFormattingTarget?) {
@@ -28,6 +32,7 @@ import AppKit
     func refresh() {
         state = target?.formatState ?? .inactive
         onChange?(state)
+        for f in observers { f(state) }
     }
 
     func getFormatAtSelection() -> TextFormatState {

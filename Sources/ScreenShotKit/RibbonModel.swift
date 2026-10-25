@@ -85,6 +85,10 @@ enum RibbonColumn {
     let compactIcon: IconName
     let columns: [RibbonColumn]
     private let observers = NSHashTable<NSView>.weakObjects()
+    /// A contextual group (Office's contextual tabs) shows only while its tool or object is in hand.
+    var isHidden = false {
+        didSet { if isHidden != oldValue { for v in observers.allObjects { v.needsLayout = true; v.needsDisplay = true } } }
+    }
 
     init(_ id: String, title: String, compactTitle: String, compactIcon: IconName, columns: [RibbonColumn]) {
         self.id = id

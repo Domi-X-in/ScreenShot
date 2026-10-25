@@ -1,11 +1,13 @@
 import AppKit
 
-/// The editor's ribbon (ROADMAP, Fase 6 · R3), shown with `Settings.newEditorUI`: Clipboard, Shapes and Tools, wired to
-/// the editor's commands, plus the title bar's commands (Copy image, Save, Pin, Undo, Redo). Font, Paragraph, Color and
-/// Arrange join in R4; until then the current formatting bar stays under the ribbon.
+/// The editor's ribbon (ROADMAP, Fase 6), shown with `Settings.newEditorUI`: Clipboard, Font, Paragraph, Color, Shapes,
+/// Tools and Arrange, then a contextual group for the tool in hand, all wired to the editor's commands; plus the title
+/// bar's commands (Copy image, Save, Pin, Undo, Redo).
 @MainActor final class EditorRibbon {
     let view: RibbonView
     let groups: [RibbonGroup]
+    /// Font, Paragraph, Color, Arrange and the contextual groups.
+    let formatting: RibbonFormatting
     private weak var editor: EditorWindowController?
     private var toolItems: [Tool: RibbonItem] = [:]
 
@@ -62,18 +64,21 @@ import AppKit
         let e = Self.effectTools.map { tool($0.0, $0.1) }
         toolItems = tools
 
+        formatting = RibbonFormatting(editor: editor, controller: editor.formatting)
         groups = [
             RibbonGroup("clipboard", title: "Clipboard", compactTitle: "Paste", compactIcon: .gPaste, columns: [
                 .large(paste),
                 .rows([[.item(cut)], [.item(copy)], [.item(format)]]),
             ]),
+            formatting.fontGroup, formatting.paragraphGroup, formatting.colorGroup,
             RibbonGroup("shapes", title: "Shapes", compactTitle: "Shapes", compactIcon: .gShapes, columns: [
                 .rows([Array(s.prefix(5)), Array(s.suffix(4))]),
             ]),
             RibbonGroup("tools", title: "Tools", compactTitle: "Tools", compactIcon: .gTools, columns: [
                 .rows([Array(e.prefix(4)), Array(e.suffix(2)) + [.item(ocr), .item(areaSelect)]]),
             ]),
-        ]
+            formatting.arrangeGroup,
+        ] + formatting.contextualGroups
         view = RibbonView(groups: groups)
     }
 
@@ -88,6 +93,7 @@ import AppKit
         let types = NSPasteboard.general.types ?? []
         paste.isEnabled = types.contains(ShotView.objectPasteboardType) || types.contains(.png) || types.contains(.tiff)
         updateHistory(canUndo: canUndo, canRedo: canRedo)
+        formatting.update()
     }
 
     func updateHistory(canUndo: Bool, canRedo: Bool) {

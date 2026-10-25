@@ -105,6 +105,7 @@ final class RibbonView: NSView {
         setAccessibilityRole(.toolbar)
         setAccessibilityLabel("Editing ribbon")
         for g in groups {
+            g.observe(self)
             let v = RibbonGroupView(g)
             groupViews.append(v)
             addSubview(v)
@@ -119,15 +120,19 @@ final class RibbonView: NSView {
     override var isFlipped: Bool { true }
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: DT.Metrics.ribbonHeight) }
 
-    /// Each group's natural width, in order.
-    var fullWidths: [CGFloat] { groupViews.map(\.preferredWidth) }
+    /// The groups shown now (contextual groups come and go), in order.
+    private var visibleIndices: [Int] { groups.indices.filter { !groups[$0].isHidden } }
+
+    /// Each shown group's natural width, in order.
+    var fullWidths: [CGFloat] { visibleIndices.map { groupViews[$0].preferredWidth } }
 
     /// The window widths (ribbon widths) at which each next group folds.
     var breakpoints: [CGFloat] { RibbonLayout.breakpoints(full: fullWidths).map { $0 + 2 * Self.sidePadding } }
 
     func isCompact(_ group: RibbonGroup) -> Bool {
-        guard let i = groups.firstIndex(where: { $0 === group }) else { return false }
-        return i >= groups.count - collapsedCount
+        let shown = visibleIndices
+        guard let i = groups.firstIndex(where: { $0 === group }), let k = shown.firstIndex(of: i) else { return false }
+        return k >= shown.count - collapsedCount
     }
 
     func compactButton(for group: RibbonGroup) -> CompactGroupButton? {
@@ -142,15 +147,21 @@ final class RibbonView: NSView {
         collapsedCount = c
         var x = Self.sidePadding
         dividerXs = []
-        let n = groups.count
-        for i in 0..<n {
-            let expanded = i < n - c
+        let shown = visibleIndices
+        let n = shown.count
+        for i in groups.indices where groups[i].isHidden {
+            groupViews[i].isHidden = true
+            compactButtons[i].isHidden = true
+            if flyout?.group === groups[i] { closeFlyout() }
+        }
+        for (k, i) in shown.enumerated() {
+            let expanded = k < n - c
             groupViews[i].isHidden = !expanded
             compactButtons[i].isHidden = expanded
             if expanded {
                 groupViews[i].frame.origin = CGPoint(x: x, y: 0)
                 x += groupViews[i].frame.width
-                if i < n - 1 { dividerXs.append(x); x += RibbonLayout.divider }
+                if k < n - 1 { dividerXs.append(x); x += RibbonLayout.divider }
             } else {
                 let size = DT.Metrics.compactGroupButton
                 compactButtons[i].frame = CGRect(x: x + 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
@@ -177,7 +188,6 @@ final class RibbonView: NSView {
         if let open = flyout, open.group === button.group { closeFlyout(); return }
         closeFlyout()
         guard let window else { return }
-        let index = groups.firstIndex { $0 === button.group } ?? 0
         let f = RibbonFlyout(group: button.group)
         f.onClose = { [weak self, weak button] in
             button?.isOpen = false
@@ -185,8 +195,8 @@ final class RibbonView: NSView {
         }
         flyout = f
         button.isOpen = true
-        // The last groups open toward the left so the flyout stays inside the window.
-        f.show(under: button, in: window, alignRight: index >= groups.count / 2 + 1)
+        // Groups on the right half open toward the left so the flyout stays inside the window.
+        f.show(under: button, in: window, alignRight: button.frame.midX > bounds.midX)
     }
 
     func closeFlyout() {

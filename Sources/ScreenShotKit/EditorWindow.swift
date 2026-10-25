@@ -97,7 +97,7 @@ import UniformTypeIdentifiers
         statusBar.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
         options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
         options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
-        topBar.shotView = shotView
+        if editorRibbon == nil { topBar.shotView = shotView }
         options.onCutOutMode = { [weak self] on in
             self?.shotView.cutOutMode = on
             self?.window?.makeFirstResponder(self?.shotView)
@@ -111,13 +111,14 @@ import UniformTypeIdentifiers
         // The canvas paints its dot background over whatever it is asked to redraw; keep that inside it, and keep the
         // toolbar above it (views don't clip to their bounds by default since macOS 14).
         shotView.clipsToBounds = true
-        for v in [shotView, topBar, statusBar, recent] as [NSView] {
+        // The new editor has no floating formatting card: Font, Paragraph, Color and Arrange are in the ribbon.
+        let floating: [NSView] = editorRibbon == nil ? [shotView, topBar, statusBar, recent] : [shotView, statusBar, recent]
+        for v in floating {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
-        shotView.topInset = 10 + EditorToolbar.height
-        // With the new editor the ribbon runs full width under the title bar, and the canvas starts below it. The
-        // formatting card keeps floating over the canvas until its groups move into the ribbon (R4).
+        shotView.topInset = editorRibbon == nil ? 10 + EditorToolbar.height : 10
+        // With the new editor the ribbon runs full width under the title bar, and the canvas starts below it.
         var top = content.safeAreaLayoutGuide.topAnchor
         if let ribbonView = editorRibbon?.view {
             ribbonView.translatesAutoresizingMaskIntoConstraints = false
@@ -130,12 +131,16 @@ import UniformTypeIdentifiers
             ])
             top = ribbonView.bottomAnchor
         }
+        if editorRibbon == nil {
+            NSLayoutConstraint.activate([
+                // Both cards float over the canvas: the toolbar at the top, hugging its content, the status bar at the bottom.
+                topBar.topAnchor.constraint(equalTo: top, constant: 8),
+                topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+                topBar.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
+                topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
+            ])
+        }
         NSLayoutConstraint.activate([
-            // Both cards float over the canvas: the toolbar at the top, hugging its content, the status bar at the bottom.
-            topBar.topAnchor.constraint(equalTo: top, constant: 8),
-            topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
-            topBar.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
-            topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
             shotView.topAnchor.constraint(equalTo: top),
             shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -201,7 +206,7 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
-        let chrome: CGFloat = 52 + 18 + EditorToolbar.height + 68 + 84 + (editorRibbon == nil ? 0 : DesignTokens.Metrics.ribbonHeight)
+        let chrome: CGFloat = 52 + 18 + 68 + 84 + (editorRibbon == nil ? EditorToolbar.height : DesignTokens.Metrics.ribbonHeight)
         var w = max(1380, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
@@ -218,7 +223,7 @@ import UniformTypeIdentifiers
         cropButton.isOn = shotView.tool == .crop
         options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, cutOut: shotView.cutOutMode)
         statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
-        topBar.update()
+        if editorRibbon == nil { topBar.update() }
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
                              canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
         // The formatting toolbar follows focus, selection and the caret.
@@ -457,7 +462,7 @@ import UniformTypeIdentifiers
     }
 
     /// Whether keyboard focus is in the formatting toolbar (its size box), so text being typed stays open.
-    func isFormattingControl(_ responder: NSResponder) -> Bool { topBar.owns(responder) }
+    func isFormattingControl(_ responder: NSResponder) -> Bool { editorRibbon == nil && topBar.owns(responder) }
 
     #if SCREENSHOT_SELFTESTS
     var debugRibbon: FormattingRibbon { ribbon }
@@ -465,6 +470,10 @@ import UniformTypeIdentifiers
     var debugTopBar: EditorToolbar { topBar }
     var debugStatusBar: StatusBar { statusBar }
     var debugEditorRibbon: EditorRibbon? { editorRibbon }
+    /// Whether the old floating formatting bar is in the window.
+    var debugTopBarShown: Bool { editorRibbon == nil }
+    /// Shape Fill's palette: the ribbon's in the new editor, the formatting bar's otherwise.
+    var debugFillControl: ColorSplitButton { editorRibbon?.formatting.fillPalette ?? topBar.fill }
     #endif
 
     /// Shottr's "Default zoom level: Prefer 100%"; otherwise the image fits the window.
