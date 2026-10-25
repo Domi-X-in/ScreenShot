@@ -12,12 +12,32 @@ extension FlowsSelfTest {
         let v = ed.shotView
         guard let r = ed.debugEditorRibbon else { check(false, "the new editor has a ribbon"); return }
 
-        // Title bar: the window's own commands only.
+        // Title bar: a card with the window's buttons and the window's own commands; the system toolbar is empty.
         let ids = win.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
-        check(ids.contains("titleActions") && ids.contains("dragOut") && ids.contains("history"), "the title bar has the actions, drag and undo/redo (\(ids))")
-        check(!ids.contains("tools") && !ids.contains("crop") && !ids.contains("adjust"), "the tools left the title bar")
+        check(ids.isEmpty, "the system toolbar holds nothing (\(ids))")
+        guard let cards = ed.debugCards else { check(false, "the new editor is laid out in cards"); return }
+        func frame(_ view: NSView) -> CGRect { view.convert(view.bounds, to: nil) }
+        let titleFrame = frame(cards.title)
+        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            if let b = win.standardWindowButton(kind) {
+                check(titleFrame.contains(b.convert(b.bounds, to: nil)), "window button \(kind.rawValue) sits inside the title card (\(b.convert(b.bounds, to: nil)) in \(titleFrame))")
+            }
+        }
+        check(allViews(RibbonButton.self, in: cards.title).map(\.item.id) == ["copyImage", "save", "pin", "undo", "redo"],
+              "the title card has Copy image, Save, Pin, Undo and Redo")
+        check(cards.title.mouseDownCanMoveWindow, "dragging the title card moves the window")
         check(r.view.window === win && r.view.frame.height == DesignTokens.Metrics.ribbonHeight, "the ribbon sits in the window, 94 pt tall")
-        check(abs(r.view.frame.minY - v.frame.maxY) < 1, "the canvas starts under the ribbon (ribbon \(r.view.frame), canvas \(v.frame))")
+        // Cards: 10 pt from the window's edges and from each other, 12 pt corners.
+        let content = win.contentView!.bounds
+        let all: [NSView] = [cards.title, cards.ribbon, cards.canvas, cards.status, cards.recent]
+        check(all.allSatisfy { $0.layer?.cornerRadius == DesignTokens.Radius.card }, "every card has the same 12 pt corners")
+        check(abs(cards.ribbon.frame.minX - 10) < 0.5 && abs(content.maxX - cards.ribbon.frame.maxX - 10) < 0.5, "cards keep 10 pt from the sides")
+        check(abs(cards.title.frame.minY - cards.ribbon.frame.maxY - 10) < 0.5, "10 pt between the title card and the ribbon")
+        check(abs(cards.ribbon.frame.minY - cards.canvas.frame.maxY - 10) < 0.5, "10 pt between the ribbon and the canvas")
+        check(abs(cards.canvas.frame.minY - cards.status.frame.maxY - 10) < 0.5 && abs(cards.status.frame.minY - cards.recent.frame.maxY - 10) < 0.5,
+              "10 pt between canvas, status bar and recent strip")
+        check(abs(cards.recent.frame.minY - 10) < 0.5, "10 pt under the recent strip")
+        check(v.isDescendant(of: cards.canvas), "the canvas is inside its card")
         let shown = r.groups.filter { !$0.isHidden }.map(\.id)
         check(Array(shown.prefix(7)) == ["clipboard", "font", "paragraph", "color", "shapes", "tools", "arrange"],
               "the design's seven groups in order, then at most one contextual group (\(shown))")
@@ -90,6 +110,53 @@ extension FlowsSelfTest {
         guard let old = await openEditor(Self.sampleImage(600, 400)) else { return }
         let oldIds = old.window?.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
         check(old.debugEditorRibbon == nil && oldIds.contains("tools"), "with newEditorUI off the editor keeps its tool strip")
+    }
+}
+#endif
+
+#if SCREENSHOT_SELFTESTS
+extension FlowsSelfTest {
+    /// The callout style bar beside the canvas: only with callouts, the five designs, the current one lit, a click
+    /// restyling the selected callout and the next one; the canvas takes the room back when it hides.
+    func calloutBarFlow() async {
+        let d = UserDefaults.standard
+        d.set(true, forKey: "newEditorUI")
+        defer { d.removeObject(forKey: "newEditorUI") }
+        Settings.returnToSelect = true
+        guard let ed = await openEditor(Self.sampleImage(1000, 700)), let bar = ed.debugCalloutBar, let cards = ed.debugCards else {
+            check(false, "the new editor opens with a callout style bar"); return
+        }
+        let v = ed.shotView
+        type("a")
+        ed.window?.layoutIfNeeded()
+        check(bar.isHidden && abs(cards.canvas.frame.minX - 10) < 0.5, "with the Arrow the bar hides and the canvas uses the room")
+        let zoomBefore = v.zoomPercent
+        let spot = v.convert(v.viewPoint(forImage: CGPoint(x: 500, y: 350)), to: nil)
+        type("e")
+        ed.window?.layoutIfNeeded()
+        check(!bar.isHidden && abs(cards.canvas.frame.minX - bar.frame.maxX - 10) < 0.5 && abs(bar.frame.width - 44) < 0.5,
+              "the Callout tool shows the 44 pt bar beside the canvas")
+        let spotAfter = v.convert(v.viewPoint(forImage: CGPoint(x: 500, y: 350)), to: nil)
+        check(v.zoomPercent == zoomBefore && abs(spot.x - spotAfter.x) < 1 && abs(spot.y - spotAfter.y) < 1,
+              "the picture stays still as the bar comes in (zoom \(zoomBefore)% → \(v.zoomPercent)%, \(spot) → \(spotAfter))")
+        check(bar.items.count == CalloutStyle.allCases.count, "all five callout designs (\(bar.items.count))")
+        check(bar.current == v.displayedStyle.callout, "the current design is lit")
+        bar.items[.thought]?.action?()
+        check(v.style.callout == .thought && bar.current == .thought, "picking Thought sets it for the next callout and lights it")
+        drag(ed, CGPoint(x: 500, y: 300), CGPoint(x: 650, y: 180)); await sleep(0.15)
+        type("Hi"); key("esc")
+        guard let callout = v.doc.objects.last, callout.kind == .callout else { check(false, "a callout was drawn"); return }
+        check(callout.calloutStyle == .thought, "the new callout is a thought bubble")
+        check(!bar.isHidden && v.selection == [callout.id], "with the callout selected the bar stays")
+        bar.items[.shout]?.action?()
+        check(v.doc.objects.last?.calloutStyle == .shout && bar.current == .shout, "picking Shout restyles the selected callout")
+        type("z", mods: .command)
+        check(v.doc.objects.last?.calloutStyle == .thought, "⌘Z undoes it")
+        key("esc"); type("r")
+        ed.window?.layoutIfNeeded()
+        check(bar.isHidden, "another tool hides the bar again")
+        check(v.fitsWindow && v.zoomPercent == zoomBefore, "and the picture fits the canvas again (\(v.zoomPercent)%)")
+        if let b = bar.items[.box] { check(RibbonButton(b).toolTip == CalloutStyle.box.title, "each design has its name as a tooltip") }
     }
 }
 #endif

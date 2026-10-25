@@ -16,6 +16,8 @@ final class RecentStrip: NSView {
     /// The new editor's look (design tokens, the #FF5500 accent); the old editor keeps Shottr's.
     let modern: Bool
     private let line = NSView()
+    /// Inside a card, which draws the background and the edge.
+    var inCard = false { didSet { needsDisplay = true; line.isHidden = inCard } }
 
     init(modern: Bool = false) {
         self.modern = modern
@@ -72,7 +74,7 @@ final class RecentStrip: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        layer?.backgroundColor = modern ? DesignTokens.color(.chrome).cgColor
+        layer?.backgroundColor = inCard ? NSColor.clear.cgColor : modern ? DesignTokens.color(.chrome).cgColor
             : Theme.dynamic(light: NSColor(hex: 0xF4F5F8), dark: NSColor(hex: 0x1D1E24)).cgColor
         line.layer?.backgroundColor = (modern ? DesignTokens.color(.lineSoft) : NSColor.separatorColor).cgColor
     }

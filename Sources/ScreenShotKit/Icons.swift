@@ -28,6 +28,8 @@ enum IconName: String, CaseIterable {
     case lineStyle, lineSolid, lineDash, lineDot
     // Compact ribbon groups
     case gPaste, gFonts, gParagraph, gColors, gShapes, gTools, gArrange
+    // Callout styles (the side bar)
+    case calloutBox, calloutCard, calloutSpeech, calloutThought, calloutShout
     // Status menu and home window
     case statusMark, capFull, capArea, capRepeat, capTimer, capWindow, capActive, capScroll, capScrollManual
     case openImage, guide, updates, prefs, power, search, folder, photo
@@ -172,6 +174,12 @@ enum Icons {
         case .gShapes: IconParts(stroke: r(3, 3, 8, 8, 1.5) + c(17, 7, 4) + "M12 13.5l5 7.5H7z")
         case .gTools: IconParts(stroke: l(4, 20, 13.5, 10.5) + l(11.5, 9.5, 14.5, 12.5) + "M17 3v4M15 5h4M20 10v3M18.5 11.5h3M10 3.5v2M9 4.5h2")
         case .gArrange: IconParts(stroke: r(3, 3, 11, 11, 2) + "M10 14v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4")
+        // Callout styles
+        case .calloutBox: IconParts(stroke: r(3, 4, 18, 12, 1.5) + l(8, 16, 5, 20.5))
+        case .calloutCard: IconParts(stroke: r(3, 4, 18, 12, 3.5) + "M9 16l-1.5 4.5 5-4.5")
+        case .calloutSpeech: IconParts(stroke: "M7 4h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-6l-4 4v-4a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z")
+        case .calloutThought: IconParts(stroke: e(12, 10, 9, 6) + c(7, 18.5, 1.5) + c(4.5, 21, 1))
+        case .calloutShout: IconParts(stroke: "M12 2.5l2 4.2 4.5-2.2-1.2 4.8 4.7 1.2-4.2 2.6 2.5 4.2-4.8-.6L14.5 21 12 17.2 9.5 21l-1-4.3-4.8.6 2.5-4.2L2 10.5l4.7-1.2-1.2-4.8 4.5 2.2z")
         // Status menu and home window
         case .statusMark: IconParts(stroke: ocrCorners + c(12, 12, 3.5))
         case .capFull: IconParts(stroke: r(2.5, 4, 19, 13, 2) + l(9, 20.5, 15, 20.5) + "M7 9.5V8h2M17 9.5V8h-2M7 11.5V13h2M17 11.5V13h-2")

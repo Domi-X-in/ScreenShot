@@ -34,7 +34,7 @@ extension FlowsSelfTest {
         s.color = NSColor(hex: 0xFF3B30); s.callout = .box; s.width = 4; v.setStyle(s)
         let body = callout.calloutShape().body.boundingBox
         click(ed, CGPoint(x: body.midX, y: body.midY))
-        check(shown().color.hexString == "#34C759" && shown().callout == .card && shown().width == 5, "selecting a callout shows its color, design and size")
+        check(shown().color.hexString == "#34C759" && shown().callout == .card && shown().width == 5, "selecting a callout shows its color, design and size (\(shown().color.hexString) \(shown().callout) \(shown().width), selected \(v.selection.count), hit \(v.selection.contains(callout.id)))")
 
         // Editing: the bar follows the letters.
         click(ed, CGPoint(x: text.bounds.midX, y: text.bounds.midY), clicks: 2)

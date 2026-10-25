@@ -154,6 +154,36 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
     /// Size shown in the toolbar's "Selection Size" cell: the crop selection, else the image.
     var selectionSize: CGSize { (tool == .crop ? cropRect?.size : nil) ?? doc.image.size }
 
+    /// Whether the picture is fitted to the canvas (the user hasn't zoomed).
+    var fitsWindow: Bool { zoomOverride == nil }
+    var currentZoom: CGFloat { zoom }
+
+    /// Keeps the picture still on screen while the canvas's frame changes (the callout style bar coming or going)
+    /// instead of re-fitting it, so nothing jumps and text being typed keeps its size. `restoreFit` returns to fitting
+    /// the canvas (when the bar leaves and the zoom is still the one it held). Text being edited stays open.
+    func keepPictureStill(restoreFit: Bool = false, _ change: () -> Void) {
+        guard let window else { change(); return }
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let anchorInWindow = convert(center, to: nil)
+        let imagePoint = toImage(center)
+        let z = zoom
+        change()
+        window.layoutIfNeeded()
+        if restoreFit {
+            zoomOverride = nil
+            pan = .zero
+        } else {
+            zoomOverride = z
+            let target = convert(anchorInWindow, from: nil)
+            let after = fromImage(imagePoint)
+            pan.x += target.x - after.x
+            pan.y += target.y - after.y
+        }
+        needsDisplay = true
+        repositionTextField()
+        controller?.updateInfo()
+    }
+
     func setZoom(_ z: CGFloat?, around viewPoint: CGPoint? = nil) {
         let anchor = viewPoint ?? CGPoint(x: bounds.midX, y: bounds.midY)
         let before = toImage(anchor)

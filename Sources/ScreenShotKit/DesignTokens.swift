@@ -99,6 +99,8 @@ enum DesignTokens {
         static let menu: CGFloat = 10
         /// The window.
         static let window: CGFloat = 12
+        /// The editor's floating cards (title bar, ribbon, canvas, bars): one curvature for every card.
+        static let card: CGFloat = 12
     }
 
     enum Metrics {
@@ -112,6 +114,20 @@ enum DesignTokens {
         static let iconGrid: CGFloat = 24
         /// Icon stroke in points, the same at every icon size.
         static let iconStroke: CGFloat = 1.5
+        /// The editor's cards: margin to the window's edges and the gap between cards.
+        static let cardInset: CGFloat = 10
+        static let cardGap: CGFloat = 10
+        /// The title card's top: it centers on the window's buttons in the unified title bar (52 pt).
+        static let titleCardTop: CGFloat = 6
+        /// The callout style bar beside the canvas.
+        static let sideBarWidth: CGFloat = 44
+    }
+
+    /// The cards' soft shadow (0 6 18 in the design): stronger in dark, lighter in light.
+    enum CardShadow {
+        static let offset = CGSize(width: 0, height: -6)
+        static let radius: CGFloat = 9
+        static func opacity(dark: Bool) -> Float { dark ? 0.25 : 0.10 }
     }
 
     enum Font {

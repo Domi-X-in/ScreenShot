@@ -91,8 +91,8 @@ extension FlowsSelfTest {
         // Color on a rectangle.
         type("r"); drag(ed, CGPoint(x: 200, y: 150), CGPoint(x: 400, y: 280))
         check(f.fill.isEnabled && f.outline.isEnabled, "a selected rectangle turns Color on")
-        check(f.visibleContextualGroup === f.textGroup && f.editText.isEnabled && !f.calloutDesign.isEnabled,
-              "a rectangle can hold text: the Text group offers Edit Text (no callout design)")
+        check(f.visibleContextualGroup === f.textGroup && f.editText.isEnabled, "a rectangle can hold text: the Text group offers Edit Text")
+        check(ed.debugCalloutBar?.isHidden == true, "no callout style bar for a rectangle")
         f.fillPalette.pick(NSColor(hex: 0x34C759))
         check(shapes().fill?.hexString == "#34C759" && f.fill.barColor?.hexString == "#34C759", "Shape Fill fills it green and shows it in the bar")
         f.outlinePalette.pick(NSColor(hex: 0x007AFF))

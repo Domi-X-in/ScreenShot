@@ -243,6 +243,7 @@ import ScreenCaptureKit
             ("ribbon-editor", ribbonEditorFlow),
             ("ribbon-formatting", ribbonFormattingFlow),
             ("notifications", notificationsFlow),
+            ("callout-bar", calloutBarFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

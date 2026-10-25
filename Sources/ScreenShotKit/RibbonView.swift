@@ -97,6 +97,8 @@ final class RibbonView: NSView {
 
     /// How many groups are folded right now.
     private(set) var collapsedCount = 0
+    /// Off inside a card, which draws the background and the edge.
+    var drawsChrome = true { didSet { needsDisplay = true } }
 
     init(groups: [RibbonGroup]) {
         self.groups = groups
@@ -172,12 +174,14 @@ final class RibbonView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        DT.color(.chrome).setFill()
-        bounds.fill()
-        DT.color(.lineSoft).setFill()
-        CGRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+        if drawsChrome {
+            DT.color(.chrome).setFill()
+            bounds.fill()
+            DT.color(.lineSoft).setFill()
+            CGRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+        }
         DT.color(.line).setFill()
-        CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
+        if drawsChrome { CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill() }
         for x in dividerXs { CGRect(x: x, y: 10, width: 1, height: bounds.height - 18).fill() }
     }
 

@@ -198,6 +198,8 @@ final class EditorStatusBar: NSView {
     let notices = NotificationBar()
     let backdropButton = BarButton(title: "Backdrop", icon: .backdrop, tooltip: "Backdrop: background, aspect ratio, padding, shadow (K toggles)")
     var onBackdropPanel: ((NSView) -> Void)?
+    /// Off inside a card, which draws the background and the edge.
+    var drawsChrome = true { didSet { needsDisplay = true } }
 
     init(info: InfoCellsView) {
         super.init(frame: .zero)
@@ -231,6 +233,7 @@ final class EditorStatusBar: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard drawsChrome else { return }
         DT.color(.chrome).setFill()
         bounds.fill()
         DT.color(.line).setFill()

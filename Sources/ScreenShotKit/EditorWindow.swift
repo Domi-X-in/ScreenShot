@@ -36,6 +36,13 @@ import UniformTypeIdentifiers
     private lazy var recent = RecentStrip(modern: editorRibbon != nil)
     /// The new editor's bottom bar: messages, readouts and Backdrop.
     private lazy var editorStatus = EditorStatusBar(info: info)
+    /// The new editor's floating cards (R5b) and the callout style bar beside the canvas.
+    private var cards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)?
+    private lazy var calloutBar = CalloutStyleBar()
+    private var canvasNextToBar: NSLayoutConstraint?
+    private var canvasAtEdge: NSLayoutConstraint?
+    /// The zoom the picture had when the callout bar came in fitted, so it can fit again when the bar leaves.
+    private var calloutBarHeldZoom: CGFloat?
     /// The formatting store and the top toolbar (Word's Font and Paragraph, PowerPoint's Shape Styles, Arrange, Align).
     let formatting = FormattingController()
     private lazy var ribbon = FormattingRibbon(controller: formatting)
@@ -50,8 +57,6 @@ import UniformTypeIdentifiers
         static let crop = NSToolbarItem.Identifier("crop")
         static let adjust = NSToolbarItem.Identifier("adjust")
         static let info = NSToolbarItem.Identifier("info")
-        static let titleActions = NSToolbarItem.Identifier("titleActions")
-        static let history = NSToolbarItem.Identifier("history")
     }
 
     init(image: CGImage, scale: CGFloat, state: EditState? = nil, url: URL? = nil) {
@@ -67,7 +72,13 @@ import UniformTypeIdentifiers
         super.init(window: win)
         win.delegate = self
         shotView.controller = self
-        if Settings.newEditorUI { editorRibbon = EditorRibbon(editor: self) }
+        if Settings.newEditorUI {
+            editorRibbon = EditorRibbon(editor: self)
+            // The cards draw the title bar: the system's is see-through, and its empty toolbar only sets its height so
+            // the window's buttons center on the title card.
+            win.titlebarAppearsTransparent = true
+            win.titlebarSeparatorStyle = .none
+        }
         buildControls()
         buildLayout()
         let toolbar = NSToolbar(identifier: "editor")
@@ -107,8 +118,97 @@ import UniformTypeIdentifiers
         }
     }
 
+    /// The new editor (R5b): floating cards on the window's background, 10 pt from the edges and from each other.
+    /// Title card (with the window's buttons), ribbon, then the callout style bar and the canvas side by side, the
+    /// status bar and the recent strip.
+    private func buildCardLayout(_ r: EditorRibbon) {
+        guard let win = window else { return }
+        let content = CanvasBackground()
+        win.contentView = content
+        let m = DesignTokens.Metrics.self
+        let drag = DragOutView(icon: Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2))) { [weak self] in
+            self?.rendered().map { ($0, self?.doc.scale ?? 2) }
+        }
+        let title = TitleCard(actions: EditorRibbon.titleBarGroup([r.copyImage, r.save, r.pin]), drag: drag,
+                              history: EditorRibbon.titleBarGroup([r.undo, r.redo]))
+        let ribbon = CardView(), canvas = CardView(), status = CardView(), strip = CardView()
+        r.view.drawsChrome = false
+        editorStatus.drawsChrome = false
+        recent.inCard = true
+        ribbon.embed(r.view)
+        canvas.embed(shotView)
+        status.embed(editorStatus)
+        strip.embed(recent)
+        calloutBar.isHidden = true
+        calloutBar.onPick = { [weak self] style in
+            guard let v = self?.shotView else { return }
+            var s = v.displayedStyle
+            s.callout = style
+            v.setStyle(s)
+        }
+        for v in [title, ribbon, calloutBar, canvas, status, strip] as [NSView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(v)
+        }
+        shotView.topInset = 10
+        let nextToBar = canvas.leadingAnchor.constraint(equalTo: calloutBar.trailingAnchor, constant: m.cardGap)
+        let atEdge = canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset)
+        canvasNextToBar = nextToBar
+        canvasAtEdge = atEdge
+        func sides(_ v: NSView) -> [NSLayoutConstraint] {
+            [v.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset),
+             v.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m.cardInset)]
+        }
+        NSLayoutConstraint.activate(sides(title) + sides(ribbon) + sides(status) + sides(strip) + [
+            title.topAnchor.constraint(equalTo: content.topAnchor, constant: m.titleCardTop),
+            title.heightAnchor.constraint(equalToConstant: m.titleBarHeight),
+            ribbon.topAnchor.constraint(equalTo: title.bottomAnchor, constant: m.cardGap),
+            ribbon.heightAnchor.constraint(equalToConstant: m.ribbonHeight),
+            calloutBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset),
+            calloutBar.widthAnchor.constraint(equalToConstant: m.sideBarWidth),
+            calloutBar.topAnchor.constraint(equalTo: ribbon.bottomAnchor, constant: m.cardGap),
+            calloutBar.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -m.cardGap),
+            atEdge,
+            canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m.cardInset),
+            canvas.topAnchor.constraint(equalTo: ribbon.bottomAnchor, constant: m.cardGap),
+            canvas.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -m.cardGap),
+            status.heightAnchor.constraint(equalToConstant: m.statusBarHeight),
+            status.bottomAnchor.constraint(equalTo: strip.topAnchor, constant: -m.cardGap),
+            strip.heightAnchor.constraint(equalToConstant: 84),
+            strip.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -m.cardInset),
+        ])
+        cards = (title, ribbon, canvas, status, strip)
+        win.initialFirstResponder = shotView
+    }
+
+    /// Shows the callout style bar while the Callout tool is in hand or a callout is selected; the canvas takes its room
+    /// otherwise.
+    private func updateCalloutBar() {
+        guard cards != nil else { return }
+        let v = shotView
+        let shows = (v.selectedKind ?? v.tool) == .callout || v.styleTargets.contains { $0.kind == .callout }
+        calloutBar.show(current: v.displayedStyle.callout)
+        guard shows == calloutBar.isHidden else { return }
+        let toggle = {
+            self.calloutBar.isHidden = !shows
+            self.canvasAtEdge?.isActive = !shows
+            self.canvasNextToBar?.isActive = shows
+        }
+        // The picture stays where it is while the canvas narrows or widens: no jump, no re-zoom under the text being typed.
+        if shows {
+            let wasFitted = v.fitsWindow
+            v.keepPictureStill(toggle)
+            calloutBarHeldZoom = wasFitted ? v.currentZoom : nil
+        } else {
+            let refit = calloutBarHeldZoom.map { abs($0 - v.currentZoom) < 0.0001 } ?? false
+            calloutBarHeldZoom = nil
+            v.keepPictureStill(restoreFit: refit, toggle)
+        }
+    }
+
     private func buildLayout() {
         guard let win = window else { return }
+        if let r = editorRibbon { buildCardLayout(r); return }
         let content = NSView()
         win.contentView = content
         // The canvas paints its dot background over whatever it is asked to redraw; keep that inside it, and keep the
@@ -176,8 +276,8 @@ import UniformTypeIdentifiers
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        // The new editor's title bar keeps only the window's own commands; the tools live in the ribbon.
-        if editorRibbon != nil { return [Item.titleActions, Item.dragOut, Item.history, .flexibleSpace] }
+        // The new editor's toolbar stays empty: it only gives the title bar the height the title card is centered on.
+        if editorRibbon != nil { return [] }
         return [Item.actions, Item.dragOut, .flexibleSpace, Item.tools, Item.crop, Item.adjust, .flexibleSpace]
     }
 
@@ -189,16 +289,8 @@ import UniformTypeIdentifiers
         let item = NSToolbarItem(itemIdentifier: id)
         switch id {
         case Item.actions: item.view = actionsPalette; item.label = "Actions"
-        case Item.titleActions:
-            guard let r = editorRibbon else { return nil }
-            item.view = EditorRibbon.titleBarGroup([r.copyImage, r.save, r.pin]); item.label = "Actions"
-        case Item.history:
-            guard let r = editorRibbon else { return nil }
-            item.view = EditorRibbon.titleBarGroup([r.undo, r.redo]); item.label = "Undo and Redo"
         case Item.dragOut:
-            let drag = DragOutView(icon: editorRibbon == nil ? nil : Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2))) { [weak self] in
-                self?.rendered().map { ($0, self?.doc.scale ?? 2) }
-            }
+            let drag = DragOutView { [weak self] in self?.rendered().map { ($0, self?.doc.scale ?? 2) } }
             item.view = drag
             item.label = "Drag"
         case Item.tools: item.view = toolPalette; item.label = "Tools"
@@ -222,7 +314,9 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
-        let chrome: CGFloat = 52 + 18 + 68 + 84 + (editorRibbon == nil ? EditorToolbar.height : DesignTokens.Metrics.ribbonHeight)
+        // The new editor's cards: title 6+40, ribbon, canvas, status, strip, with 10 pt gaps and margins.
+        let chrome: CGFloat = editorRibbon == nil ? 52 + 18 + 68 + 84 + EditorToolbar.height
+            : 6 + 40 + 10 + DesignTokens.Metrics.ribbonHeight + 10 + 10 + DesignTokens.Metrics.statusBarHeight + 10 + 84 + 10 + 32
         var w = max(1380, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
@@ -246,6 +340,7 @@ import UniformTypeIdentifiers
         if editorRibbon == nil { topBar.update() }
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
                              canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
+        updateCalloutBar()
         // The formatting toolbar follows focus, selection and the caret.
         formatting.attach(shotView.formattingTarget())
         updateInfo()
@@ -499,6 +594,8 @@ import UniformTypeIdentifiers
     var debugStatusBar: StatusBar { statusBar }
     var debugEditorRibbon: EditorRibbon? { editorRibbon }
     var debugEditorStatus: EditorStatusBar? { editorRibbon == nil ? nil : editorStatus }
+    var debugCards: (title: TitleCard, ribbon: CardView, canvas: CardView, status: CardView, recent: CardView)? { cards }
+    var debugCalloutBar: CalloutStyleBar? { cards == nil ? nil : calloutBar }
     /// Whether the old floating formatting bar is in the window.
     var debugTopBarShown: Bool { editorRibbon == nil }
     /// Shape Fill's palette: the ribbon's in the new editor, the formatting bar's otherwise.

@@ -40,7 +40,7 @@ final class ClosureMenuItem: NSMenuItem {
     // Arrange
     let arrange: RibbonItem, align: RibbonItem, rotate: RibbonItem, flip: RibbonItem, arrowHeads: RibbonItem, lineStyle: RibbonItem
     // Contextual: text, callout, counter, blur, crop, ruler, magnifier
-    let editText: RibbonItem, textFace: RibbonItem, calloutDesign: RibbonItem, counterShape: RibbonItem, blurMode: RibbonItem
+    let editText: RibbonItem, textFace: RibbonItem, counterShape: RibbonItem, blurMode: RibbonItem
     let cropMode: RibbonItem, autoadjust: RibbonItem, imprint: RibbonItem, rulerUnits: RibbonItem, lensShape: RibbonItem, lensZoom: RibbonItem
 
     let fontGroup: RibbonGroup, paragraphGroup: RibbonGroup, colorGroup: RibbonGroup, arrangeGroup: RibbonGroup
@@ -84,7 +84,6 @@ final class ClosureMenuItem: NSMenuItem {
         lineStyle = item("lineStyle", .small, "Line Style", .lineSolid)
         editText = item("editText", .label, "Edit Text", .textbox, shortcut: "↩")
         textFace = item("textFace", .label, "Face", .fontFill)
-        calloutDesign = item("calloutDesign", .label, "Design", .callout)
         counterShape = item("counterShape", .label, "Shape", .counter)
         blurMode = item("blurMode", .label, "Mode", .blur)
         cropMode = item("cropMode", .label, "Mode", .crop)
@@ -111,7 +110,7 @@ final class ClosureMenuItem: NSMenuItem {
             .rows([[.item(arrowHeads)], [.item(lineStyle)]]),
         ])
         textGroup = RibbonGroup("textOptions", title: "Text", compactTitle: "Text", compactIcon: .textbox, columns: [
-            .rows([[.item(editText)], [.item(textFace)], [.item(calloutDesign)]]),
+            .rows([[.item(editText)], [.item(textFace)]]),
         ])
         counterGroup = RibbonGroup("counterOptions", title: "Counter", compactTitle: "Counter", compactIcon: .counter, columns: [.rows([[.item(counterShape)]])])
         blurGroup = RibbonGroup("blurOptions", title: "Blur", compactTitle: "Blur", compactIcon: .blur, columns: [.rows([[.item(blurMode)]])])
@@ -250,7 +249,6 @@ final class ClosureMenuItem: NSMenuItem {
         // Contextual options
         editText.action = { [weak self] in self?.shotView?.editSelectedText(nil) }
         textFace.menu = { [weak self] in self?.optionMenu("Face", TextFont.allCases, title: \.title, get: \.font) { $0.font = $1 } ?? NSMenu() }
-        calloutDesign.menu = { [weak self] in self?.optionMenu("Design", CalloutStyle.allCases, title: \.title, get: \.callout) { $0.callout = $1 } ?? NSMenu() }
         counterShape.menu = { [weak self] in self?.optionMenu("Shape", CounterShape.allCases, title: \.title, get: \.counterShape) { $0.counterShape = $1 } ?? NSMenu() }
         blurMode.menu = { [weak self] in self?.optionMenu("Mode", BlurMode.allCases, title: \.title, get: \.blur) { $0.blur = $1 } ?? NSMenu() }
         rulerUnits.menu = { [weak self] in
@@ -449,7 +447,6 @@ final class ClosureMenuItem: NSMenuItem {
         let textLike = v.styleTargets.contains { $0.kind == .text || $0.kind == .callout || $0.holdsTextInShape }
         textGroup.isHidden = !(kind == .text || kind == .callout || (textLike && v.selection.count == 1))
         editText.isEnabled = v.selection.count == 1 && textLike && !v.isEditingText
-        calloutDesign.isEnabled = kind == .callout
         counterGroup.isHidden = kind != .counter
         blurGroup.isHidden = kind != .blur
         cropGroup.isHidden = v.tool != .crop
