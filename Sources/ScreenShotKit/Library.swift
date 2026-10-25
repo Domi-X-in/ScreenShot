@@ -23,12 +23,28 @@ import Vision
     private let countLabel = NSTextField(labelWithString: "")
     private var all: [LibraryItem] = []
     private var shown: [LibraryItem] = []
+    /// The grid's sections: one untitled section in the old look; Today, Yesterday… in the new one.
+    private var sections: [(title: String, items: [LibraryItem])] = []
     private let index = TextIndex.shared
+    /// The new look (ROADMAP, Fase 6 · R7): cards, a ribbon-style bar and screenshots grouped by day.
+    private let modern = Settings.newEditorUI
+    private var captureItems: [RibbonItem] = []
 
     init() {
-        let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 980, height: 680), styleMask: [.titled, .closable, .resizable, .miniaturizable],
+        let modernLook = Settings.newEditorUI
+        let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: modernLook ? 1180 : 980, height: modernLook ? 760 : 680),
+                           styleMask: modernLook ? [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
+                               : [.titled, .closable, .resizable, .miniaturizable],
                            backing: .buffered, defer: false)
         win.title = "ScreenShot"
+        if modernLook {
+            // The cards draw the title bar; an empty unified toolbar centers the window's buttons on the title card.
+            win.titleVisibility = .hidden
+            win.titlebarAppearsTransparent = true
+            win.titlebarSeparatorStyle = .none
+            win.toolbarStyle = .unified
+            win.toolbar = NSToolbar(identifier: "home")
+        }
         win.minSize = NSSize(width: 820, height: 380)
         win.isReleasedWhenClosed = false
         win.center()
@@ -42,6 +58,7 @@ import Vision
     required init?(coder: NSCoder) { fatalError() }
 
     private func build() {
+        if modern { buildModern(); return }
         guard let content = window?.contentView else { return }
         search.placeholderString = "Search names, dates and text in screenshots"
         search.delegate = self
@@ -128,9 +145,137 @@ import Vision
     private func filter() {
         let q = search.stringValue
         shown = all.filter { $0.matches(q, text: index.text(for: $0.url)) }
+        sections = modern ? LibraryItem.sections(shown) : [("", shown)]
         countLabel.stringValue = q.isEmpty ? "\(all.count) screenshots" : "\(shown.count) of \(all.count)"
         collection.reloadData()
     }
+
+    // MARK: The new look
+
+    private func buildModern() {
+        guard let win = window else { return }
+        let content = CanvasBackground()
+        win.contentView = content
+        let m = DesignTokens.Metrics.self
+
+        // Capture · Open · Search · Thumbnail size · Settings, as ribbon groups.
+        func large(_ id: String, _ title: String, _ icon: IconName, shortcut: String? = nil, action: @escaping () -> Void) -> RibbonItem {
+            let i = RibbonItem(id, kind: .large, title: title, icon: icon, action: action)
+            i.shortcut = shortcut
+            i.showsShortcut = shortcut != nil
+            return i
+        }
+        let keys = { (a: HotkeyAction) in HotKeyCenter.shared.shortcut(for: a)?.display }
+        let area = large("area", "Area", .capArea, shortcut: keys(.area)) { AppLogic.shared.run(.area) }
+        area.isOn = true // the main action
+        let windowItem = large("window", "Window", .capWindow, shortcut: keys(.anyWindow)) { AppLogic.shared.run(.anyWindow) }
+        let fullscreen = large("fullscreen", "Fullscreen", .capFull, shortcut: keys(.fullscreen)) { AppLogic.shared.run(.fullscreen) }
+        captureItems = [area, windowItem, fullscreen]
+        let capture = RibbonGroupView(RibbonGroup("capture", title: "Capture", compactTitle: "Capture", compactIcon: .capArea,
+                                                  columns: [.large(area), .large(windowItem), .large(fullscreen)]))
+        let open = RibbonGroupView(RibbonGroup("open", title: "Open", compactTitle: "Open", compactIcon: .openImage, columns: [
+            .large(large("openImage", "Open Image", .openImage) { AppLogic.shared.chooseFile() }),
+            .large(large("folder", "Show Folder", .folder) { NSWorkspace.shared.open(Settings.saveFolder) }),
+        ]))
+        let settings = RibbonGroupView(RibbonGroup("settings", title: "Settings", compactTitle: "Settings", compactIcon: .prefs, columns: [
+            .large(large("prefs", "Preferences", .prefs, shortcut: "⌘,") { (NSApp.delegate as? AppDelegate)?.showPreferences() }),
+        ]))
+
+        search.placeholderString = "Search names, dates and text in screenshots"
+        search.delegate = self
+        search.setAccessibilityLabel("Search screenshots")
+        countLabel.font = DesignTokens.Font.caption
+        countLabel.textColor = DesignTokens.color(.ink3)
+        let searchStack = NSStackView(views: [search, countLabel])
+        searchStack.orientation = .vertical
+        searchStack.alignment = .leading
+        searchStack.spacing = 6
+        search.widthAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
+        let searchGroup = HomeToolbarGroup(title: "Search", content: searchStack, flexible: true)
+
+        sizeSlider.controlSize = .small
+        sizeSlider.target = self
+        sizeSlider.action = #selector(sizeChanged)
+        sizeSlider.doubleValue = UserDefaults.standard.double(forKey: "libraryThumbSize").nonZero ?? 220
+        sizeSlider.toolTip = "Thumbnail size"
+        sizeSlider.setAccessibilityLabel("Thumbnail size")
+        sizeSlider.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        let small = NSImageView(image: Icons.image(.photo, size: 12)), big = NSImageView(image: Icons.image(.photo, size: 18))
+        for i in [small, big] { i.contentTintColor = DesignTokens.color(.ink3) }
+        let sizeRow = NSStackView(views: [small, sizeSlider, big])
+        sizeRow.spacing = 8
+        let sizeGroup = HomeToolbarGroup(title: "Thumbnail size", content: sizeRow, flexible: false)
+
+        var bar: [NSView] = []
+        for (i, g) in ([capture, open, searchGroup, sizeGroup, settings] as [NSView]).enumerated() {
+            if i > 0 { bar.append(HomeToolbarGroup.divider()) }
+            if let gv = g as? RibbonGroupView {
+                gv.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([gv.widthAnchor.constraint(equalToConstant: gv.frame.width),
+                                             gv.heightAnchor.constraint(equalToConstant: m.ribbonHeight)])
+            }
+            bar.append(g)
+        }
+        let row = NSStackView(views: bar)
+        row.spacing = 0
+        row.alignment = .centerY
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+
+        // The grid: sections with a day header, the new cells, no background of its own.
+        layout.minimumInteritemSpacing = 18
+        layout.minimumLineSpacing = 18
+        layout.sectionInset = NSEdgeInsets(top: 4, left: 16, bottom: 18, right: 16)
+        layout.headerReferenceSize = NSSize(width: 0, height: 40)
+        collection.collectionViewLayout = layout
+        collection.dataSource = self
+        collection.delegate = self
+        collection.isSelectable = true
+        collection.backgroundColors = [.clear]
+        collection.register(LibraryCell.self, forItemWithIdentifier: LibraryCell.id)
+        collection.register(LibrarySectionHeader.self, forSupplementaryViewOfKind: NSCollectionView.elementKindSectionHeader,
+                            withIdentifier: LibrarySectionHeader.id)
+        let scroll = NSScrollView()
+        scroll.documentView = collection
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+
+        let title = WindowTitleCard(title: "ScreenShot"), toolbar = CardView(), grid = CardView()
+        toolbar.embed(row)
+        grid.embed(scroll)
+        for v in [title, toolbar, grid] as [NSView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(v)
+            NSLayoutConstraint.activate([v.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m.cardInset),
+                                         v.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m.cardInset)])
+        }
+        NSLayoutConstraint.activate([
+            title.topAnchor.constraint(equalTo: content.topAnchor, constant: m.titleCardTop),
+            title.heightAnchor.constraint(equalToConstant: m.titleBarHeight),
+            toolbar.topAnchor.constraint(equalTo: title.bottomAnchor, constant: m.cardGap),
+            toolbar.heightAnchor.constraint(equalToConstant: m.ribbonHeight),
+            grid.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: m.cardGap),
+            grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -m.cardInset),
+        ])
+        win.minSize = NSSize(width: 900, height: 480)
+        applySize()
+    }
+
+    func collectionView(_ collectionView: NSCollectionView, viewForSupplementaryElementOfKind kind: NSCollectionView.SupplementaryElementKind,
+                        at indexPath: IndexPath) -> NSView {
+        let header = collectionView.makeSupplementaryView(ofKind: kind, withIdentifier: LibrarySectionHeader.id, for: indexPath) as! LibrarySectionHeader
+        let s = sections[indexPath.section]
+        header.show(title: s.title, count: s.items.count)
+        return header
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    /// How many screenshots the grid shows now, across its sections.
+    var debugShownCount: Int { shown.count }
+    var debugSectionTitles: [String] { sections.map(\.title) }
+    var debugCaptureItems: [RibbonItem] { captureItems }
+    var debugModern: Bool { modern }
+    func debugOpen(at indexPath: IndexPath) { collectionView(collection, didSelectItemsAt: [indexPath]) }
+    #endif
 
     func controlTextDidChange(_ obj: Notification) { filter() }
 
@@ -141,7 +286,8 @@ import Vision
 
     private func applySize() {
         let w = CGFloat(sizeSlider.doubleValue)
-        layout.itemSize = NSSize(width: w, height: (w * 0.68 + 38).rounded())
+        // The new cells have a name and a size/time line under the picture.
+        layout.itemSize = NSSize(width: w, height: (w * (modern ? 0.62 : 0.68) + (modern ? 52 : 38)).rounded())
         layout.invalidateLayout()
     }
 
@@ -159,18 +305,22 @@ import Vision
 
     // MARK: Collection view
 
-    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int { shown.count }
+    func numberOfSections(in collectionView: NSCollectionView) -> Int { sections.count }
+
+    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
+        section < sections.count ? sections[section].items.count : 0
+    }
 
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let cell = collectionView.makeItem(withIdentifier: LibraryCell.id, for: indexPath) as! LibraryCell
-        cell.configure(shown[indexPath.item])
+        cell.configure(sections[indexPath.section].items[indexPath.item], modern: modern)
         return cell
     }
 
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
-        guard let i = indexPaths.first?.item, i < shown.count else { return }
+        guard let p = indexPaths.first, p.section < sections.count, p.item < sections[p.section].items.count else { return }
         collectionView.deselectAll(nil)
-        AppLogic.shared.openFile(shown[i].url)
+        AppLogic.shared.openFile(sections[p.section].items[p.item].url)
     }
 }
 
@@ -178,6 +328,27 @@ import Vision
 struct LibraryItem: Sendable {
     let url: URL
     let date: Date
+
+    /// The home window's day groups, newest first: Today, Yesterday, Earlier this week, Earlier this month, then one
+    /// per month ("September 2026"). `items` is newest first; empty groups are left out.
+    static func sections(_ items: [LibraryItem], now: Date = Date(), calendar: Calendar = .current) -> [(title: String, items: [LibraryItem])] {
+        let monthFormat = DateFormatter()
+        monthFormat.calendar = calendar
+        monthFormat.setLocalizedDateFormatFromTemplate("MMMM yyyy")
+        func title(_ d: Date) -> String {
+            if calendar.isDate(d, inSameDayAs: now) { return "Today" }
+            if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(d, inSameDayAs: y) { return "Yesterday" }
+            if d < now, calendar.isDate(d, equalTo: now, toGranularity: .weekOfYear) { return "Earlier this week" }
+            if d < now, calendar.isDate(d, equalTo: now, toGranularity: .month) { return "Earlier this month" }
+            return monthFormat.string(from: d)
+        }
+        var out: [(title: String, items: [LibraryItem])] = []
+        for item in items {
+            let t = title(item.date)
+            if out.last?.title == t { out[out.count - 1].items.append(item) } else { out.append((t, [item])) }
+        }
+        return out
+    }
 
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "gif", "tiff"]
 
@@ -303,7 +474,11 @@ final class LibraryCell: NSCollectionViewItem {
     private static let cache = NSCache<NSURL, NSImage>()
     private let thumb = NSImageView()
     private let caption = NSTextField(labelWithString: "")
+    /// The new look's second line: pixel size and time.
+    private let meta = NSTextField(labelWithString: "")
+    private static let sizes = NSCache<NSURL, NSValue>()
     private var url: URL?
+    private var modern = false
 
     override func loadView() {
         let v = NSView()
@@ -322,22 +497,48 @@ final class LibraryCell: NSCollectionViewItem {
         thumb.setContentCompressionResistancePriority(.init(1), for: .vertical)
         thumb.setContentHuggingPriority(.init(1), for: .vertical)
         caption.setContentCompressionResistancePriority(.required, for: .vertical)
-        for s in [thumb, caption] as [NSView] {
+        meta.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        meta.lineBreakMode = .byTruncatingTail
+        meta.setContentCompressionResistancePriority(.required, for: .vertical)
+        let text = NSStackView(views: [caption, meta])
+        text.orientation = .vertical
+        text.spacing = 2
+        text.alignment = .centerX
+        for s in [thumb, text] as [NSView] {
             s.translatesAutoresizingMaskIntoConstraints = false
             v.addSubview(s)
         }
         NSLayoutConstraint.activate([
             thumb.topAnchor.constraint(equalTo: v.topAnchor), thumb.leadingAnchor.constraint(equalTo: v.leadingAnchor),
-            thumb.trailingAnchor.constraint(equalTo: v.trailingAnchor), thumb.bottomAnchor.constraint(equalTo: caption.topAnchor, constant: -6),
-            caption.leadingAnchor.constraint(equalTo: v.leadingAnchor), caption.trailingAnchor.constraint(equalTo: v.trailingAnchor),
-            caption.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -4),
+            thumb.trailingAnchor.constraint(equalTo: v.trailingAnchor), thumb.bottomAnchor.constraint(equalTo: text.topAnchor, constant: -6),
+            text.leadingAnchor.constraint(equalTo: v.leadingAnchor), text.trailingAnchor.constraint(equalTo: v.trailingAnchor),
+            text.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -4),
+            caption.widthAnchor.constraint(lessThanOrEqualTo: v.widthAnchor), meta.widthAnchor.constraint(lessThanOrEqualTo: v.widthAnchor),
         ])
         view = v
     }
 
-    func configure(_ item: LibraryItem) {
+    func configure(_ item: LibraryItem, modern: Bool = false) {
         url = item.url
-        caption.stringValue = item.date.formatted(date: .abbreviated, time: .shortened)
+        self.modern = modern
+        meta.isHidden = !modern
+        if modern {
+            // Name, then "1520 × 950 · 10:42".
+            caption.stringValue = item.url.deletingPathExtension().lastPathComponent
+            caption.font = .systemFont(ofSize: 12, weight: .medium)
+            caption.textColor = DesignTokens.color(.ink)
+            meta.textColor = DesignTokens.color(.ink3)
+            let time = item.date.formatted(date: .omitted, time: .shortened)
+            if let s = Self.sizes.object(forKey: item.url as NSURL)?.sizeValue {
+                meta.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(time)"
+            } else {
+                meta.stringValue = time
+            }
+            thumb.layer?.cornerRadius = 7
+            thumb.layer?.borderColor = DesignTokens.color(.line).cgColor
+        } else {
+            caption.stringValue = item.date.formatted(date: .abbreviated, time: .shortened)
+        }
         view.toolTip = item.url.lastPathComponent
         view.setAccessibilityElement(true)
         view.setAccessibilityRole(.button)
@@ -350,13 +551,21 @@ final class LibraryCell: NSCollectionViewItem {
         let u = item.url
         DispatchQueue.global(qos: .userInitiated).async {
             guard let src = CGImageSourceCreateWithURL(u as CFURL, nil) else { return }
+            let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+            let pixels = (props?[kCGImagePropertyPixelWidth] as? Int).flatMap { w in (props?[kCGImagePropertyPixelHeight] as? Int).map { CGSize(width: w, height: $0) } }
             let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 680,
                                          kCGImageSourceCreateThumbnailWithTransform: true]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return }
             DispatchQueue.main.async {
                 let img = NSImage(cgImage: cg, size: .zero)
                 Self.cache.setObject(img, forKey: u as NSURL)
-                if self.url == u { self.thumb.image = img }
+                if let pixels { Self.sizes.setObject(NSValue(size: pixels), forKey: u as NSURL) }
+                if self.url == u {
+                    self.thumb.image = img
+                    if self.modern, let pixels {
+                        self.meta.stringValue = "\(Int(pixels.width)) × \(Int(pixels.height)) · " + item.date.formatted(date: .omitted, time: .shortened)
+                    }
+                }
             }
         }
     }
@@ -364,4 +573,74 @@ final class LibraryCell: NSCollectionViewItem {
 
 private extension Double {
     var nonZero: Double? { self == 0 ? nil : self }
+}
+
+/// A day header in the home window's grid: "Today  5 screenshots".
+final class LibrarySectionHeader: NSView, NSCollectionViewElement {
+    static let id = NSUserInterfaceItemIdentifier("LibrarySectionHeader")
+    private let title = NSTextField(labelWithString: "")
+    private let count = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.textColor = DesignTokens.color(.ink)
+        count.font = .systemFont(ofSize: 11.5)
+        count.textColor = DesignTokens.color(.ink3)
+        let row = NSStackView(views: [title, count])
+        row.spacing = 10
+        row.alignment = .firstBaseline
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        NSLayoutConstraint.activate([row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+                                     row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(title t: String, count n: Int) {
+        title.stringValue = t
+        count.stringValue = n == 1 ? "1 screenshot" : "\(n) screenshots"
+        setAccessibilityLabel("\(t), \(count.stringValue)")
+    }
+}
+
+/// A non-ribbon group in the home window's bar (Search, Thumbnail size): its content and its title underneath.
+final class HomeToolbarGroup: NSView {
+    init(title: String, content: NSView, flexible: Bool) {
+        super.init(frame: .zero)
+        let label = NSTextField(labelWithString: title)
+        label.font = DesignTokens.Font.groupLabel
+        label.textColor = DesignTokens.color(.ink3)
+        for v in [content, label] as [NSView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: DesignTokens.Metrics.ribbonHeight),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            content.centerYAnchor.constraint(equalTo: topAnchor, constant: 38),
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+        ])
+        setContentHuggingPriority(flexible ? .init(1) : .required, for: .horizontal)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel(title)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// A hairline between groups, like the ribbon's.
+    static func divider() -> NSView {
+        let v = NSBox()
+        v.boxType = .custom
+        v.borderWidth = 0
+        v.fillColor = DesignTokens.color(.line)
+        v.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([v.widthAnchor.constraint(equalToConstant: 1), v.heightAnchor.constraint(equalToConstant: 76)])
+        return v
+    }
 }

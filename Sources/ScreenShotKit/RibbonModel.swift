@@ -28,6 +28,8 @@ import AppKit
     var split = false
     /// The keyboard shortcut, shown in the tooltip ("Arrow (A)").
     var shortcut: String?
+    /// A large button shows its shortcut under its caption (the home window's capture buttons).
+    var showsShortcut = false
     /// A field you can type in (Font Size): a click on its text opens an editor, Return sends what was typed here.
     var onTextEntry: ((String) -> Void)?
 

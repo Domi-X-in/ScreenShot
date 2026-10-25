@@ -135,7 +135,13 @@ final class RibbonButton: NSView, NSTextFieldDelegate {
             let s = item.title as NSString
             let size = s.size(withAttributes: attrs)
             s.draw(at: CGPoint(x: (b.width - size.width) / 2, y: 36), withAttributes: attrs)
-            if item.hasChevron { drawIcon(.chev, size: 10, color: chevronInk, at: CGPoint(x: (b.width - 10) / 2, y: 51)) }
+            if item.hasChevron {
+                drawIcon(.chev, size: 10, color: chevronInk, at: CGPoint(x: (b.width - 10) / 2, y: 51))
+            } else if item.showsShortcut, let key = item.shortcut {
+                let a: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: DT.color(.ink3)]
+                let k = key as NSString
+                k.draw(at: CGPoint(x: (b.width - k.size(withAttributes: a).width) / 2, y: 49), withAttributes: a)
+            }
         case .field:
             break
         }

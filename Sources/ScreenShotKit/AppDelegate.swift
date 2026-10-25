@@ -17,7 +17,9 @@ import AppKit
         NSApp.mainMenu = buildMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "ScreenShot")
+        // The new look's viewfinder mark (ROADMAP, Fase 6 · R7); a template image, so macOS tints it for the menu bar.
+        statusItem.button?.image = Settings.newEditorUI ? Self.statusMark()
+            : NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "ScreenShot")
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -80,9 +82,10 @@ import AppKit
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         // The home window: capture buttons and every screenshot (the Library).
+        let newLook = Settings.newEditorUI
         let open = item("Open ScreenShot", #selector(showLibrary))
         open.keyEquivalent = "l"
-        open.image = NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: nil)
+        open.image = newLook ? Icons.image(.photo, size: 16) : NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: nil)
         menu.addItem(open)
         menu.addItem(.separator())
         let order: [HotkeyAction?] = [.fullscreen, .area, .repeatArea, .delayed, nil, .anyWindow, .activeWindow, nil,
@@ -92,6 +95,7 @@ import AppKit
             let item = NSMenuItem(title: a.title, action: #selector(runAction(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = a.rawValue
+            if newLook { item.image = Icons.image(Self.icon(for: a), size: 16) }
             if let s = HotKeyCenter.shared.shortcut(for: a), s.key.count == 1 {
                 item.keyEquivalent = s.key.lowercased()
                 item.keyEquivalentModifierMask = s.nsModifiers
@@ -99,10 +103,13 @@ import AppKit
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        menu.addItem(item("Load From Clipboard", #selector(loadClipboard)))
-        menu.addItem(item("Open Image…", #selector(openImage)))
+        let clipboard = item("Load From Clipboard", #selector(loadClipboard))
+        let openImage = item("Open Image…", #selector(openImage))
+        menu.addItem(clipboard)
+        menu.addItem(openImage)
         menu.addItem(.separator())
-        menu.addItem(item("Welcome Guide…", #selector(showWelcome)))
+        let welcome = item("Welcome Guide…", #selector(showWelcome))
+        menu.addItem(welcome)
         let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
         update.target = Updates.shared
         menu.addItem(update)
@@ -111,7 +118,38 @@ import AppKit
         menu.addItem(prefs)
         let quit = NSMenuItem(title: "Quit ScreenShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
+        if newLook {
+            for (i, icon) in [(clipboard, IconName.paste), (openImage, .openImage), (welcome, .guide), (update, .updates), (prefs, .prefs), (quit, .power)] {
+                i.image = Icons.image(icon, size: 16)
+            }
+        }
     }
+
+    /// The status menu's icon for a capture.
+    static func icon(for a: HotkeyAction) -> IconName {
+        switch a {
+        case .fullscreen: .capFull
+        case .area: .capArea
+        case .repeatArea: .capRepeat
+        case .delayed: .capTimer
+        case .anyWindow: .capWindow
+        case .activeWindow: .capActive
+        case .scrolling: .capScroll
+        case .scrollingManual: .capScrollManual
+        case .ocr: .ocr
+        }
+    }
+
+    /// The menu bar mark: the icon family's viewfinder, as a template image at the menu bar's size.
+    static func statusMark() -> NSImage {
+        let img = Icons.image(.statusMark, size: 18, stroke: 1.6)
+        img.accessibilityDescription = "ScreenShot"
+        return img
+    }
+
+    #if SCREENSHOT_SELFTESTS
+    var debugStatusItem: NSStatusItem { statusItem }
+    #endif
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {
         let i = NSMenuItem(title: title, action: action, keyEquivalent: "")

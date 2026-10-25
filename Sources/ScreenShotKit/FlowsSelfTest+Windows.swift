@@ -177,8 +177,24 @@ extension FlowsSelfTest {
         await sleep(0.6)
         guard let lib = LibraryWindowController.shared, let content = lib.window?.contentView else { check(false, "the home window opens"); return }
         lib.reload()
-        let segments = allViews(NSSegmentedControl.self, in: content).first { $0.segmentCount == 3 }
-        check((0..<3).compactMap { segments?.label(forSegment: $0) } == ["Area", "Window", "Fullscreen"], "it has Area / Window / Fullscreen buttons")
+        if lib.debugModern {
+            // The new look: capture buttons in a ribbon-style bar, cards, day groups, the status menu's icons.
+            check(lib.debugCaptureItems.map(\.title) == ["Area", "Window", "Fullscreen"] && lib.debugCaptureItems[0].isOn,
+                  "it has Area / Window / Fullscreen buttons, Area as the main one")
+            check(lib.debugCaptureItems.allSatisfy { $0.showsShortcut && $0.shortcut != nil }, "each capture button shows its shortcut")
+            check(content is CanvasBackground && allViews(CardView.self, in: content).count >= 3, "the home window is made of cards")
+            check(lib.debugSectionTitles.first == "Today", "screenshots are grouped by day, today first (\(lib.debugSectionTitles))")
+            if let app = NSApp.delegate as? AppDelegate {
+                let menu = NSMenu()
+                app.menuNeedsUpdate(menu)
+                let items = menu.items.filter { !$0.isSeparatorItem }
+                check(items.count >= 15 && items.allSatisfy { $0.image != nil }, "every status menu item has an icon (\(items.filter { $0.image == nil }.map(\.title)))")
+                check(app.debugStatusItem.button?.image?.isTemplate == true, "the menu bar mark is a template image")
+            }
+        } else {
+            let segments = allViews(NSSegmentedControl.self, in: content).first { $0.segmentCount == 3 }
+            check((0..<3).compactMap { segments?.label(forSegment: $0) } == ["Area", "Window", "Fullscreen"], "it has Area / Window / Fullscreen buttons")
+        }
         guard let collection = allViews(NSCollectionView.self, in: content).first,
               let search = allViews(NSSearchField.self, in: content).first else { check(false, "it lists screenshots and has a search field"); return }
         // Wait for the text index (it reads each file in the background).
@@ -192,9 +208,9 @@ extension FlowsSelfTest {
         func searchFor(_ q: String) -> Int {
             search.stringValue = q
             lib.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: search))
-            return collection.numberOfItems(inSection: 0)
+            return (0..<collection.numberOfSections).map { collection.numberOfItems(inSection: $0) }.reduce(0, +)
         }
-        check(searchFor("") >= 3, "all screenshots are listed (\(collection.numberOfItems(inSection: 0)))")
+        check(searchFor("") >= 3, "all screenshots are listed (\(lib.debugShownCount))")
         check(searchFor("lib-\(tag)-1") == 1, "searching a file name finds it")
         check(searchFor("AB123") == 1, "searching text inside a screenshot finds it")
         check(searchFor("flight ab123") == 1, "search ignores case and matches every word")

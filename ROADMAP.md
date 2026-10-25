@@ -162,7 +162,13 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Selección de área de imagen: la herramienta de recorte en modo selección, con su propio botón iluminado y un grupo contextual "Selection": Copiar área (⌘C o Retorno), Leer texto (OCR/QR del área), Desenfocar área y Recortar al área.
   - [x] Cortar/copiar/pegar objetos y OCR/QR ya estaban desde R3 (Portapapeles y Herramientas).
   - [x] Verificado: 111 tests unitarios (8 nuevos en `TextFeaturesTests`: tachado, contorno, justificar, los 5 casos de mayúsculas, formato conservado, viñetas, numeración, guardar y reabrir); flujo nuevo `ribbon-r6` (27 comprobaciones con clics y tecleo reales). FLOWS 417/0 y FLOWS-NEWUI 312/0.
-- [ ] **R7 · Puntos de entrada**: nuevo icono de la barra de menús, menú de estado con iconos, ventana de inicio con barra tipo cinta y agrupación por día, en tarjetas como el editor (R5b).
+- [x] **R7 · Puntos de entrada** (con `newEditorUI`):
+  - [x] Icono de la barra de menús: la marca de visor de la familia de iconos, como imagen plantilla (macOS la tiñe).
+  - [x] Menú de estado: las mismas opciones, orden y atajos, cada una con su icono de la familia (capturas, Abrir ScreenShot, Cargar del portapapeles, Abrir imagen, Guía, Actualizaciones, Preferencias, Salir).
+  - [x] Ventana de inicio en tarjetas: tarjeta de título con los botones de la ventana y el nombre centrado (se arrastra como una barra de título; `DraggableCard`, compartida con el editor); barra tipo cinta con Capture (Area destacada, Window, Fullscreen, con sus atajos debajo), Open (Open Image, Show Folder), Search (campo y recuento), Thumbnail size y Settings (Preferences); cuadrícula en tarjeta.
+  - [x] Cuadrícula agrupada por día: Today, Yesterday, Earlier this week, Earlier this month y luego un grupo por mes, con cabecera y recuento. Cada miniatura muestra el nombre, el tamaño en píxeles y la hora.
+  - [x] Capturas: `docs/screenshots/r7-home-dark.png` y `r7-home-light.png`.
+  - [x] Verificado: 112 tests unitarios (nuevo: agrupación por días con fechas fijas); el flujo `library` comprueba con el diseño nuevo los botones y atajos, las tarjetas, los grupos por día, los iconos del menú de estado y el icono plantilla, y la búsqueda y abrir funcionan igual en los dos diseños. FLOWS 417/0 y FLOWS-NEWUI 317/0.
 - [ ] **R8 · Guía de bienvenida de 3 pasos**: Bienvenida con bucle animado, Configuración (permiso, carpeta, tema), Listo (atajos y primera captura); se mantiene la reanudación tras reiniciar y "Reducir movimiento".
 - [ ] **R9 · Cierre**: quitar `newEditorUI` y el código viejo, revisar tema claro y accesibilidad, actualizar `docs/screenshots`, README y esta hoja de ruta, versión de prueba con `release.sh`.
 

@@ -76,10 +76,46 @@ final class CanvasBackground: NSView {
     }
 }
 
+/// A card that stands in for a title bar: dragging its background moves the window, and a double-click zooms or
+/// minimizes it as the user's macOS setting says.
+class DraggableCard: CardView {
+    override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            // The system's "double-click a window's title bar to…" setting.
+            switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+            case "Minimize": window?.performMiniaturize(nil)
+            case "None": break
+            default: window?.performZoom(nil)
+            }
+            return
+        }
+        window?.performDrag(with: event)
+    }
+}
+
+/// The home window's title card: the window's buttons on the left, the app's name in the middle.
+final class WindowTitleCard: DraggableCard {
+    init(title: String) {
+        super.init()
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = DT.color(.ink2)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(label)
+        NSLayoutConstraint.activate([label.centerXAnchor.constraint(equalTo: content.centerXAnchor), label.centerYAnchor.constraint(equalTo: content.centerYAnchor)])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Title bar")
+    }
+    required init?(coder: NSCoder) { fatalError() }
+}
+
 /// The title bar as a card: the window's buttons sit inside it (the empty unified toolbar keeps them centered on it),
 /// then Copy image, Save, Pin, Drag and Undo/Redo. Dragging the card's background moves the window, and a double-click
 /// zooms it or minimizes it as the user's macOS setting says.
-final class TitleCard: CardView {
+final class TitleCard: DraggableCard {
     /// Room for the close, minimize and zoom buttons.
     static let windowButtonsWidth: CGFloat = 72
 
@@ -108,21 +144,6 @@ final class TitleCard: CardView {
         v.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([v.widthAnchor.constraint(equalToConstant: 1), v.heightAnchor.constraint(equalToConstant: 16)])
         return v
-    }
-
-    override var mouseDownCanMoveWindow: Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
-            // The system's "double-click a window's title bar to…" setting.
-            switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
-            case "Minimize": window?.performMiniaturize(nil)
-            case "None": break
-            default: window?.performZoom(nil)
-            }
-            return
-        }
-        window?.performDrag(with: event)
     }
 
     private final class DividerLine: NSView {

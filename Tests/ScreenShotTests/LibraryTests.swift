@@ -82,3 +82,22 @@ struct LibraryIndexQueueTests {
         #expect(first.allSatisfy { index.text(for: $0) != nil }, "the earlier files are read too")
     }
 }
+
+@Suite("Library day groups")
+struct LibrarySectionsTests {
+    @Test("newest first: Today, Yesterday, Earlier this week, Earlier this month, then by month")
+    func groups() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        cal.firstWeekday = 2 // weeks start on Monday
+        func at(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date { cal.date(from: DateComponents(year: y, month: m, day: d, hour: h))! }
+        let now = at(2026, 10, 30, 15) // a Friday
+        let dates = [at(2026, 10, 30, 9), at(2026, 10, 30, 8), at(2026, 10, 29), at(2026, 10, 27), at(2026, 10, 12), at(2026, 9, 20), at(2025, 12, 1)]
+        let items = dates.enumerated().map { LibraryItem(url: URL(fileURLWithPath: "/tmp/\($0.offset).png"), date: $0.element) }
+        let s = LibraryItem.sections(items, now: now, calendar: cal)
+        #expect(s.map(\.items.count) == [2, 1, 1, 1, 1, 1])
+        #expect(Array(s.map(\.title).prefix(4)) == ["Today", "Yesterday", "Earlier this week", "Earlier this month"])
+        #expect(s[4].title.contains("2026") && s[5].title.contains("2025"), "older groups are months (\(s.map(\.title)))")
+        #expect(LibraryItem.sections([], now: now, calendar: cal).isEmpty)
+    }
+}
