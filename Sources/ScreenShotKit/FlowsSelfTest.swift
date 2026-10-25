@@ -240,6 +240,7 @@ import ScreenCaptureKit
             ("style-sync", styleSyncFlow),
             ("formatting", formattingFlow),
             ("toolbar", toolbarFlow),
+            ("ribbon-editor", ribbonEditorFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),

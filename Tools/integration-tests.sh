@@ -39,6 +39,17 @@ printf "%-12s %3d passed  %d failed\n" "FLOWS" "$pass" "$fail"
 grep '^FAIL' "$WORK/FLOWS/out.log"
 if [ "$fail" -gt 0 ] || [ "$pass" -eq 0 ]; then FAILED=1; fi
 
+# The same flows with the new ribbon editor (ROADMAP, Fase 6), until it becomes the only one.
+mkdir -p "$WORK/FLOWS-NEWUI"
+SCREENSHOT_NEW_UI=1 SCREENSHOT_SELFTEST_FLOWS=1 "$BIN" -saveFolder "$WORK/FLOWS-NEWUI" > "$WORK/FLOWS-NEWUI/out.log" 2>&1 &
+FPID=$!
+for _ in $(seq 1 300); do sleep 0.5; kill -0 $FPID 2>/dev/null || break; done
+kill $FPID 2>/dev/null
+pass=$(grep -c '^PASS' "$WORK/FLOWS-NEWUI/out.log"); fail=$(grep -c '^FAIL' "$WORK/FLOWS-NEWUI/out.log")
+printf "%-12s %3d passed  %d failed\n" "FLOWS-NEWUI" "$pass" "$fail"
+grep '^FAIL' "$WORK/FLOWS-NEWUI/out.log"
+if [ "$fail" -gt 0 ] || [ "$pass" -eq 0 ]; then FAILED=1; fi
+
 # Auto-save and same-window switching work on two files in the save folder.
 mkdir -p "$WORK/AUTOSAVE"; cp "$IMG" "$WORK/AUTOSAVE/a.png"; sleep 1; cp "$IMG" "$WORK/AUTOSAVE/b.png"
 SCREENSHOT_SELFTEST_DIR="$WORK/AUTOSAVE" "$BIN" -saveFolder "$WORK/AUTOSAVE" > "$WORK/AUTOSAVE/out.log" 2>&1 &

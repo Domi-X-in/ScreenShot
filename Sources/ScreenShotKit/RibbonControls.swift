@@ -23,6 +23,7 @@ final class RibbonButton: NSView {
         super.init(frame: .zero)
         item.observe(self)
         setAccessibilityElement(true)
+        toolTip = item.shortcut.map { "\(item.title) (\($0))" } ?? item.title
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -86,6 +87,13 @@ final class RibbonButton: NSView {
         if let fill {
             fill.setFill()
             NSBezierPath(roundedRect: b, xRadius: radius, yRadius: radius).fill()
+        }
+        if item.isActiveTool && !disabled {
+            // The deeper accent edge keeps the selected tool at 3:1 or more against the light bar (#FF5500 alone is 2.99:1).
+            let edge = NSBezierPath(roundedRect: b.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5)
+            edge.lineWidth = 1
+            DT.color(.accentPressed).setStroke()
+            edge.stroke()
         }
         let chevronInk = item.isActiveTool ? NSColor.white.withAlphaComponent(0.8) : DT.color(.ink3)
 

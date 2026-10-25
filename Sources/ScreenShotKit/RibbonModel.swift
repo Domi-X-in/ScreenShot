@@ -25,6 +25,8 @@ import AppKit
     /// Builds the item's menu. With `split` the chevron opens it and the rest runs `action`; otherwise any click opens it.
     var menu: (() -> NSMenu)?
     var split = false
+    /// The keyboard shortcut, shown in the tooltip ("Arrow (A)").
+    var shortcut: String?
 
     var isEnabled = true { didSet { if isEnabled != oldValue { changed() } } }
     /// A toggle that is on (Bold) or a choice that is current.

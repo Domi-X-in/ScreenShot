@@ -38,6 +38,8 @@ import UniformTypeIdentifiers
     let formatting = FormattingController()
     private lazy var ribbon = FormattingRibbon(controller: formatting)
     private lazy var topBar = EditorToolbar(ribbon: ribbon, options: options)
+    /// The Office-style ribbon and trimmed title bar (ROADMAP, Fase 6), only with `Settings.newEditorUI` for now.
+    private(set) var editorRibbon: EditorRibbon?
 
     private enum Item {
         static let actions = NSToolbarItem.Identifier("actions")
@@ -46,6 +48,8 @@ import UniformTypeIdentifiers
         static let crop = NSToolbarItem.Identifier("crop")
         static let adjust = NSToolbarItem.Identifier("adjust")
         static let info = NSToolbarItem.Identifier("info")
+        static let titleActions = NSToolbarItem.Identifier("titleActions")
+        static let history = NSToolbarItem.Identifier("history")
     }
 
     init(image: CGImage, scale: CGFloat, state: EditState? = nil, url: URL? = nil) {
@@ -61,6 +65,7 @@ import UniformTypeIdentifiers
         super.init(window: win)
         win.delegate = self
         shotView.controller = self
+        if Settings.newEditorUI { editorRibbon = EditorRibbon(editor: self) }
         buildControls()
         buildLayout()
         let toolbar = NSToolbar(identifier: "editor")
@@ -111,13 +116,27 @@ import UniformTypeIdentifiers
             content.addSubview(v)
         }
         shotView.topInset = 10 + EditorToolbar.height
+        // With the new editor the ribbon runs full width under the title bar, and the canvas starts below it. The
+        // formatting card keeps floating over the canvas until its groups move into the ribbon (R4).
+        var top = content.safeAreaLayoutGuide.topAnchor
+        if let ribbonView = editorRibbon?.view {
+            ribbonView.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(ribbonView)
+            NSLayoutConstraint.activate([
+                ribbonView.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
+                ribbonView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                ribbonView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                ribbonView.heightAnchor.constraint(equalToConstant: DesignTokens.Metrics.ribbonHeight),
+            ])
+            top = ribbonView.bottomAnchor
+        }
         NSLayoutConstraint.activate([
             // Both cards float over the canvas: the toolbar at the top, hugging its content, the status bar at the bottom.
-            topBar.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor, constant: 8),
+            topBar.topAnchor.constraint(equalTo: top, constant: 8),
             topBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
             topBar.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
             topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
-            shotView.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
+            shotView.topAnchor.constraint(equalTo: top),
             shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
@@ -136,7 +155,9 @@ import UniformTypeIdentifiers
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Item.actions, Item.dragOut, .flexibleSpace, Item.tools, Item.crop, Item.adjust, .flexibleSpace]
+        // The new editor's title bar keeps only the window's own commands; the tools live in the ribbon.
+        if editorRibbon != nil { return [Item.titleActions, Item.dragOut, Item.history, .flexibleSpace] }
+        return [Item.actions, Item.dragOut, .flexibleSpace, Item.tools, Item.crop, Item.adjust, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -147,8 +168,16 @@ import UniformTypeIdentifiers
         let item = NSToolbarItem(itemIdentifier: id)
         switch id {
         case Item.actions: item.view = actionsPalette; item.label = "Actions"
+        case Item.titleActions:
+            guard let r = editorRibbon else { return nil }
+            item.view = EditorRibbon.titleBarGroup([r.copyImage, r.save, r.pin]); item.label = "Actions"
+        case Item.history:
+            guard let r = editorRibbon else { return nil }
+            item.view = EditorRibbon.titleBarGroup([r.undo, r.redo]); item.label = "Undo and Redo"
         case Item.dragOut:
-            let drag = DragOutView { [weak self] in self?.rendered().map { ($0, self?.doc.scale ?? 2) } }
+            let drag = DragOutView(icon: editorRibbon == nil ? nil : Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2))) { [weak self] in
+                self?.rendered().map { ($0, self?.doc.scale ?? 2) }
+            }
             item.view = drag
             item.label = "Drag"
         case Item.tools: item.view = toolPalette; item.label = "Tools"
@@ -172,7 +201,7 @@ import UniformTypeIdentifiers
         guard let win = window else { return }
         let screen = NSScreen.containingMouse().visibleFrame
         let c = Renderer.canvasSize(doc)
-        let chrome: CGFloat = 52 + 18 + EditorToolbar.height + 68 + 84
+        let chrome: CGFloat = 52 + 18 + EditorToolbar.height + 68 + 84 + (editorRibbon == nil ? 0 : DesignTokens.Metrics.ribbonHeight)
         var w = max(1380, c.width / doc.scale + 32)
         var h = max(480, c.height / doc.scale + 32 + chrome)
         w = min(w, screen.width * 0.94)
@@ -190,6 +219,8 @@ import UniformTypeIdentifiers
         options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, cutOut: shotView.cutOutMode)
         statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
         topBar.update()
+        editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
+                             canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
         // The formatting toolbar follows focus, selection and the caret.
         formatting.attach(shotView.formattingTarget())
         updateInfo()
@@ -286,6 +317,13 @@ import UniformTypeIdentifiers
     }
 
     // MARK: Toolbar actions
+
+    /// A tool picked in the ribbon: Crop starts a crop, or applies the one in progress, as the old Crop button did.
+    func pickTool(_ t: Tool) {
+        if t == .crop { cropClicked(); return }
+        shotView.tool = t
+        window?.makeFirstResponder(shotView)
+    }
 
     private func toolChanged(_ i: Int) {
         guard i >= 0, i < Self.tools.count else { return }
@@ -426,6 +464,7 @@ import UniformTypeIdentifiers
     var debugOptions: ToolOptions { options }
     var debugTopBar: EditorToolbar { topBar }
     var debugStatusBar: StatusBar { statusBar }
+    var debugEditorRibbon: EditorRibbon? { editorRibbon }
     #endif
 
     /// Shottr's "Default zoom level: Prefer 100%"; otherwise the image fits the window.
@@ -435,6 +474,7 @@ import UniformTypeIdentifiers
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        if editorRibbon != nil { syncToolbar() } // Paste follows what the clipboard holds now
         recent.currentURL = doc.fileURL
         recent.reload()
     }
@@ -480,6 +520,7 @@ import UniformTypeIdentifiers
     }
 
     func scheduleAutosave() {
+        editorRibbon?.updateHistory(canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
         autosaveTimer?.invalidate()
         autosaveTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -679,14 +720,15 @@ final class ClickableStack: NSStackView {
 final class DragOutView: NSView, NSDraggingSource {
     private let provider: () -> (CGImage, CGFloat)?
 
-    init(provider: @escaping () -> (CGImage, CGFloat)?) {
+    /// `icon` replaces the SF Symbol hand (the new editor passes its own icon family's Drag icon).
+    init(icon: NSImage? = nil, provider: @escaping () -> (CGImage, CGFloat)?) {
         self.provider = provider
         super.init(frame: CGRect(x: 0, y: 0, width: 40, height: 28))
         toolTip = "Drag'n'Drop Image"
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel("Drag the image into another app")
-        let icon = NSImageView(image: NSImage(systemSymbolName: "hand.draw", accessibilityDescription: "Drag image")!
+        let icon = NSImageView(image: icon ?? NSImage(systemSymbolName: "hand.draw", accessibilityDescription: "Drag image")!
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))!)
         icon.contentTintColor = .secondaryLabelColor
         icon.translatesAutoresizingMaskIntoConstraints = false
