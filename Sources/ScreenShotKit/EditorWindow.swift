@@ -33,7 +33,9 @@ import UniformTypeIdentifiers
     private let info = InfoCellsView()
     private lazy var statusBar = StatusBar(info: info)
     private let options = ToolOptions()
-    private let recent = RecentStrip()
+    private lazy var recent = RecentStrip(modern: editorRibbon != nil)
+    /// The new editor's bottom bar: messages, readouts and Backdrop.
+    private lazy var editorStatus = EditorStatusBar(info: info)
     /// The formatting store and the top toolbar (Word's Font and Paragraph, PowerPoint's Shape Styles, Arrange, Align).
     let formatting = FormattingController()
     private lazy var ribbon = FormattingRibbon(controller: formatting)
@@ -95,6 +97,7 @@ import UniformTypeIdentifiers
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
         recent.onBrowse = { LibraryWindowController.show() }
         statusBar.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
+        if editorRibbon != nil { editorStatus.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) } }
         options.onAutoadjust = { [weak self] in self?.shotView.autoadjustSelection() }
         options.onImprint = { [weak self] in self?.shotView.imprintSelectionSize() }
         if editorRibbon == nil { topBar.shotView = shotView }
@@ -112,7 +115,7 @@ import UniformTypeIdentifiers
         // toolbar above it (views don't clip to their bounds by default since macOS 14).
         shotView.clipsToBounds = true
         // The new editor has no floating formatting card: Font, Paragraph, Color and Arrange are in the ribbon.
-        let floating: [NSView] = editorRibbon == nil ? [shotView, topBar, statusBar, recent] : [shotView, statusBar, recent]
+        let floating: [NSView] = editorRibbon == nil ? [shotView, topBar, statusBar, recent] : [shotView, editorStatus, recent]
         for v in floating {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
@@ -140,15 +143,28 @@ import UniformTypeIdentifiers
                 topBar.heightAnchor.constraint(equalToConstant: EditorToolbar.height),
             ])
         }
+        if editorRibbon == nil {
+            NSLayoutConstraint.activate([
+                shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
+                statusBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+                statusBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
+                statusBar.bottomAnchor.constraint(equalTo: recent.topAnchor, constant: -10),
+                statusBar.heightAnchor.constraint(equalToConstant: ToolbarShell.barHeight),
+            ])
+        } else {
+            // The new status bar is a full-width band between the canvas and the recent strip, not a floating card.
+            NSLayoutConstraint.activate([
+                shotView.bottomAnchor.constraint(equalTo: editorStatus.topAnchor),
+                editorStatus.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                editorStatus.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                editorStatus.bottomAnchor.constraint(equalTo: recent.topAnchor),
+                editorStatus.heightAnchor.constraint(equalToConstant: DesignTokens.Metrics.statusBarHeight),
+            ])
+        }
         NSLayoutConstraint.activate([
             shotView.topAnchor.constraint(equalTo: top),
             shotView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             shotView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            shotView.bottomAnchor.constraint(equalTo: recent.topAnchor),
-            statusBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
-            statusBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
-            statusBar.bottomAnchor.constraint(equalTo: recent.topAnchor, constant: -10),
-            statusBar.heightAnchor.constraint(equalToConstant: ToolbarShell.barHeight),
             recent.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             recent.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             recent.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -222,7 +238,11 @@ import UniformTypeIdentifiers
         toolPalette.selectedIndex = Self.tools.firstIndex(of: shotView.tool)
         cropButton.isOn = shotView.tool == .crop
         options.update(tool: shotView.selectedKind ?? shotView.tool, style: shotView.displayedStyle, cutOut: shotView.cutOutMode)
-        statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+        if editorRibbon == nil {
+            statusBar.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+        } else {
+            editorStatus.update(tool: shotView.selectedKind ?? shotView.tool, backdrop: doc.backdrop, cutOut: shotView.cutOutMode)
+        }
         if editorRibbon == nil { topBar.update() }
         editorRibbon?.update(tool: shotView.tool, hasSelection: !shotView.selection.isEmpty,
                              canUndo: !doc.undoStack.isEmpty, canRedo: !doc.redoStack.isEmpty)
@@ -300,6 +320,14 @@ import UniformTypeIdentifiers
                                   actual: { v.zoomToActualSize() }, fit: { v.zoomToFit(nil) })
         zoomPanel = panel
         present(panel, from: anchor)
+    }
+
+    /// Shows a message in the new editor's notification bar. Returns false for the old editor (which uses Toast's HUD).
+    @discardableResult
+    func notify(_ notice: NotificationBar.Notice) -> Bool {
+        guard editorRibbon != nil else { return false }
+        editorStatus.notices.show(notice)
+        return true
     }
 
     func toggleSizeUnits() {
@@ -470,6 +498,7 @@ import UniformTypeIdentifiers
     var debugTopBar: EditorToolbar { topBar }
     var debugStatusBar: StatusBar { statusBar }
     var debugEditorRibbon: EditorRibbon? { editorRibbon }
+    var debugEditorStatus: EditorStatusBar? { editorRibbon == nil ? nil : editorStatus }
     /// Whether the old floating formatting bar is in the window.
     var debugTopBarShown: Bool { editorRibbon == nil }
     /// Shape Fill's palette: the ribbon's in the new editor, the formatting bar's otherwise.
@@ -600,6 +629,7 @@ final class InfoCellsView: NSView {
     private let sizeCaption = InfoCellsView.captionLabel("Selection Size")
     private let zoomValue = InfoCellsView.valueLabel("100%")
     private let zoomCaption = InfoCellsView.captionLabel("Zoom")
+    private var separators: [NSView] = []
 
     /// Shottr's clrToolbarLabel / clrToolbarInfo asset colors (light and dark variants).
     static let labelColor = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(hex: 0xD0D0D0) : NSColor(hex: 0x282828) }
@@ -649,7 +679,8 @@ final class InfoCellsView: NSView {
         zoomCell.setAccessibilityRole(.button)
         zoomCell.setAccessibilityLabel("Zoom controls")
 
-        let row = NSStackView(views: [colorCell, Self.separator(), sizeCell, Self.separator(), zoomCell])
+        separators = [Self.separator(), Self.separator()]
+        let row = NSStackView(views: [colorCell, separators[0], sizeCell, separators[1], zoomCell])
         row.spacing = 8
         row.alignment = .centerY
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -682,6 +713,25 @@ final class InfoCellsView: NSView {
         v.translatesAutoresizingMaskIntoConstraints = false
         v.heightAnchor.constraint(equalToConstant: 24).isActive = true
         return v
+    }
+
+    /// The new editor's look: the design tokens' readout and caption type and colors, hairline dividers.
+    func applyModernStyle() {
+        for l in [colorValue, sizeValue, zoomValue] {
+            l.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+            l.textColor = DesignTokens.color(.ink)
+        }
+        for l in [colorCaption, sizeCaption, zoomCaption] {
+            l.font = DesignTokens.Font.caption
+            l.textColor = DesignTokens.color(.ink3)
+        }
+        for case let s as NSBox in separators {
+            s.boxType = .custom
+            s.borderWidth = 0
+            s.fillColor = DesignTokens.color(.line)
+            s.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        }
+        swatch.layer?.cornerRadius = 4
     }
 
     func setColor(_ c: NSColor?) {
@@ -802,20 +852,25 @@ final class StatusBar: ToolbarShell {
 
     func update(tool: Tool, backdrop: Backdrop, cutOut: Bool) {
         backdropButton.isOn = backdrop.isOn
-        switch tool {
-        case .counter: hint.stringValue = "Type digits to renumber · drag the bubble tip to point it"
-        case .crop where cutOut: hint.stringValue = "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
-        case .crop: hint.stringValue = "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
-        case .ruler: hint.stringValue = "Drag to measure · Shift snaps to 45° · hold 1 or 2 anywhere to measure what's under the pointer"
-        case .select: hint.stringValue = "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
-        case .text: hint.stringValue = "Click to type · double-click text to edit"
-        case .spotlight: hint.stringValue = "Everything outside the spotlights gets dimmed"
-        case .callout: hint.stringValue = "Press on the target, drag to place the bubble, type · drag the tip to re-aim"
-        case .image: hint.stringValue = "Drag to move · pinch or scroll over it to resize"
-        case .magnifier: hint.stringValue = "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
-        default: hint.stringValue = "Shift constrains · Tab copies the color under the cursor"
-        }
+        hint.stringValue = Self.hint(for: tool, cutOut: cutOut)
         hint.toolTip = hint.stringValue
+    }
+
+    /// A tip for the tool in hand.
+    static func hint(for tool: Tool, cutOut: Bool) -> String {
+        switch tool {
+        case .counter: "Type digits to renumber · drag the bubble tip to point it"
+        case .crop where cutOut: "Drag up/down to cut rows, sideways to cut columns · Enter cuts · Esc resets"
+        case .crop: "Select an area · Enter crops · ⌘O reads its text · C copies its average color · Esc resets"
+        case .ruler: "Drag to measure · Shift snaps to 45° · hold 1 or 2 anywhere to measure what's under the pointer"
+        case .select: "Click to select · Shift-click adds · drag empty space to select several · ⌥-drag duplicates · ⌘A all"
+        case .text: "Click to type · double-click text to edit"
+        case .spotlight: "Everything outside the spotlights gets dimmed"
+        case .callout: "Press on the target, drag to place the bubble, type · drag the tip to re-aim"
+        case .image: "Drag to move · pinch or scroll over it to resize"
+        case .magnifier: "Drag over an area · drag the lens to move it · pinch, scroll or +/− to zoom"
+        default: "Shift constrains · Tab copies the color under the cursor"
+        }
     }
 
     #if SCREENSHOT_SELFTESTS

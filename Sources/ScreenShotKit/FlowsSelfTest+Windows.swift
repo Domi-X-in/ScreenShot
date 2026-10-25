@@ -31,8 +31,9 @@ extension FlowsSelfTest {
         let content = ed.window?.contentView
 
         // Backdrop panel: a preset swatch, the fill popup, a slider.
-        guard let pill = allViews(PillButton.self, in: content).first(where: { $0.accessibilityLabel() == "Backdrop" }) else {
-            check(false, "the options bar has a Backdrop button"); return
+        // The old editor's pill or the new status bar's button: whichever button is called Backdrop.
+        guard let pill = allViews(NSView.self, in: content).first(where: { $0.accessibilityLabel() == "Backdrop" && $0.accessibilityRole() == .button }) else {
+            check(false, "the status bar has a Backdrop button"); return
         }
         let panel = await popover { _ = pill.accessibilityPerformPress() }
         check(panel != nil, "the Backdrop button opens its panel")

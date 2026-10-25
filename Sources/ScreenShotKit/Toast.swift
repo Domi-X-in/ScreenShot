@@ -36,7 +36,21 @@ import AppKit
         return .info
     }
 
+    /// The new editor's notification state for a message (ROADMAP, Fase 6 · R5).
+    static func noticeKind(for text: String) -> NotificationBar.Kind {
+        let t = text.lowercased()
+        if ["fail", "couldn't", "can't", "error", "unknown"].contains(where: t.contains) { return .error }
+        if ["no text", "requires", "make sure", "not "].contains(where: t.contains) { return .warning }
+        if ["copied", "saved", "copy", "save"].contains(where: t.contains) { return .success }
+        return .info
+    }
+
     static func show(_ text: String, duration: TimeInterval = 1.8) {
+        // In front of the new editor, messages go to its notification bar instead of a floating HUD.
+        if let editor = (NSApp.keyWindow ?? NSApp.mainWindow)?.windowController as? EditorWindowController,
+           editor.window?.isVisible == true, editor.notify(NotificationBar.Notice(noticeKind(for: text), text)) {
+            return
+        }
         panel?.orderOut(nil)
         generation += 1
         let gen = generation

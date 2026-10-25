@@ -13,8 +13,12 @@ final class RecentStrip: NSView {
     private let row = NSStackView()
     private let empty = NSTextField(labelWithString: "Every screenshot you save appears here.")
     private var generation = 0
+    /// The new editor's look (design tokens, the #FF5500 accent); the old editor keeps Shottr's.
+    let modern: Bool
+    private let line = NSView()
 
-    init() {
+    init(modern: Bool = false) {
+        self.modern = modern
         super.init(frame: .zero)
         wantsLayer = true
 
@@ -24,9 +28,9 @@ final class RecentStrip: NSView {
         row.edgeInsets = NSEdgeInsets(top: 10, left: 4, bottom: 4, right: 4)
 
         empty.font = .systemFont(ofSize: 11)
-        empty.textColor = .secondaryLabelColor
+        empty.textColor = modern ? DesignTokens.color(.ink3) : .secondaryLabelColor
 
-        let folder = BrowseTile { [weak self] in self?.onBrowse?() }
+        let folder = BrowseTile(modern: modern) { [weak self] in self?.onBrowse?() }
 
         let scroll = NSScrollView()
         scroll.drawsBackground = false
@@ -38,9 +42,7 @@ final class RecentStrip: NSView {
         row.translatesAutoresizingMaskIntoConstraints = false
         scroll.documentView = row
 
-        let line = NSView()
         line.wantsLayer = true
-        line.layer?.backgroundColor = NSColor.separatorColor.cgColor
         for v in [scroll, folder, empty, line] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
@@ -70,7 +72,9 @@ final class RecentStrip: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        layer?.backgroundColor = Theme.dynamic(light: NSColor(hex: 0xF4F5F8), dark: NSColor(hex: 0x1D1E24)).cgColor
+        layer?.backgroundColor = modern ? DesignTokens.color(.chrome).cgColor
+            : Theme.dynamic(light: NSColor(hex: 0xF4F5F8), dark: NSColor(hex: 0x1D1E24)).cgColor
+        line.layer?.backgroundColor = (modern ? DesignTokens.color(.lineSoft) : NSColor.separatorColor).cgColor
     }
 
     /// Lists the folder off the main thread and builds thumbnails with ImageIO.
@@ -108,7 +112,7 @@ final class RecentStrip: NSView {
     private func show(_ items: [(URL, CGImage)]) {
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for (url, thumb) in items {
-            let tile = RecentTile(url: url, thumbnail: thumb) { [weak self] in self?.onSelect?($0) }
+            let tile = RecentTile(url: url, thumbnail: thumb, modern: modern) { [weak self] in self?.onSelect?($0) }
             row.addArrangedSubview(tile)
         }
         empty.isHidden = !items.isEmpty
@@ -137,10 +141,12 @@ private final class RecentTile: NSView {
     private let imageLayer = CALayer()
     private let caption = NSTextField(labelWithString: "")
     private static let tileHeight: CGFloat = 48
+    private let modern: Bool
 
-    init(url: URL, thumbnail: CGImage, onSelect: @escaping (URL) -> Void) {
+    init(url: URL, thumbnail: CGImage, modern: Bool = false, onSelect: @escaping (URL) -> Void) {
         self.url = url
         self.onSelect = onSelect
+        self.modern = modern
         super.init(frame: .zero)
         let ratio = CGFloat(thumbnail.width) / CGFloat(max(1, thumbnail.height))
         let width = max(48, min(96, Self.tileHeight * ratio))
@@ -184,7 +190,7 @@ private final class RecentTile: NSView {
         toolTip = url.lastPathComponent + (edited ? " · editable annotations" : "")
         if edited {
             let badge = NSImageView(image: NSImage(systemSymbolName: "pencil.circle.fill", accessibilityDescription: "Editable")!)
-            badge.contentTintColor = Palette.accent
+            badge.contentTintColor = modern ? DesignTokens.color(.accent) : Palette.accent
             badge.translatesAutoresizingMaskIntoConstraints = false
             card.addSubview(badge)
             NSLayoutConstraint.activate([
@@ -220,10 +226,19 @@ private final class RecentTile: NSView {
 
     private func refresh() {
         imageLayer.borderWidth = isCurrent ? 2 : 1
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            imageLayer.borderColor = (isCurrent ? Palette.accent : hovering ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+        if modern {
+            // The current capture wears the accent; hover stays neutral.
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                imageLayer.borderColor = (isCurrent ? DesignTokens.color(.accent) : hovering ? DesignTokens.color(.ink3) : DesignTokens.color(.line)).cgColor
+            }
+            caption.textColor = isCurrent ? DesignTokens.color(.accentText) : DesignTokens.color(.ink3)
+            caption.font = .systemFont(ofSize: 10.5, weight: isCurrent ? .semibold : .regular)
+        } else {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                imageLayer.borderColor = (isCurrent ? Palette.accent : hovering ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+            }
+            caption.textColor = isCurrent ? Palette.accent : .tertiaryLabelColor
         }
-        caption.textColor = isCurrent ? Palette.accent : .tertiaryLabelColor
         // Hover lifts the card a little with a deeper shadow.
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.16
@@ -276,8 +291,11 @@ private final class BrowseTile: NSView {
     private let dash = CAShapeLayer()
     private var hovering = false { didSet { refresh() } }
 
-    init(action: @escaping () -> Void) {
+    private let modern: Bool
+
+    init(modern: Bool = false, action: @escaping () -> Void) {
         self.action = action
+        self.modern = modern
         super.init(frame: .zero)
         wantsLayer = true
         dash.fillColor = nil
@@ -288,12 +306,12 @@ private final class BrowseTile: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel("Open the Library")
-        let icon = NSImageView(image: NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: "Library")!
+        let icon = NSImageView(image: modern ? Icons.image(.library, size: 18) : NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: "Library")!
             .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))!)
-        icon.contentTintColor = .secondaryLabelColor
+        icon.contentTintColor = modern ? DesignTokens.color(.ink2) : .secondaryLabelColor
         let label = NSTextField(labelWithString: "Library")
-        label.font = .systemFont(ofSize: 10, weight: .medium)
-        label.textColor = .tertiaryLabelColor
+        label.font = .systemFont(ofSize: modern ? 10.5 : 10, weight: .medium)
+        label.textColor = modern ? DesignTokens.color(.ink2) : .tertiaryLabelColor
         for v in [icon, label] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
@@ -318,8 +336,13 @@ private final class BrowseTile: NSView {
 
     private func refresh() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            dash.strokeColor = (hovering ? NSColor.controlAccentColor : NSColor.tertiaryLabelColor).cgColor
-            dash.fillColor = (hovering ? Theme.hover : NSColor.clear).cgColor
+            if modern {
+                dash.strokeColor = (hovering ? DesignTokens.color(.ink3) : DesignTokens.color(.line)).cgColor
+                dash.fillColor = (hovering ? DesignTokens.color(.hover) : NSColor.clear).cgColor
+            } else {
+                dash.strokeColor = (hovering ? NSColor.controlAccentColor : NSColor.tertiaryLabelColor).cgColor
+                dash.fillColor = (hovering ? Theme.hover : NSColor.clear).cgColor
+            }
         }
     }
 

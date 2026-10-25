@@ -242,6 +242,7 @@ import ScreenCaptureKit
             ("toolbar", toolbarFlow),
             ("ribbon-editor", ribbonEditorFlow),
             ("ribbon-formatting", ribbonFormattingFlow),
+            ("notifications", notificationsFlow),
             ("panels", panelsFlow),
             ("windows", windowsFlow),
             ("library", libraryFlow),
