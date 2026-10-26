@@ -6,6 +6,8 @@ enum Keys {
     static let afterShow = "afterGrabShow"
     static let escCopy = "escCopy"
     static let escSave = "escSave"
+    /// The title card's Copy and Save close every window but pins (R11).
+    static let closeAfterCopySave = "closeAfterCopySave"
     static let saveFolder = "saveFolder"
     static let saveFormat = "saveFormat"
     static let windowShadow = "windowShadow"
@@ -43,6 +45,7 @@ enum Settings {
             Keys.afterShow: true,
             Keys.escCopy: true,
             Keys.escSave: false,
+            Keys.closeAfterCopySave: true,
             Keys.saveFolder: defaultFolder.path,
             Keys.saveFormat: "png",
             Keys.windowShadow: true,
@@ -69,6 +72,7 @@ enum Settings {
     static var afterShow: Bool { d.bool(forKey: Keys.afterShow) }
     static var escCopy: Bool { d.bool(forKey: Keys.escCopy) }
     static var escSave: Bool { d.bool(forKey: Keys.escSave) }
+    static var closeAfterCopySave: Bool { d.bool(forKey: Keys.closeAfterCopySave) }
     static var saveFolder: URL { URL(fileURLWithPath: d.string(forKey: Keys.saveFolder) ?? defaultFolder.path) }
     static var saveFormat: String { d.string(forKey: Keys.saveFormat) ?? "png" }
     static var windowShadow: Bool { d.bool(forKey: Keys.windowShadow) }

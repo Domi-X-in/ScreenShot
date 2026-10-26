@@ -122,13 +122,13 @@ extension FlowsSelfTest {
         let wide = NSImage(pasteboard: .general)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
         check(wide.map { CGFloat($0.width) } == Renderer.canvasSize(vb.doc).width, "⌘C copies the whole picture, outside part included")
 
-        // An object copied in A pastes into B.
-        a.window?.makeKeyAndOrderFront(nil)
-        click(a, CGPoint(x: 200, y: 150))
+        // One editor window (R11): B replaced A in it, and an object copied in one picture pastes into the next one.
+        check(a === b, "the second picture opens in the same editor window")
+        type("a", mods: .command)
         type("c", mods: .command)
-        b.window?.makeKeyAndOrderFront(nil)
+        guard let c = await openEditor(Self.sampleImage(500, 300, text: "Third")) else { return }
         type("v", mods: .command)
-        check(vb.doc.objects.last?.kind == .rect && vb.doc.objects.last?.text == "Card", "a shape copied in one editor pastes into another")
+        check(c === b && c.shotView.doc.objects.last?.kind == .image, "an object copied in one picture pastes into the next one")
     }
 
     /// Crop and Cut Out when there are objects inside, crossing and fully outside the image.

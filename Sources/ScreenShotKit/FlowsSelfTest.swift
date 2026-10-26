@@ -222,6 +222,7 @@ import ScreenCaptureKit
         d.set(false, forKey: Keys.saveRetinaAt1x)
         d.set("png", forKey: Keys.saveFormat)
         d.set(true, forKey: Keys.urlScheme)
+        d.set(false, forKey: Keys.closeAfterCopySave) // the flows press Copy to check the clipboard; `single-editor` turns it on
         Settings.snapToGuides = true
         NSApp.activate()
 
@@ -244,6 +245,7 @@ import ScreenCaptureKit
             ("callout-bar", calloutBarFlow),
             ("ribbon-r6", ribbonR6Flow),
             ("side-bar", sideBarFlow),
+            ("single-editor", singleEditorFlow),
             ("welcome", welcomeFlow),
             ("accessibility", accessibilityFlow),
             ("panels", panelsFlow),

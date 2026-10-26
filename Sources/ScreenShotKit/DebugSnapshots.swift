@@ -792,15 +792,14 @@ final class IconSheetView: NSView {
             print(ok ? "PASS" : "FAIL", what)
             if !ok { failures += 1 }
         }
-        func editors() -> [EditorWindowController] { NSApp.windows.compactMap { $0.windowController as? EditorWindowController } }
+        func editors() -> [EditorWindowController] { NSApp.windows.filter(\.isVisible).compactMap { $0.windowController as? EditorWindowController } }
         check(ToolStyle.loadDefaults().callout == .box, "built-in default callout is Professional · Box")
         AppLogic.shared.openEditor(img, scale: 2)
-        let ed = editors()[0]
+        var ed = editors()[0]
         ed.window?.layoutIfNeeded()
         check(ed.shotView.style.callout == .box, "a new editor starts with the Box callout")
         ed.shotView.tool = .callout
-        let options = ed.shapeOptions
-        func designMenu(_ c: CalloutStyle) -> NSMenu { options.callouts[c.rawValue].contextMenu?() ?? NSMenu() }
+        func designMenu(_ c: CalloutStyle) -> NSMenu { ed.shapeOptions.callouts[c.rawValue].contextMenu?() ?? NSMenu() }
         func choose(_ m: NSMenu?, _ title: String) {
             if let i = m?.items.firstIndex(where: { $0.title == title }) { m?.performActionForItem(at: i) } else { check(false, "the menu has “\(title)”") }
         }
@@ -813,13 +812,21 @@ final class IconSheetView: NSView {
         check(designMenu(.thought).items.first?.state == .on, "the mark moves to Thought")
         check(ed.shotView.style.callout == .thought, "Thought is also selected right away")
 
-        options.callouts[CalloutStyle.speech.rawValue].action?()
+        ed.shapeOptions.callouts[CalloutStyle.speech.rawValue].action?()
         check(ed.shotView.style.callout == .speech && ToolStyle.loadDefaults().callout == .thought,
               "an ordinary click picks Speech for now without changing the default")
 
+        // The app has one editor: close it and open it again.
+        ed.close()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         AppLogic.shared.openEditor(img, scale: 2)
-        let second = editors().first { $0 !== ed }
-        check(second?.shotView.style.callout == .thought, "a new editor starts from the new default (Thought)")
+        let second = editors().first
+        check(second !== ed && second?.shotView.style.callout == .thought, "a new editor starts from the new default (Thought)")
+        second?.close()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        AppLogic.shared.openEditor(img, scale: 2)
+        guard let reopened = editors().first else { print("FAIL the editor reopens"); exit(1) }
+        ed = reopened
 
         choose(designMenu(.box), "Reset to Original Default")
         check(ToolStyle.loadDefaults().callout == .box, "Reset to Original Default goes back to Box")

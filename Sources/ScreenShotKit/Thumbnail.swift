@@ -10,6 +10,9 @@ import AppKit
     private let panel: NSPanel
     private var monitors: [Any] = []
 
+    /// Closes the thumbnail on screen, if any.
+    static func dismissCurrent() { current?.dismiss() }
+
     static func show(_ image: CGImage, scale: CGFloat) {
         current?.dismiss()
         let t = Thumbnail(image: image, scale: scale)

@@ -45,10 +45,12 @@ import AppKit
             v.beginAreaSelection()
             v.window?.makeFirstResponder(v)
         }
-        copyImage = RibbonItem("copyImage", kind: .small, title: "Copy Full Image", icon: .copyImage, action: { [weak editor] in editor?.copyImage() })
-        copyImage.shortcut = "⌘C"
-        save = RibbonItem("save", kind: .small, title: "Save Image", icon: .save, action: { [weak editor] in editor?.saveImage() })
-        save.shortcut = "⌘S"
+        copyImage = RibbonItem("copyImage", kind: .small, title: Settings.closeAfterCopySave ? "Copy and Close" : "Copy Full Image", icon: .copyImage,
+                               action: { [weak editor] in editor?.copyFromTitleCard() })
+        if !Settings.closeAfterCopySave { copyImage.shortcut = "⌘C" } // ⌘C copies without closing
+        save = RibbonItem("save", kind: .small, title: Settings.closeAfterCopySave ? "Save and Close" : "Save Image", icon: .save,
+                          action: { [weak editor] in editor?.saveFromTitleCard() })
+        if !Settings.closeAfterCopySave { save.shortcut = "⌘S" }
         pin = RibbonItem("pin", kind: .small, title: "Pin to Screen", icon: .pin, action: { [weak editor] in editor?.pinImage() })
         pin.shortcut = "⌘P"
         undo = RibbonItem("undo", kind: .small, title: "Undo", icon: .undo, action: send(#selector(ShotView.undo(_:))))

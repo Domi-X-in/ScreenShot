@@ -164,6 +164,8 @@ import AppKit
     @objc func showLibrary() { LibraryWindowController.show() }
     @objc func showWelcome() { OnboardingWindowController.show(from: 0) }
 
+    func closePreferences() { prefs?.close() }
+
     @objc func showPreferences() {
         if prefs == nil { prefs = PreferencesWindowController() }
         NSApp.activate()

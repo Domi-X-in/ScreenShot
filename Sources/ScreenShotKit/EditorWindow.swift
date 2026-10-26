@@ -321,14 +321,35 @@ import UniformTypeIdentifiers
     }
 
     /// Saves with annotations kept editable; a document opened from a file is updated in place.
-    @objc func saveImage() {
-        guard let img = rendered() else { return }
+    @objc func saveImage() { _ = save() }
+
+    @discardableResult
+    private func save(quiet: Bool = false) -> Bool {
+        guard let img = rendered() else { return false }
         let revision = doc.revision
-        if Exporter.saveEditable(doc, rendered: img) != nil {
-            doc.savedRevision = revision
-            window?.title = doc.fileURL?.lastPathComponent ?? "ScreenShot"
-            recent.currentURL = doc.fileURL
-        }
+        guard Exporter.saveEditable(doc, rendered: img, quiet: quiet) != nil else { return false }
+        doc.savedRevision = revision
+        window?.title = doc.fileURL?.lastPathComponent ?? "ScreenShot"
+        recent.currentURL = doc.fileURL
+        return true
+    }
+
+    /// The title card's Copy: copies, then (Preferences › General, on by default) closes every window but pins so the
+    /// picture can be pasted in the app that was in front.
+    func copyFromTitleCard() {
+        guard Settings.closeAfterCopySave else { copyImage(); return }
+        guard let img = rendered() else { return }
+        Exporter.copy(img, scale: doc.scale)
+        AppLogic.shared.closeAllWindows()
+        Toast.show("Copied to the clipboard")
+    }
+
+    /// The title card's Save: saves, then closes every window but pins; a failed save leaves everything open.
+    func saveFromTitleCard() {
+        guard Settings.closeAfterCopySave else { saveImage(); return }
+        guard save(quiet: true), let name = doc.fileURL?.lastPathComponent else { return }
+        AppLogic.shared.closeAllWindows()
+        Toast.show("Saved \(name)")
     }
 
     @objc func saveImageAs() {
@@ -451,11 +472,6 @@ import UniformTypeIdentifiers
     /// Thumbnail click: save what is open, then show `url` in this same window.
     func switchTo(_ url: URL) {
         guard url.standardizedFileURL != doc.fileURL?.standardizedFileURL else { return }
-        // A file already open in another window is brought forward rather than shown twice.
-        if let other = AppLogic.shared.editor(showing: url), other !== self {
-            other.window?.makeKeyAndOrderFront(nil)
-            return
-        }
         let next: EditorDocument
         if let cached = visited[url.standardizedFileURL] {
             next = cached
@@ -464,13 +480,27 @@ import UniformTypeIdentifiers
             next = Self.makeDocument(image: loaded.image, scale: loaded.scale, state: loaded.state, url: url)
         }
         // A capture that was never saved gets a file now, so it can be come back to from the strip.
-        flushAutosave(force: doc.fileURL == nil)
+        present(next, saveUnsaved: true)
+    }
+
+    /// A new capture, an opened file or the clipboard, in this window (the app has one editor): the picture shown now
+    /// is auto-saved first if it was edited, as when the window closes.
+    func show(image: CGImage, scale: CGFloat, state: EditState?, url: URL?) {
+        if let url, url.standardizedFileURL == doc.fileURL?.standardizedFileURL { return }
+        let next = url.flatMap { visited[$0.standardizedFileURL] } ?? Self.makeDocument(image: image, scale: scale, state: state, url: url)
+        if url.flatMap({ visited[$0.standardizedFileURL] }) == nil { next.savedRevision = next.revision }
+        present(next, saveUnsaved: false)
+    }
+
+    private func present(_ next: EditorDocument, saveUnsaved: Bool) {
+        flushAutosave(force: saveUnsaved && doc.fileURL == nil)
         if let current = doc.fileURL { visited[current.standardizedFileURL] = doc }
         if visited.count > 20 { visited.removeAll() }
         shotView.switchDocument(next)
         applyDefaultZoom()
-        window?.title = url.lastPathComponent
-        recent.currentURL = url
+        window?.title = next.fileURL?.lastPathComponent ?? "ScreenShot"
+        recent.currentURL = next.fileURL
+        recent.reload()
         syncToolbar()
         updateInfo()
         window?.makeFirstResponder(shotView)

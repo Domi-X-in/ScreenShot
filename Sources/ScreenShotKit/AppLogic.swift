@@ -6,7 +6,8 @@ import ScreenCaptureKit
     static let shared = AppLogic()
 
     private var lastArea: (displayID: CGDirectDisplayID, rect: CGRect)?
-    private var editors: [EditorWindowController] = []
+    /// The one editor window (ROADMAP, Fase 6 · R11): everything opened goes into it.
+    private(set) var editor: EditorWindowController?
 
     func run(_ a: HotkeyAction) {
         switch a {
@@ -168,15 +169,17 @@ import ScreenCaptureKit
     }
 
     func openEditor(_ img: CGImage, scale: CGFloat, state: EditState? = nil, url: URL? = nil) {
-        // A file that is already open is brought forward instead of opened twice.
-        if let url, let existing = editors.first(where: { $0.doc.fileURL?.standardizedFileURL == url.standardizedFileURL }) {
+        // The editor is already open: the picture replaces the one it shows (that one is auto-saved first).
+        if let ed = editor {
+            ed.show(image: img, scale: scale, state: state, url: url)
             NSApp.activate()
-            existing.window?.makeKeyAndOrderFront(nil)
+            ed.window?.makeKeyAndOrderFront(nil)
+            ed.window?.makeFirstResponder(ed.shotView)
             return
         }
         let ed = EditorWindowController(image: img, scale: scale, state: state, url: url)
         ed.doc.savedRevision = ed.doc.revision
-        editors.append(ed)
+        editor = ed
         NSApp.activate()
         ed.showWindow(nil)
         ed.window?.makeKeyAndOrderFront(nil)
@@ -184,12 +187,22 @@ import ScreenCaptureKit
         ed.applyDefaultZoom()
     }
 
-    func editor(showing url: URL) -> EditorWindowController? {
-        editors.first { $0.doc.fileURL?.standardizedFileURL == url.standardizedFileURL }
+    func editorClosed(_ ed: EditorWindowController) {
+        DispatchQueue.main.async { if self.editor === ed { self.editor = nil } }
     }
 
-    func editorClosed(_ ed: EditorWindowController) {
-        DispatchQueue.main.async { self.editors.removeAll { $0 === ed } }
+    /// After Copy or Save from the title card (with Preferences › General › "Close all windows after Copy or Save"):
+    /// every ScreenShot window closes except pins, and the app that was in front before gets the focus back, so the
+    /// picture can be pasted there at once. The app keeps running in the menu bar.
+    func closeAllWindows() {
+        Thumbnail.dismissCurrent()
+        editor?.close()
+        LibraryWindowController.shared?.close()
+        OnboardingWindowController.shared?.window?.close()
+        (NSApp.delegate as? AppDelegate)?.closePreferences()
+        if NSColorPanel.sharedColorPanelExists { NSColorPanel.shared.orderOut(nil) }
+        if NSFontPanel.sharedFontPanelExists { NSFontPanel.shared.orderOut(nil) }
+        NSApp.deactivate()
     }
 
     func loadFromClipboard() {

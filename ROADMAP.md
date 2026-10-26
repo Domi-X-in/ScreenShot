@@ -201,6 +201,13 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Corregido al integrarla: la barra puede aparecer antes de que la ventana tenga tamaño (el editor abre con una herramienta en mano), y "mantener la imagen quieta" fijaba el zoom del 2 % de un lienzo vacío. Ahora solo la sujeta con la ventana visible. Al ocultarse la barra la imagen vuelve a ajustarse si seguía ajustada (⌘0). Los avisos de Toast van a la barra del editor más al frente aunque la app no esté activa.
   - Pendiente: el pellizco real sobre un contador solo se probó con su función (no se pueden simular gestos del trackpad).
 
+- [x] **R11 · Una sola ventana de editor; Copiar y Guardar cierran** (petición del 26-oct-2026):
+  - [x] Un solo editor (`AppLogic.editor`): capturas, archivos abiertos, el portapapeles y la Biblioteca se abren en la misma ventana. La imagen que se sustituye se autoguarda antes si se editó (como al cerrar); una captura sin editar se sustituye sin dejar archivo. Fuera "Open in New Window" del menú de la tira de recientes.
+  - [x] Los botones Copiar y Guardar de la tarjeta de título (solo los botones; ⌘C, ⌘S y Esc no cambian): copian o guardan, cierran todas las ventanas de la app salvo los pines (editor, inicio, Preferencias, guía, miniatura, paneles de color y fuente) y devuelven el foco a la app anterior para pegar enseguida. La app sigue en la barra de menús. Si el guardado falla, no se cierra nada y el error se ve en la barra. Se llaman "Copy and Close" y "Save and Close".
+  - [x] Ajuste en Preferencias › General › Editor: "Close all windows after Copy or Save (title bar buttons)", activado por defecto.
+  - [x] Verificado: flujo nuevo `single-editor` (14 comprobaciones: misma ventana, autoguardado de la sustituida, abrirla de nuevo, captura sin editar sin archivo, Copiar y Guardar cierran editor, inicio y Preferencias y dejan el pin, guardado fallido no cierra, ajuste desactivado). `copy-paste` y DEFAULTS adaptados a una sola ventana. 113 tests unitarios; todas las suites de integración pasan y FLOWS 377/0.
+  - Pendiente: los nombres de los botones se leen al abrir el editor; si se cambia el ajuste con el editor abierto, el comportamiento cambia al momento pero el nombre al reabrirlo.
+
 Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 
 ---

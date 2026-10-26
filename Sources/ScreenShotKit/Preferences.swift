@@ -91,6 +91,7 @@ import ServiceManagement
             DefaultsCheckbox("Copy", key: Keys.afterCopy),
             DefaultsCheckbox("Save", key: Keys.afterSave),
         ])
+        form.row("Editor", [DefaultsCheckbox("Close all windows after Copy or Save (title bar buttons)", key: Keys.closeAfterCopySave)])
         form.row("After Area Crop, show", DefaultsRadio.group(key: Keys.afterAreaShow, options: [("Thumbnail", "thumbnail"), ("Editor", "editor")]))
         form.row("Autostart", [LoginCheckbox()])
         form.row("Appearance", DefaultsRadio.group(key: "appearance", options: [("System", "system"), ("Light", "light"), ("Dark", "dark")]))

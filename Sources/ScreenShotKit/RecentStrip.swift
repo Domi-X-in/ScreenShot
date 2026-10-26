@@ -256,14 +256,12 @@ private final class RecentTile: NSView {
     override func menu(for event: NSEvent) -> NSMenu? {
         let m = NSMenu()
         m.addItem(withTitle: "Edit Here", action: #selector(open), keyEquivalent: "").target = self
-        m.addItem(withTitle: "Open in New Window", action: #selector(openNewWindow), keyEquivalent: "").target = self
         m.addItem(withTitle: "Copy Image", action: #selector(copyImage), keyEquivalent: "").target = self
         m.addItem(withTitle: "Show in Finder", action: #selector(reveal), keyEquivalent: "").target = self
         return m
     }
 
     @objc private func open() { onSelect(url) }
-    @objc private func openNewWindow() { AppLogic.shared.openFile(url) }
 
     @objc private func copyImage() {
         guard let loaded = EditableFile.load(url), let src = CGImageSourceCreateWithURL(url as CFURL, nil),
