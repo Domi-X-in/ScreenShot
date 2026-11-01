@@ -30,7 +30,7 @@ import AppKit
     /// The keyboard shortcut, shown in the tooltip ("Arrow (A)").
     var shortcut: String? { didSet { if shortcut != oldValue { changed() } } }
     var toolTipText: String { shortcut.map { "\(title) (\($0))" } ?? title }
-    /// A large button shows its shortcut under its caption (the home window's capture buttons).
+    /// A large button shows its shortcut under its caption (the capture buttons of the editor's empty page).
     var showsShortcut = false
     /// A field you can type in (Font Size): a click on its text opens an editor, Return sends what was typed here.
     var onTextEntry: ((String) -> Void)?

@@ -37,7 +37,7 @@ import Vision
         win.titlebarAppearsTransparent = true
         win.titlebarSeparatorStyle = .none
         win.toolbarStyle = .unified
-        win.toolbar = NSToolbar(identifier: "home")
+        win.toolbar = NSToolbar(identifier: "library")
         win.minSize = NSSize(width: 820, height: 380)
         win.isReleasedWhenClosed = false
         win.center()
@@ -98,7 +98,7 @@ import Vision
         searchStack.alignment = .leading
         searchStack.spacing = 6
         search.widthAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
-        let searchGroup = HomeToolbarGroup(title: "Search", content: searchStack, flexible: true)
+        let searchGroup = LibraryToolbarGroup(title: "Search", content: searchStack, flexible: true)
 
         sizeSlider.controlSize = .small
         sizeSlider.trackFillColor = DesignTokens.color(.accent)
@@ -112,11 +112,11 @@ import Vision
         for i in [small, big] { i.contentTintColor = DesignTokens.color(.ink3) }
         let sizeRow = NSStackView(views: [small, sizeSlider, big])
         sizeRow.spacing = 8
-        let sizeGroup = HomeToolbarGroup(title: "Thumbnail size", content: sizeRow, flexible: false)
+        let sizeGroup = LibraryToolbarGroup(title: "Thumbnail size", content: sizeRow, flexible: false)
 
         var bar: [NSView] = []
         for (i, g) in ([open, searchGroup, sizeGroup] as [NSView]).enumerated() {
-            if i > 0 { bar.append(HomeToolbarGroup.divider()) }
+            if i > 0 { bar.append(LibraryToolbarGroup.divider()) }
             if let gv = g as? RibbonGroupView {
                 gv.translatesAutoresizingMaskIntoConstraints = false
                 NSLayoutConstraint.activate([gv.widthAnchor.constraint(equalToConstant: gv.frame.width),
@@ -226,7 +226,7 @@ struct LibraryItem: Sendable {
     let url: URL
     let date: Date
 
-    /// The home window's day groups, newest first: Today, Yesterday, Earlier this week, Earlier this month, then one
+    /// The Library's day groups, newest first: Today, Yesterday, Earlier this week, Earlier this month, then one
     /// per month ("September 2026"). `items` is newest first; empty groups are left out.
     static func sections(_ items: [LibraryItem], now: Date = Date(), calendar: Calendar = .current) -> [(title: String, items: [LibraryItem])] {
         let monthFormat = DateFormatter()
@@ -461,7 +461,7 @@ private extension Double {
     var nonZero: Double? { self == 0 ? nil : self }
 }
 
-/// A day header in the home window's grid: "Today  5 screenshots".
+/// A day header in the Library's grid: "Today  5 screenshots".
 final class LibrarySectionHeader: NSView, NSCollectionViewElement {
     static let id = NSUserInterfaceItemIdentifier("LibrarySectionHeader")
     private let title = NSTextField(labelWithString: "")
@@ -492,8 +492,8 @@ final class LibrarySectionHeader: NSView, NSCollectionViewElement {
     }
 }
 
-/// A non-ribbon group in the home window's bar (Search, Thumbnail size): its content and its title underneath.
-final class HomeToolbarGroup: NSView {
+/// A non-ribbon group in the Library's bar (Search, Thumbnail size): its content and its title underneath.
+final class LibraryToolbarGroup: NSView {
     init(title: String, content: NSView, flexible: Bool) {
         super.init(frame: .zero)
         let label = NSTextField(labelWithString: title)

@@ -95,7 +95,7 @@ class DraggableCard: CardView {
     }
 }
 
-/// The home window's title card: the window's buttons on the left, the app's name in the middle.
+/// The Library's title card: the window's buttons on the left, its name in the middle.
 final class WindowTitleCard: DraggableCard {
     init(title: String) {
         super.init()

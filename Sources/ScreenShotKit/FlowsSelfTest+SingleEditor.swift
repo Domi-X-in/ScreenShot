@@ -53,7 +53,7 @@ extension FlowsSelfTest {
         let copied = NSImage(pasteboard: .general).map { Int($0.size.width) }
         check(copied == 700, "Copy puts the picture on the clipboard (\(copied ?? 0))")
         check(!visible(ed2.window) && !visible(LibraryWindowController.shared?.window) && editors.isEmpty,
-              "and closes the editor and the home window")
+              "and closes the editor and the Library")
         check(!NSApp.windows.contains { $0.isVisible && $0.windowController is PreferencesWindowController }, "and Preferences")
         check(pin.isVisible, "pins stay on screen")
         check(AppLogic.shared.editor === ed2, "the editor is hidden, ready to come back")

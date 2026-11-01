@@ -2,7 +2,7 @@ import AppKit
 
 #if SCREENSHOT_SELFTESTS
 extension FlowsSelfTest {
-    /// Closing the editor after an Area capture keeps the capture: the home window lists it and opening it shows the
+    /// Closing the editor after an Area capture keeps the capture: the Library lists it and opening it shows the
     /// picture again, with its edits still editable.
     func closeReopenFlow() async {
         func pngs() -> Set<String> {
@@ -25,7 +25,7 @@ extension FlowsSelfTest {
         }
         func reopen(_ name: String, _ text: String, edited: Bool) async {
             let url = folder.appendingPathComponent(name)
-            check(LibraryItem.list(in: folder).first?.url.lastPathComponent == name, "[\(text)] the home window lists it first")
+            check(LibraryItem.list(in: folder).first?.url.lastPathComponent == name, "[\(text)] the Library lists it first")
             AppLogic.shared.openFile(url)
             await sleep(0.3)
             guard let ed = AppLogic.shared.editor else { check(false, "[\(text)] opening it reopens the editor"); return }
