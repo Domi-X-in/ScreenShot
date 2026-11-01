@@ -52,7 +52,7 @@ import AppKit
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
             AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested, ShapesSelfTest.runIfRequested, FlowsSelfTest.runIfRequested,
-            RibbonSelfTest.runIfRequested, SpacesSelfTest.runIfRequested,
+            RibbonSelfTest.runIfRequested, SpacesSelfTest.runIfRequested, DragOutSelfTest.runIfRequested,
         ]
         if selfTests.contains(where: { $0() }) { return }
         if RibbonDemo.openIfRequested() { return }

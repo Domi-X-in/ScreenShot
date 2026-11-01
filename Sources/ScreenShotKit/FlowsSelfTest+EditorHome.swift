@@ -39,6 +39,11 @@ extension FlowsSelfTest {
         // The capture button: the window steps aside, and comes back if the capture is cancelled.
         guard let ed = await openEditor(Self.sampleImage(640, 360, text: "Behind")), let r = ed.debugEditorRibbon else { check(false, "the editor opens"); return }
         check(r.capture.split && r.capture.menu?().items.map(\.title).count == 3, "the title card has New Capture, with Area, Window and Fullscreen")
+        // The drag-out button only starts a drag: the window stays where it is.
+        if let content = ed.window?.contentView, let out = allViews(DragOutView.self, in: content).first {
+            let center = out.convert(CGPoint(x: out.bounds.midX, y: out.bounds.midY), to: out.superview)
+            check(!out.mouseDownCanMoveWindow && out.hitTest(center) === out, "pressing the drag-out button doesn't move the window")
+        } else { check(false, "the title card has the drag-out button") }
         let doc = ed.doc
         AppLogic.shared.hideEditorForCapture()
         check(ed.window?.isVisible == false, "New Capture hides the editor, so it isn't in the picture")

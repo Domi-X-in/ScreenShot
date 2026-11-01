@@ -48,6 +48,11 @@ grep -q "SELFTEST OK" "$WORK/AUTOSAVE/out.log" || FAILED=1
 
 if [ "${1:-}" = "--live" ]; then
     # Launched through Launch Services so the app's own Screen Recording permission applies.
+    # A drag from the drag-out button with real mouse events (skipped without Accessibility).
+    open -n -W "$APP" --env SCREENSHOT_SELFTEST_DRAGOUT=1 --stdout "$WORK/dragout.txt" --stderr /dev/null --args -saveFolder "$WORK"
+    printf "%-12s %3d passed  %d failed\n" DRAGOUT "$(grep -c '^PASS' "$WORK/dragout.txt")" "$(grep -c '^FAIL' "$WORK/dragout.txt")"
+    grep -E '^(FAIL|SKIP)' "$WORK/dragout.txt"
+    grep -q '^FAIL' "$WORK/dragout.txt" && FAILED=1
     open -n -W "$APP" --env SCREENSHOT_SELFTEST_LIVE="$WORK/live.txt" --args -saveFolder "$WORK" &
     for _ in $(seq 1 120); do sleep 1; grep -q "LIVE SELFTEST" "$WORK/live.txt" 2>/dev/null && break; done
     printf "%-12s %3d passed  %d failed  %d skipped\n" LIVE "$(grep -c '^PASS' "$WORK/live.txt")" "$(grep -c '^FAIL' "$WORK/live.txt")" "$(grep -c '^SKIP' "$WORK/live.txt")"

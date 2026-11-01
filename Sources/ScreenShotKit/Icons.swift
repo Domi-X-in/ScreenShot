@@ -6,7 +6,7 @@ import AppKit
 /// their own color, like the ink bar under the Highlighter.
 enum IconName: String, CaseIterable {
     // Window chrome and title bar
-    case copyImage, save, pin, drag
+    case copyImage, save, pin, drag, dragIndicator
     // Clipboard
     case paste, cut, copy, formatPainter, undo, redo
     // Font
@@ -81,7 +81,9 @@ enum Icons {
         case .copyImage: IconParts(stroke: r(8, 8, 12, 12, 2) + "M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" + l(10.5, 17.5, 13, 14.5, 15, 16.5, 16.5, 15, 18, 16.5))
         case .save: IconParts(stroke: l(12, 4, 12, 15) + l(7.5, 10.5, 12, 15, 16.5, 10.5) + "M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3")
         case .pin: IconParts(stroke: "M9 3.5h6M10 3.5v5.5l-3 3.5h10l-3-3.5V3.5M12 12.5v8")
-        case .drag: IconParts(stroke: r(3, 3, 12, 12, 2) + l(3, 11.5, 6.5, 8, 10, 11.5) + l(10, 11.5, 11.5, 10, 15, 13.5), fill: "M14 14l7 2.6-3.1 1.3-1.3 3.1z")
+        case .drag: IconParts(stroke: r(4, 4, 16, 16, 3) + l(4, 16, 8.5, 11, 12, 14.5, 14.5, 12, 20, 17), fill: "M17 8.5a1.6 1.6 0 1 1-3.2 0a1.6 1.6 0 1 1 3.2 0z")
+        // Google's Material Symbols "drag_indicator" (Apache 2.0): two columns of three dots.
+        case .dragIndicator: IconParts(fill: "M11 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM17 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM17 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM17 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0z")
         // Clipboard
         case .paste: IconParts(stroke: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" + r(9, 3, 6, 4, 1.5) + l(9, 12, 15, 12) + l(9, 16, 13, 16))
         case .cut: IconParts(stroke: c(6.5, 17, 2.5) + c(17.5, 17, 2.5) + l(8.3, 15.2, 17, 4) + l(15.7, 15.2, 7, 4))

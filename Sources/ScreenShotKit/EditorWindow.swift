@@ -85,7 +85,8 @@ import UniformTypeIdentifiers
         let content = CanvasBackground()
         win.contentView = content
         let m = DesignTokens.Metrics.self
-        let drag = DragOutView(icon: Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2))) { [weak self] in
+        let drag = DragOutView(icon: Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2)),
+                               handle: Icons.image(.dragIndicator, size: 16, color: DesignTokens.color(.ink2))) { [weak self] in
             self?.rendered().map { ($0, self?.doc.scale ?? 2) }
         }
         let title = TitleCard(actions: EditorRibbon.titleBarGroup([r.capture, r.copyImage, r.save, r.pin]), drag: drag,
@@ -774,24 +775,24 @@ final class ClickableStack: NSStackView {
 // MARK: - Drag out
 
 /// Shottr's CtrlDragOut: drag the rendered screenshot into another app as a PNG file.
-final class DragOutView: NSView, NSDraggingSource {
+final class DragOutView: NSControl, NSDraggingSource {
     private let provider: () -> (CGImage, CGFloat)?
 
-    /// `icon` replaces the SF Symbol hand (the new editor passes its own icon family's Drag icon).
-    init(icon: NSImage? = nil, provider: @escaping () -> (CGImage, CGFloat)?) {
+    /// `icon` is the picture in the middle, with a `handle` on each side.
+    init(icon: NSImage, handle: NSImage, provider: @escaping () -> (CGImage, CGFloat)?) {
         self.provider = provider
         super.init(frame: CGRect(x: 0, y: 0, width: 40, height: 28))
         toolTip = "Drag'n'Drop Image"
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel("Drag the image into another app")
-        let icon = NSImageView(image: icon ?? NSImage(systemSymbolName: "hand.draw", accessibilityDescription: "Drag image")!
-            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))!)
-        icon.contentTintColor = .secondaryLabelColor
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(icon)
+        for (image, offset) in [(icon, CGFloat(0)), (handle, -11.5), (handle, 11.5)] {
+            let view = NSImageView(image: image)
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+            NSLayoutConstraint.activate([view.centerXAnchor.constraint(equalTo: centerXAnchor, constant: offset), view.centerYAnchor.constraint(equalTo: centerYAnchor)])
+        }
         NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: centerXAnchor), icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             widthAnchor.constraint(equalToConstant: 40), heightAnchor.constraint(equalToConstant: 28),
         ])
     }
@@ -800,19 +801,42 @@ final class DragOutView: NSView, NSDraggingSource {
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
 
+    // It sits in the title bar, where the window server moves the window with any drag that doesn't start on a control:
+    // that's why this is an NSControl. The window would otherwise follow the picture and the drop land on nothing.
+    #if SCREENSHOT_SELFTESTS
+    static var sessionsStarted = 0
+    #endif
+
+    private var dragging = false
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+    override func mouseDown(with event: NSEvent) {}
+
     override func mouseDragged(with event: NSEvent) {
-        guard let (img, scale) = provider(), let data = Exporter.encode(img, scale: scale, type: .png) else { return }
+        guard !dragging, let (img, scale) = provider(), let data = Exporter.encode(img, scale: scale, type: .png) else { return }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(Exporter.fileName(ext: "png"))
         guard (try? data.write(to: url)) != nil else { return }
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         let preview = NSImage(cgImage: img, size: NSSize(width: 120, height: 120 * CGFloat(img.height) / CGFloat(max(1, img.width))))
         let p = convert(event.locationInWindow, from: nil)
         item.setDraggingFrame(CGRect(x: p.x - 60, y: p.y - 30, width: preview.size.width, height: preview.size.height), contents: preview)
+        dragging = true
         beginDraggingSession(with: [item], event: event, source: self)
+        // The editor steps aside so the drop target can be seen, and comes back when the drag ends, dropped or not.
+        window?.orderOut(nil)
+        #if SCREENSHOT_SELFTESTS
+        Self.sessionsStarted += 1
+        #endif
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         .copy
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dragging = false
+        window?.makeKeyAndOrderFront(nil)
     }
 }
 

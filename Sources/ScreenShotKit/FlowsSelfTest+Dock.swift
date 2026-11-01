@@ -61,6 +61,60 @@ extension FlowsSelfTest {
     }
 }
 
+/// A drag from the drag-out button with real mouse events (needs Accessibility): the window has to stay where it is.
+@MainActor enum DragOutSelfTest {
+    static func runIfRequested() -> Bool {
+        guard ProcessInfo.processInfo.environment["SCREENSHOT_SELFTEST_DRAGOUT"] != nil else { return false }
+        Task { @MainActor in await run() }
+        return true
+    }
+
+    private static func dragOutView(in root: NSView) -> DragOutView? {
+        (root as? DragOutView) ?? root.subviews.lazy.compactMap { dragOutView(in: $0) }.first
+    }
+
+    private static func run() async {
+        guard AXIsProcessTrusted() else { print("SKIP needs Accessibility"); print("DRAGOUT SELFTEST DONE"); exit(0) }
+        AppLogic.shared.openEditor(FlowsSelfTest.sampleImage(640, 400), scale: 2)
+        try? await Task.sleep(for: .seconds(1))
+        NSApp.activate()
+        try? await Task.sleep(for: .seconds(0.5))
+        guard let win = AppLogic.shared.editor?.window, let content = win.contentView,
+              let out = dragOutView(in: content) else { print("FAIL no drag-out button"); exit(1) }
+        win.level = .floating // above whatever is in front, since a script can't take the focus
+        win.orderFrontRegardless()
+        let before = win.frame
+        let onWindow = out.convert(CGPoint(x: out.bounds.midX, y: out.bounds.midY), to: nil)
+        let onScreen = win.convertPoint(toScreen: onWindow)
+        let start = CGPoint(x: onScreen.x, y: (NSScreen.screens.first?.frame.height ?? 0) - onScreen.y)
+        await Task.detached {
+            func post(_ type: CGEventType, _ p: CGPoint) {
+                CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+                usleep(50000)
+            }
+            post(.mouseMoved, start)
+            usleep(300000)
+            // A first click brings the app in front, as a person's would.
+            post(.leftMouseDown, start)
+            post(.leftMouseUp, start)
+            usleep(600000)
+            post(.leftMouseDown, start)
+            for i in 1...12 { post(.leftMouseDragged, CGPoint(x: start.x + CGFloat(i) * 8, y: start.y + CGFloat(i) * 12)) }
+            usleep(300000)
+        }.value
+        let during = win.frame
+        print((during.origin == before.origin ? "PASS" : "FAIL"), "the window doesn't move with the drag (moved \(during.origin.x - before.origin.x), \(during.origin.y - before.origin.y))")
+        print(DragOutView.sessionsStarted == 1 ? "PASS" : "FAIL", "one drag session started (\(DragOutView.sessionsStarted))")
+        print(!win.isVisible ? "PASS" : "FAIL", "the editor is out of the way during the drag")
+        let end = CGPoint(x: start.x + 96, y: start.y + 144)
+        CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: end, mouseButton: .left)?.post(tap: .cghidEventTap)
+        try? await Task.sleep(for: .seconds(1))
+        print(win.isVisible ? "PASS" : "FAIL", "the editor comes back when the drag ends")
+        print("DRAGOUT SELFTEST DONE")
+        exit(0)
+    }
+}
+
 /// R12: with another app in full screen (Tools/fullscreen-test.sh), the capture windows stay on that Space. The editor's
 /// behaviour is printed, not judged, so the two activation policies can be compared.
 @MainActor enum SpacesSelfTest {
