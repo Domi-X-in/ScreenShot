@@ -30,8 +30,6 @@ jobs:
     name: In-app UI tests
     runs-on: macos-latest
     timeout-minutes: 20
-    # Real windows and mouse/keyboard events on a hosted runner: reported, but not blocking yet.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: UI self-tests (no screen recording on hosted runners, so no --live)

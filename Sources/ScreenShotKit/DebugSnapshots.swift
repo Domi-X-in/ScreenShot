@@ -407,10 +407,12 @@ final class IconSheetView: NSView {
         check(v.selection == [r1.id, r2.id], "drag on empty space selects everything it touches")
         let count = ed.doc.objects.count
         let r1Before = obj(r1.id)!.rect
-        dragFrom(CGPoint(x: r1Before.minX, y: r1Before.midY), to: CGPoint(x: r1Before.minX + 30, y: r1Before.midY), .option)
+        // Far enough on screen to count as a drag, and one screen point of slack per image point, however small the window.
+        let dx = max(30, 12 / v.currentZoom), slack = max(3, 2 / v.currentZoom)
+        dragFrom(CGPoint(x: r1Before.minX, y: r1Before.midY), to: CGPoint(x: r1Before.minX + dx, y: r1Before.midY), .option)
         let copies = ed.doc.objects.filter { $0.id != r1.id && $0.id != r2.id }
-        check(ed.doc.objects.count == count + 2 && obj(r1.id)!.rect == r1Before && copies.contains { near($0.rect.minX, r1Before.minX + 30) },
-              "⌥-drag duplicates the selection, moves the copies and leaves the originals")
+        check(ed.doc.objects.count == count + 2 && obj(r1.id)!.rect == r1Before && copies.contains { abs($0.rect.minX - (r1Before.minX + dx)) < slack },
+              "⌥-drag duplicates the selection, moves the copies and leaves the originals (zoom \(v.currentZoom), \(count) → \(ed.doc.objects.count), \(r1Before.minX) → \(copies.map(\.rect.minX)))")
         v.selectAll(nil)
         check(v.selection.count == 4, "⌘A selects every object")
         v.delete(nil)
