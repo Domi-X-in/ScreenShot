@@ -24,11 +24,11 @@ The app has a Dock icon by default, and so the full menu bar while it is in fron
 
 **Clicking the Dock icon**, or opening the app from Finder or Spotlight, always shows the editor. The red button, ⌘W, Esc, Pin, Copy and Close and Save and Close only hide it, so it comes back as it was, with its undo history. With no editor yet (after launching), it opens the newest screenshot; with an empty folder, a page of capture buttons (Area, Window, Fullscreen, Open Image). **Open ScreenShot** in the menu bar menu does the same; **Library…** (⌘L) is right below it. Launching the app at login shows nothing.
 
-## Home window
+## Library
 
-**Library…** (menu bar menu, or ⌘L) opens the app's home window, made of floating cards like the editor: a ribbon-style bar with Area, Window and Fullscreen capture buttons (each with its shortcut), Open Image and Show Folder, search, the thumbnail size and Preferences; below it every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. 
+**Library…** (menu bar menu, ⌘L, or the last tile of the editor's recent strip) is a support window, made of floating cards like the editor: Open Image and Show Folder, search and the thumbnail size; below them every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. Choosing one opens it in the editor and closes the Library. 
 
-![Home window](docs/screenshots/home-dark.png)
+![Library](docs/screenshots/home-dark.png)
 
 ## Build and run
 

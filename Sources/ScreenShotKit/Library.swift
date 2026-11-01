@@ -2,7 +2,7 @@ import AppKit
 import ImageIO
 import Vision
 
-/// The app's home window ("Open ScreenShot") and Shottr's screenshot Library: capture buttons, then every image in the
+/// A support window of the editor (R15), Shottr's screenshot Library: every image in the
 /// Screenshots folder, newest first, with search (file name, date and the text inside the screenshot) and adjustable
 /// thumbnail size. Clicking one opens it in the editor.
 @MainActor final class LibraryWindowController: NSWindowController, NSCollectionViewDataSource, NSCollectionViewDelegate, NSSearchFieldDelegate {
@@ -26,13 +26,12 @@ import Vision
     /// The grid's sections: Today, Yesterday, Earlier this week…
     private var sections: [(title: String, items: [LibraryItem])] = []
     private let index = TextIndex.shared
-    private var captureItems: [RibbonItem] = []
 
     init() {
         let win = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1180, height: 760),
                            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
                            backing: .buffered, defer: false)
-        win.title = "ScreenShot"
+        win.title = "Library"
         // The cards draw the title bar; an empty unified toolbar centers the window's buttons on the title card.
         win.titleVisibility = .hidden
         win.titlebarAppearsTransparent = true
@@ -80,27 +79,13 @@ import Vision
         win.contentView = content
         let m = DesignTokens.Metrics.self
 
-        // Capture · Open · Search · Thumbnail size · Settings, as ribbon groups.
-        func large(_ id: String, _ title: String, _ icon: IconName, shortcut: String? = nil, action: @escaping () -> Void) -> RibbonItem {
-            let i = RibbonItem(id, kind: .large, title: title, icon: icon, action: action)
-            i.shortcut = shortcut
-            i.showsShortcut = shortcut != nil
-            return i
+        // Open · Search · Thumbnail size, as ribbon groups.
+        func large(_ id: String, _ title: String, _ icon: IconName, action: @escaping () -> Void) -> RibbonItem {
+            RibbonItem(id, kind: .large, title: title, icon: icon, action: action)
         }
-        let keys = { (a: HotkeyAction) in HotKeyCenter.shared.shortcut(for: a)?.display }
-        let area = large("area", "Area", .capArea, shortcut: keys(.area)) { AppLogic.shared.run(.area) }
-        area.isOn = true // the main action
-        let windowItem = large("window", "Window", .capWindow, shortcut: keys(.anyWindow)) { AppLogic.shared.run(.anyWindow) }
-        let fullscreen = large("fullscreen", "Fullscreen", .capFull, shortcut: keys(.fullscreen)) { AppLogic.shared.run(.fullscreen) }
-        captureItems = [area, windowItem, fullscreen]
-        let capture = RibbonGroupView(RibbonGroup("capture", title: "Capture", compactTitle: "Capture", compactIcon: .capArea,
-                                                  columns: [.large(area), .large(windowItem), .large(fullscreen)]))
         let open = RibbonGroupView(RibbonGroup("open", title: "Open", compactTitle: "Open", compactIcon: .openImage, columns: [
             .large(large("openImage", "Open Image", .openImage) { AppLogic.shared.chooseFile() }),
             .large(large("folder", "Show Folder", .folder) { NSWorkspace.shared.open(Settings.saveFolder) }),
-        ]))
-        let settings = RibbonGroupView(RibbonGroup("settings", title: "Settings", compactTitle: "Settings", compactIcon: .prefs, columns: [
-            .large(large("prefs", "Preferences", .prefs, shortcut: "⌘,") { (NSApp.delegate as? AppDelegate)?.showPreferences() }),
         ]))
 
         search.placeholderString = "Search names, dates and text in screenshots"
@@ -130,7 +115,7 @@ import Vision
         let sizeGroup = HomeToolbarGroup(title: "Thumbnail size", content: sizeRow, flexible: false)
 
         var bar: [NSView] = []
-        for (i, g) in ([capture, open, searchGroup, sizeGroup, settings] as [NSView]).enumerated() {
+        for (i, g) in ([open, searchGroup, sizeGroup] as [NSView]).enumerated() {
             if i > 0 { bar.append(HomeToolbarGroup.divider()) }
             if let gv = g as? RibbonGroupView {
                 gv.translatesAutoresizingMaskIntoConstraints = false
@@ -162,7 +147,7 @@ import Vision
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
 
-        let title = WindowTitleCard(title: "ScreenShot"), toolbar = CardView(), grid = CardView()
+        let title = WindowTitleCard(title: "Library"), toolbar = CardView(), grid = CardView()
         toolbar.embed(row)
         grid.embed(scroll)
         for v in [title, toolbar, grid] as [NSView] {
@@ -195,7 +180,6 @@ import Vision
     /// How many screenshots the grid shows now, across its sections.
     var debugShownCount: Int { shown.count }
     var debugSectionTitles: [String] { sections.map(\.title) }
-    var debugCaptureItems: [RibbonItem] { captureItems }
     func debugOpen(at indexPath: IndexPath) { collectionView(collection, didSelectItemsAt: [indexPath]) }
     #endif
 
@@ -230,7 +214,10 @@ import Vision
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
         guard let p = indexPaths.first, p.section < sections.count, p.item < sections[p.section].items.count else { return }
         collectionView.deselectAll(nil)
-        AppLogic.shared.openFile(sections[p.section].items[p.item].url)
+        let url = sections[p.section].items[p.item].url
+        AppLogic.shared.openFile(url)
+        // Its job is done; a file that couldn't be read leaves it open, with the error.
+        if AppLogic.shared.editor?.doc.fileURL?.standardizedFileURL == url.standardizedFileURL { window?.close() }
     }
 }
 

@@ -380,7 +380,7 @@ final class FeatureIllustration: NSView {
             ("10:42" as NSString).draw(at: CGPoint(x: b.width - 40, y: 4), withAttributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor(hex: 0xF2F2F4)])
             let menu = CGRect(x: b.width - 190, y: 24, width: 156, height: 64)
             box(menu, NSColor(hex: 0x25262B), 7)
-            for (i, (icon, t, key)) in [(IconName.photo, "Open ScreenShot", "⌘L"), (.capArea, "Area Capture", "⇧⌘2"), (.capWindow, "Any Window", "⇧⌘7")].enumerated() {
+            for (i, (icon, t, key)) in [(IconName.statusMark, "Open ScreenShot", ""), (.capArea, "Area Capture", "⇧⌘2"), (.capWindow, "Any Window", "⇧⌘7")].enumerated() {
                 let row = CGRect(x: menu.minX + 3, y: menu.minY + 3 + CGFloat(i) * 19, width: menu.width - 6, height: 19)
                 if i == 1 { box(row, NSColor(hex: 0x33343A), 4) }
                 Icons.image(icon, size: 11, color: NSColor(hex: 0xB6B7BE)).draw(in: CGRect(x: row.minX + 6, y: row.minY + 4, width: 11, height: 11))

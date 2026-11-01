@@ -170,10 +170,9 @@ extension FlowsSelfTest {
         guard let lib = LibraryWindowController.shared, let content = lib.window?.contentView else { check(false, "the home window opens"); return }
         lib.reload()
         do {
-            // Capture buttons in a ribbon-style bar, cards, day groups, the status menu's icons.
-            check(lib.debugCaptureItems.map(\.title) == ["Area", "Window", "Fullscreen"] && lib.debugCaptureItems[0].isOn,
-                  "it has Area / Window / Fullscreen buttons, Area as the main one")
-            check(lib.debugCaptureItems.allSatisfy { $0.showsShortcut && $0.shortcut != nil }, "each capture button shows its shortcut")
+            // A support window: no capture or Preferences buttons. Cards, day groups, the status menu's icons.
+            let buttons = allViews(RibbonButton.self, in: content).map(\.item.id)
+            check(buttons == ["openImage", "folder"], "it only has Open Image and Show Folder (\(buttons))")
             check(content is CanvasBackground && allViews(CardView.self, in: content).count >= 3, "the home window is made of cards")
             check(lib.debugSectionTitles.first == "Today", "screenshots are grouped by day, today first (\(lib.debugSectionTitles))")
             if let app = NSApp.delegate as? AppDelegate {
@@ -209,6 +208,7 @@ extension FlowsSelfTest {
         lib.collectionView(collection, didSelectItemsAt: [IndexPath(item: 0, section: 0)])
         await sleep(0.4)
         check(editors.contains { $0.doc.fileURL?.lastPathComponent == "lib-\(tag)-1.png" }, "clicking a result opens it in the editor")
+        check(lib.window?.isVisible == false, "and the Library closes")
         lib.window?.close()
     }
 

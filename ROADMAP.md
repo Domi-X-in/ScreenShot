@@ -224,6 +224,10 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Con la carpeta vacía, el editor muestra una página con Área, Ventana, Pantalla completa y Abrir imagen, sobre un documento en blanco que nunca se guarda ni se puede editar.
   - [x] Menú de estado: "Open ScreenShot" abre el editor y "Library…" (⌘L) la Biblioteca.
   - [x] Verificado: flujo nuevo `editor-home` (la parte de carpeta vacía se ejecuta sin `-saveFolder`, porque ese argumento fija la carpeta). 113 tests unitarios; todas las suites de integración pasan, FLOWS 425/0 y LIVE 22/0 (1 omitida: requiere dos pantallas).
+- [x] **R15 · La Biblioteca como ventana de soporte** (petición del 1-nov-2026):
+  - [x] Fuera los botones de captura y Preferencias; quedan Abrir imagen, Mostrar carpeta, búsqueda y tamaño. Se llama "Library" y se cierra al elegir una imagen (sigue abierta si el archivo no se puede leer).
+  - [x] Guía de bienvenida, README y capturas de `docs/screenshots` al día.
+  - [x] Verificado: flujo `library` actualizado. 113 tests unitarios; todas las suites de integración pasan, FLOWS 425/0 y LIVE 22/0 (1 omitida: requiere dos pantallas).
 
 Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 
