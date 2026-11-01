@@ -571,7 +571,8 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         }
         let vp = convert(event.locationInWindow, from: nil)
         let mods = event.modifierFlags
-        if let (handle, i) = handleHit(vp) {
+        // ⌥ always duplicates, even on a handle: zoomed out, the handles cover much of a small object.
+        if !mods.contains(.option), let (handle, i) = handleHit(vp) {
             pushUndo()
             drag = .resize(handle: handle, original: doc.objects[i], index: i)
             return
