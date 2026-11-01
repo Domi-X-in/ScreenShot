@@ -28,7 +28,7 @@ The app has a Dock icon by default, and so the full menu bar while it is in fron
 
 **Library…** (menu bar menu, ⌘L, or the last tile of the editor's recent strip) is a support window, made of floating cards like the editor: Open Image and Show Folder, search and the thumbnail size; below them every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. Choosing one opens it in the editor and closes the Library. 
 
-![Library](docs/screenshots/home-dark.png)
+![Library](docs/screenshots/library-dark.png)
 
 ## Build and run
 
@@ -73,7 +73,7 @@ REA's `decode_interface_builder` decoded all 17 compiled storyboards (3,431 obje
 
 Icons are this app's own family (`Icons.swift`: 1.5 pt strokes on a 24 pt grid); the floating thumbnail and pins still use SF Symbols. Shottr's own icon artwork is not copied.
 
-To check the UI without Screen Recording permission, run the binary with `SCREENSHOT_SNAPSHOT_DIR=<dir> SCREENSHOT_SNAPSHOT_IMAGE=<png>`. It renders the editor (light or dark with `SCREENSHOT_SNAPSHOT_APPEARANCE`), its panels and ribbon widths, the home window, preferences, pin, thumbnail, icon sheet and the welcome guide to PNG files, then quits.
+To check the UI without Screen Recording permission, run the binary with `SCREENSHOT_SNAPSHOT_DIR=<dir> SCREENSHOT_SNAPSHOT_IMAGE=<png>`. It renders the editor (light or dark with `SCREENSHOT_SNAPSHOT_APPEARANCE`), its panels and ribbon widths, the Library, preferences, pin, thumbnail, icon sheet and the welcome guide to PNG files, then quits.
 
 ## Editable saves and the recent strip
 
@@ -169,6 +169,10 @@ Tools/test.sh                      # unit tests (swift test)
 Tools/integration-tests.sh         # in-app self-tests on the debug build, plus FLOWS: real-usage flows across features
 Tools/integration-tests.sh --live  # also real captures (needs Screen Recording and an unlocked screen)
 ```
+
+## Third-party licenses
+
+The drag indicator icon is from [Material Symbols](https://fonts.google.com/icons) by Google (Apache License 2.0) and updates use [Sparkle](https://sparkle-project.org). **About ScreenShot** credits them, and their license texts ship in the app, in `Contents/Resources/Licenses`.
 
 ## Releases and updates
 

@@ -18,6 +18,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp ".build/$CONFIG/ScreenShot" "$APP/Contents/MacOS/ScreenShot"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# The About panel shows Credits.rtf; the texts it points to go next to it.
+cp Resources/Credits.rtf "$APP/Contents/Resources/Credits.rtf"
+cp -R Resources/Licenses "$APP/Contents/Resources/Licenses"
 # Sparkle (automatic updates) ships as a framework next to the executable.
 ditto ".build/$CONFIG/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/ScreenShot" 2>/dev/null || true

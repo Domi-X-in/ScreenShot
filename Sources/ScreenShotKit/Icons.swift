@@ -32,7 +32,7 @@ enum IconName: String, CaseIterable {
     case calloutBox, calloutCard, calloutSpeech, calloutThought, calloutShout
     // Side bar choices
     case counterSquare, counterBubble, blurText, erase, eraseText
-    // Status menu and home window
+    // Status menu and Library
     case statusMark, capFull, capArea, capRepeat, capTimer, capWindow, capActive, capScroll, capScrollManual
     case openImage, guide, updates, prefs, power, search, folder, photo
     // App chrome and notifications
@@ -191,7 +191,7 @@ enum Icons {
                                     + r(4, 10.5, 3.5, 3.5, 0.6) + r(8.5, 10.5, 3.5, 3.5, 0.6) + r(13, 10.5, 2.5, 3.5, 0.6))
         case .erase: IconParts(stroke: "M14 4.5l5.5 5.5-9.5 9.5H6.5l-3-3a1.5 1.5 0 0 1 0-2.1zM8.5 10l5.5 5.5" + l(10.5, 19.5, 20.5, 19.5))
         case .eraseText: IconParts(stroke: l(4, 6, 20, 6) + l(4, 11, 12, 11) + l(4, 16, 9, 16), fill: r(13.5, 9, 7, 11, 1.5))
-        // Status menu and home window
+        // Status menu and Library
         case .statusMark: IconParts(stroke: ocrCorners + c(12, 12, 3.5))
         case .capFull: IconParts(stroke: r(2.5, 4, 19, 13, 2) + l(9, 20.5, 15, 20.5) + "M7 9.5V8h2M17 9.5V8h-2M7 11.5V13h2M17 11.5V13h-2")
         case .capArea: IconParts(stroke: "M4 7V4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4" + l(12, 9.5, 12, 14.5) + l(9.5, 12, 14.5, 12))

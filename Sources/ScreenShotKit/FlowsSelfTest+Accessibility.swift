@@ -3,7 +3,7 @@ import AppKit
 #if SCREENSHOT_SELFTESTS
 extension FlowsSelfTest {
     /// VoiceOver can name every control: in the editor (title card, ribbon, folded groups, callout bar, bottom bar,
-    /// recent strip), the home window and each step of the welcome guide. Custom-drawn controls must be accessibility
+    /// recent strip), the Library and each step of the welcome guide. Custom-drawn controls must be accessibility
     /// elements with a label; standard controls need a title or a label.
     func accessibilityFlow() async {
         func unnamed(in root: NSView?) -> [String] {
@@ -29,11 +29,11 @@ extension FlowsSelfTest {
         type("v")
         await closeAllEditors()
 
-        // The home window.
+        // The Library.
         LibraryWindowController.show()
         await sleep(0.4)
-        let home = unnamed(in: LibraryWindowController.shared?.window?.contentView)
-        check(home.isEmpty, "every home window control has a VoiceOver name (missing: \(Set(home)))")
+        let library = unnamed(in: LibraryWindowController.shared?.window?.contentView)
+        check(library.isEmpty, "every Library control has a VoiceOver name (missing: \(Set(library)))")
         LibraryWindowController.shared?.window?.orderOut(nil)
 
         // The welcome guide, step by step.

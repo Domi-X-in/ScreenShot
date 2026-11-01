@@ -19,6 +19,13 @@ extension FlowsSelfTest {
         for t in ["ScreenShot", "File", "Edit", "Arrange", "View", "Window", "Help"] { check(menus.contains(t), "the main menu has \(t)") }
         check(NSApp.windowsMenu?.title == "Window" && NSApp.helpMenu?.title == "Help", "macOS knows the Window and Help menus")
 
+        // The About panel's credits and the license texts ship with the app.
+        let resources = Bundle.main.resourceURL
+        check(Bundle.main.url(forResource: "Credits", withExtension: "rtf") != nil, "the app has the About panel's credits")
+        for name in ["Material-Symbols-Apache-2.0.txt", "Sparkle-LICENSE.txt"] {
+            check(resources.map { FileManager.default.fileExists(atPath: $0.appendingPathComponent("Licenses/\(name)").path) } == true, "the app has \(name)")
+        }
+
         // The two icons can't both be hidden.
         d.set(false, forKey: Keys.showInDock)
         await sleep(0.3)

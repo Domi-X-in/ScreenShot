@@ -156,7 +156,7 @@ extension FlowsSelfTest {
         }
     }
 
-    /// The home window: its capture buttons, search by name, date and text, opening a screenshot.
+    /// The Library: its buttons, search by name, date and text, opening a screenshot.
     func libraryFlow() async {
         // Three screenshots in the folder, one with recognizable text.
         // Unique names, so nothing is found from an earlier run's index.
@@ -167,13 +167,13 @@ extension FlowsSelfTest {
         }
         (NSApp.delegate as? AppDelegate)?.showLibrary()
         await sleep(0.6)
-        guard let lib = LibraryWindowController.shared, let content = lib.window?.contentView else { check(false, "the home window opens"); return }
+        guard let lib = LibraryWindowController.shared, let content = lib.window?.contentView else { check(false, "the Library opens"); return }
         lib.reload()
         do {
             // A support window: no capture or Preferences buttons. Cards, day groups, the status menu's icons.
             let buttons = allViews(RibbonButton.self, in: content).map(\.item.id)
             check(buttons == ["openImage", "folder"], "it only has Open Image and Show Folder (\(buttons))")
-            check(content is CanvasBackground && allViews(CardView.self, in: content).count >= 3, "the home window is made of cards")
+            check(content is CanvasBackground && allViews(CardView.self, in: content).count >= 3, "the Library is made of cards")
             check(lib.debugSectionTitles.first == "Today", "screenshots are grouped by day, today first (\(lib.debugSectionTitles))")
             if let app = NSApp.delegate as? AppDelegate {
                 let menu = NSMenu()
