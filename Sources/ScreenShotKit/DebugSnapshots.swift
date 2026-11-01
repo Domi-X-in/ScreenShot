@@ -818,14 +818,20 @@ final class IconSheetView: NSView {
         check(ed.shotView.style.callout == .speech && ToolStyle.loadDefaults().callout == .thought,
               "an ordinary click picks Speech for now without changing the default")
 
-        // The app has one editor: close it and open it again.
-        ed.close()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        // The app has one editor: close it and open it again. AppLogic forgets a closed editor a moment later (the main
+        // queue can take a while on a slow machine); opening before that would bring the old one back.
+        func closeEditor(_ e: EditorWindowController?) {
+            e?.close()
+            let limit = Date().addingTimeInterval(5)
+            while AppLogic.shared.editor != nil, Date() < limit { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        }
+        closeEditor(ed)
+        check(AppLogic.shared.editor == nil, "the editor is really closed")
         AppLogic.shared.openEditor(img, scale: 2)
         let second = editors().first
-        check(second !== ed && second?.shotView.style.callout == .thought, "a new editor starts from the new default (Thought)")
-        second?.close()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        check(second !== ed && second?.shotView.style.callout == .thought,
+              "a new editor starts from the new default (Thought; new window \(second !== ed), style \(String(describing: second?.shotView.style.callout)))")
+        closeEditor(second)
         AppLogic.shared.openEditor(img, scale: 2)
         guard let reopened = editors().first else { print("FAIL the editor reopens"); exit(1) }
         ed = reopened
