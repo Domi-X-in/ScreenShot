@@ -46,13 +46,18 @@ pid=$!; for _ in $(seq 1 40); do sleep 0.5; kill -0 $pid 2>/dev/null || break; d
 printf "%-12s %3d passed  %d failed\n" AUTOSAVE "$(grep -c '^PASS' "$WORK/AUTOSAVE/out.log")" "$(grep -c '^FAIL' "$WORK/AUTOSAVE/out.log")"
 grep -q "SELFTEST OK" "$WORK/AUTOSAVE/out.log" || FAILED=1
 
+# A drag from the drag-out button with real mouse events. Needs Accessibility: without it the test is skipped on a
+# Mac, but it fails on CI, so a green run always means the drag was really made.
+mkdir -p "$WORK/DRAGOUT"
+SCREENSHOT_SELFTEST_DRAGOUT=1 "$BIN" -saveFolder "$WORK/DRAGOUT" > "$WORK/DRAGOUT/out.log" 2>&1 &
+pid=$!; for _ in $(seq 1 40); do sleep 0.5; kill -0 $pid 2>/dev/null || break; done; kill $pid 2>/dev/null
+printf "%-12s %3d passed  %d failed\n" DRAGOUT "$(grep -c '^PASS' "$WORK/DRAGOUT/out.log")" "$(grep -c '^FAIL' "$WORK/DRAGOUT/out.log")"
+grep -E '^(FAIL|SKIP)' "$WORK/DRAGOUT/out.log"
+grep -q '^FAIL' "$WORK/DRAGOUT/out.log" && FAILED=1
+if [ -n "${CI:-}" ] && ! grep -q '^PASS' "$WORK/DRAGOUT/out.log"; then FAILED=1; fi
+
 if [ "${1:-}" = "--live" ]; then
     # Launched through Launch Services so the app's own Screen Recording permission applies.
-    # A drag from the drag-out button with real mouse events (skipped without Accessibility).
-    open -n -W "$APP" --env SCREENSHOT_SELFTEST_DRAGOUT=1 --stdout "$WORK/dragout.txt" --stderr /dev/null --args -saveFolder "$WORK"
-    printf "%-12s %3d passed  %d failed\n" DRAGOUT "$(grep -c '^PASS' "$WORK/dragout.txt")" "$(grep -c '^FAIL' "$WORK/dragout.txt")"
-    grep -E '^(FAIL|SKIP)' "$WORK/dragout.txt"
-    grep -q '^FAIL' "$WORK/dragout.txt" && FAILED=1
     open -n -W "$APP" --env SCREENSHOT_SELFTEST_LIVE="$WORK/live.txt" --args -saveFolder "$WORK" &
     for _ in $(seq 1 120); do sleep 1; grep -q "LIVE SELFTEST" "$WORK/live.txt" 2>/dev/null && break; done
     printf "%-12s %3d passed  %d failed  %d skipped\n" LIVE "$(grep -c '^PASS' "$WORK/live.txt")" "$(grep -c '^FAIL' "$WORK/live.txt")" "$(grep -c '^SKIP' "$WORK/live.txt")"

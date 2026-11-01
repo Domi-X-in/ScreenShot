@@ -8,6 +8,9 @@ extension FlowsSelfTest {
         guard let ed = await openEditor(Self.sampleImage(1000, 700)), let win = ed.window else { check(false, "editor opens"); return }
         let v = ed.shotView
         guard let r = ed.debugEditorRibbon else { check(false, "the new editor has a ribbon"); return }
+        // Wide enough for every group whatever the screen: narrower, some collapse into a menu (CI has a small screen).
+        win.setFrame(CGRect(origin: win.frame.origin, size: CGSize(width: 1380, height: win.frame.height)), display: true)
+        win.layoutIfNeeded()
 
         // Title bar: a card with the window's buttons and the window's own commands; the system toolbar is empty.
         let ids = win.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
