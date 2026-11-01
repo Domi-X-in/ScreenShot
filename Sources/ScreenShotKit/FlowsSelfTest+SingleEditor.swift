@@ -56,7 +56,7 @@ extension FlowsSelfTest {
               "and closes the editor and the home window")
         check(!NSApp.windows.contains { $0.isVisible && $0.windowController is PreferencesWindowController }, "and Preferences")
         check(pin.isVisible, "pins stay on screen")
-        check(AppLogic.shared.editor == nil, "the app keeps running with no editor open")
+        check(AppLogic.shared.editor === ed2, "the editor is hidden, ready to come back")
         pin.close()
 
         // Save does the same once the file is written.

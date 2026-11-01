@@ -188,16 +188,40 @@ import ScreenCaptureKit
         ed.applyDefaultZoom()
     }
 
+    /// The Dock icon: the editor as it was left or, with none yet, the newest screenshot. An empty folder falls back to
+    /// the Library, which has the capture buttons.
+    func showEditor() {
+        NSApp.activate()
+        if let editor {
+            editor.reveal()
+            return
+        }
+        let folder = Settings.saveFolder
+        Task.detached(priority: .userInitiated) {
+            let newest = LibraryItem.list(in: folder).first?.url
+            await MainActor.run {
+                // A capture may have opened the editor in the meantime.
+                if let editor = self.editor {
+                    editor.reveal()
+                } else if let newest {
+                    self.openFile(newest)
+                } else {
+                    LibraryWindowController.show()
+                }
+            }
+        }
+    }
+
     func editorClosed(_ ed: EditorWindowController) {
         DispatchQueue.main.async { if self.editor === ed { self.editor = nil } }
     }
 
     /// After Copy or Save from the title card (with Preferences › General › "Close all windows after Copy or Save"):
     /// every ScreenShot window closes except pins, and the app that was in front before gets the focus back, so the
-    /// picture can be pasted there at once. The app keeps running in the menu bar.
+    /// picture can be pasted there at once. The app keeps running, and the editor is only hidden.
     func closeAllWindows() {
         Thumbnail.dismissCurrent()
-        editor?.close()
+        editor?.hideEditor()
         LibraryWindowController.shared?.close()
         OnboardingWindowController.shared?.window?.close()
         (NSApp.delegate as? AppDelegate)?.closePreferences()

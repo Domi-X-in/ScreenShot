@@ -18,7 +18,8 @@ import AppKit
 
     let id: String
     let kind: Kind
-    let title: String
+    /// Can change (Copy and Close follows its setting).
+    var title: String { didSet { if title != oldValue { changed() } } }
     /// Can change (Align Text shows the current alignment).
     var icon: IconName? { didSet { if icon != oldValue { changed() } } }
     /// Runs on a click (on the main part, for a split button).
@@ -27,7 +28,8 @@ import AppKit
     var menu: (() -> NSMenu)?
     var split = false
     /// The keyboard shortcut, shown in the tooltip ("Arrow (A)").
-    var shortcut: String?
+    var shortcut: String? { didSet { if shortcut != oldValue { changed() } } }
+    var toolTipText: String { shortcut.map { "\(title) (\($0))" } ?? title }
     /// A large button shows its shortcut under its caption (the home window's capture buttons).
     var showsShortcut = false
     /// A field you can type in (Font Size): a click on its text opens an editor, Return sends what was typed here.
@@ -68,7 +70,7 @@ import AppKit
     func observe(_ view: NSView) { observers.add(view) }
 
     private func changed() {
-        for v in observers.allObjects { v.needsDisplay = true; v.invalidateIntrinsicContentSize() }
+        for v in observers.allObjects { v.toolTip = toolTipText; v.needsDisplay = true; v.invalidateIntrinsicContentSize() }
         group?.itemChanged()
     }
 }

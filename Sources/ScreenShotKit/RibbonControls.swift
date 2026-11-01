@@ -25,7 +25,7 @@ final class RibbonButton: NSView, NSTextFieldDelegate {
         super.init(frame: .zero)
         item.observe(self)
         setAccessibilityElement(true)
-        toolTip = item.shortcut.map { "\(item.title) (\($0))" } ?? item.title
+        toolTip = item.toolTipText
     }
     required init?(coder: NSCoder) { fatalError() }
 

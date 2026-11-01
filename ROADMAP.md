@@ -206,7 +206,6 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Los botones Copiar y Guardar de la tarjeta de título (solo los botones; ⌘C, ⌘S y Esc no cambian): copian o guardan, cierran todas las ventanas de la app salvo los pines (editor, inicio, Preferencias, guía, miniatura, paneles de color y fuente) y devuelven el foco a la app anterior para pegar enseguida. La app sigue en la barra de menús. Si el guardado falla, no se cierra nada y el error se ve en la barra. Se llaman "Copy and Close" y "Save and Close".
   - [x] Ajuste en Preferencias › General › Editor: "Close all windows after Copy or Save (title bar buttons)", activado por defecto.
   - [x] Verificado: flujo nuevo `single-editor` (14 comprobaciones: misma ventana, autoguardado de la sustituida, abrirla de nuevo, captura sin editar sin archivo, Copiar y Guardar cierran editor, inicio y Preferencias y dejan el pin, guardado fallido no cierra, ajuste desactivado). `copy-paste` y DEFAULTS adaptados a una sola ventana. 113 tests unitarios; todas las suites de integración pasan y FLOWS 377/0.
-  - Pendiente: los nombres de los botones se leen al abrir el editor; si se cambia el ajuste con el editor abierto, el comportamiento cambia al momento pero el nombre al reabrirlo.
 - [x] **R12 · Icono en el Dock** (petición del 1-nov-2026; primer paso para que el editor sea la ventana principal):
   - [x] La app tiene icono en el Dock por defecto (política `.regular`). `LSUIElement` sigue en Info.plist para que el icono no parpadee con el ajuste desactivado. Ajuste en Preferencias › General: "Show the app icon in the Dock"; no se pueden ocultar a la vez el icono del Dock y el de la barra de menús.
   - [x] Menú principal completo: About, Hide Others, Show All, Window y Help.
@@ -214,6 +213,11 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] Decidido: sobre una app en pantalla completa, el editor se abre en el Space del escritorio y Copy and Close vuelve al de la app, como cualquier app del Dock.
   - [x] Antes de R12: una captura nueva recibe archivo al salir del editor (al cerrar o sustituirla), aunque no se haya editado. Cambia lo decidido en R11.
   - [x] Verificado: flujos nuevos `dock` y `close-reopen`, `Tools/fullscreen-test.sh` a mano (cortina y pin sobre pantalla completa) y prueba manual de foco, cursor y pantalla completa con atajos reales. 113 tests unitarios; todas las suites de integración pasan, FLOWS 408/0 y LIVE 22/0 (1 omitida: requiere dos pantallas).
+- [x] **R13 · El editor persiste; el Dock lo muestra** (petición del 1-nov-2026):
+  - [x] El botón rojo, ⌘W, Esc, Pin, Copy and Close y Save and Close solo ocultan el editor, tras guardar. Vuelve igual, con su historial de deshacer.
+  - [x] El clic en el Dock (y abrir la app desde Finder o Spotlight) siempre muestra el editor, también con un pin o la Biblioteca en pantalla. Sin editor abre la captura más reciente; con la carpeta vacía, la Biblioteca hasta que exista el estado vacío (R14). Un arranque normal hace lo mismo; al iniciar sesión o con un enlace o archivo, no.
+  - [x] Los nombres de Copy y Save siguen el ajuste al momento: el editor oculto ya no se recrea, así que leerlos al abrir dejaría de bastar.
+  - [x] Verificado: flujo `close-reopen` ampliado (ocultar por cada camino, volver con el mismo documento e historial, desde minimizado, sin editor). 113 tests unitarios; todas las suites de integración pasan, FLOWS 417/0 y LIVE 22/0 (1 omitida: requiere dos pantallas). Falta comprobar a mano el clic real en el Dock y el arranque al iniciar sesión.
 
 Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 

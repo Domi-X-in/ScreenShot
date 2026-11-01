@@ -43,6 +43,7 @@ import UniformTypeIdentifiers
         win.delegate = self
         shotView.controller = self
         editorRibbon = EditorRibbon(editor: self)
+        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: UserDefaults.didChangeNotification, object: nil)
         // The cards draw the title bar: the system's is see-through, and its empty toolbar only sets its height so
         // the window's buttons center on the title card.
         win.titlebarAppearsTransparent = true
@@ -72,6 +73,8 @@ import UniformTypeIdentifiers
         recent.onBrowse = { LibraryWindowController.show() }
         editorStatus.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
     }
+
+    @objc private func settingsChanged() { editorRibbon?.updateCloseLabels() }
 
     /// Floating cards (R5b) on the window's background, 10 pt from the edges and from each other.
     /// Title card (with the window's buttons), ribbon, then the callout style bar and the canvas side by side, the
@@ -395,7 +398,7 @@ import UniformTypeIdentifiers
     @objc func pinImage() {
         guard let img = rendered() else { return }
         Pins.pin(img, scale: doc.scale, near: window?.frame)
-        close()
+        hideEditor()
     }
 
     /// Reads the area selected with the Crop tool, or the whole screenshot when nothing is selected.
@@ -412,7 +415,7 @@ import UniformTypeIdentifiers
             if Settings.escCopy { Exporter.copy(img, scale: doc.scale); Toast.show("Copied to the clipboard") }
             if Settings.escSave { Exporter.saveEditable(doc, rendered: img) }
         }
-        close()
+        hideEditor()
     }
 
     func windowDidResize(_ notification: Notification) { updateInfo() }
@@ -556,6 +559,26 @@ import UniformTypeIdentifiers
         } else {
             saveQueue.async { job.write() }
         }
+    }
+
+    /// The red button, ⌘W, Esc, Pin, Copy and Close and Save and Close only hide the editor (R13), so the Dock icon brings
+    /// it back as it was, with its undo history.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hideEditor()
+        return false
+    }
+
+    func hideEditor() {
+        saveBeforeLeaving()
+        window?.orderOut(nil)
+    }
+
+    /// Back on screen as it was left; the recent strip may have new captures.
+    func reveal() {
+        recent.reload()
+        if window?.isMiniaturized == true { window?.deminiaturize(nil) }
+        window?.makeKeyAndOrderFront(nil)
+        window?.makeFirstResponder(shotView)
     }
 
     func windowWillClose(_ notification: Notification) {

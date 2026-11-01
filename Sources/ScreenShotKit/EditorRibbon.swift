@@ -106,6 +106,15 @@ import AppKit
         formatting.update()
     }
 
+    /// The title card's Copy and Save follow Preferences › General at once.
+    func updateCloseLabels() {
+        let closes = Settings.closeAfterCopySave
+        copyImage.title = closes ? "Copy and Close" : "Copy Full Image"
+        copyImage.shortcut = closes ? nil : "⌘C" // ⌘C copies without closing
+        save.title = closes ? "Save and Close" : "Save Image"
+        save.shortcut = closes ? nil : "⌘S"
+    }
+
     func updateHistory(canUndo: Bool, canRedo: Bool) {
         undo.isEnabled = canUndo
         redo.isEnabled = canRedo

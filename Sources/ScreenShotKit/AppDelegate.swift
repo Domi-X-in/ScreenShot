@@ -7,6 +7,7 @@ import AppKit
     private var appearanceObserver: NSKeyValueObservation?
     private var menuIconObserver: NSKeyValueObservation?
     private var dockObserver: NSKeyValueObservation?
+    private var launchedByUser = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
@@ -63,6 +64,7 @@ import AppKit
         // First launch: the welcome guide explains and asks for Screen Recording itself.
         if OnboardingWindowController.isDone {
             Capturer.requestPermissionOnFirstLaunch()
+            if launchedByUser { AppLogic.shared.showEditor() }
         } else {
             OnboardingWindowController.show()
         }
@@ -83,10 +85,17 @@ import AppKit
         if wasActive { NSApp.activate() }
     }
 
-    /// Opening the app again (Finder, Dock, Spotlight) shows its home window.
+    /// Opening the app again (Dock, Finder, Spotlight) always shows the editor, even with a pin or the Library on screen.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { showLibrary() }
+        if OnboardingWindowController.shared?.window?.isVisible != true { AppLogic.shared.showEditor() }
         return true
+    }
+
+    /// Read here, while the launch event is current: only a plain launch shows the editor, not one at login, for a link or a file.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return }
+        launchedByUser = event.eventID == AEEventID(kAEOpenApplication)
+            && event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue != OSType(keyAELaunchedAsLogInItem)
     }
 
     @objc private func handleURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {

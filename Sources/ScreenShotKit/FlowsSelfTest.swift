@@ -203,7 +203,8 @@ import ScreenCaptureKit
     }
 
     func closeAllEditors() async {
-        for ed in editors { ed.window?.performClose(nil) }
+        // Really closed, not hidden: each flow starts with no editor.
+        AppLogic.shared.editor?.close()
         await sleep(0.4)
     }
 
