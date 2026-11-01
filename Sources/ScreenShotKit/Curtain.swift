@@ -29,7 +29,6 @@ enum CurtainResult {
     }
 
     func show() {
-        NSApp.activate()
         let mouseScreen = NSScreen.containingMouse()
         for w in windows {
             w.orderFrontRegardless()
@@ -56,9 +55,10 @@ enum CurtainResult {
     }
 }
 
-final class CurtainWindow: NSWindow {
+/// A non-activating panel: with a Dock icon (R12), only these open over another app's full-screen Space.
+final class CurtainWindow: NSPanel {
     init(screen: NSScreen) {
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .screenSaver
         isOpaque = true
         hasShadow = false

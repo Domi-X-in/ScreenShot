@@ -6,6 +6,7 @@ import AppKit
 
     private var appearanceObserver: NSKeyValueObservation?
     private var menuIconObserver: NSKeyValueObservation?
+    private var dockObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
@@ -22,12 +23,21 @@ import AppKit
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
-        // With the icon hidden, opening the app again (Finder, Spotlight) brings up Preferences.
         statusItem.isVisible = !Settings.hideMenuBarIcon
+        // One way back in always stays: hiding the menu bar icon brings the Dock icon back, and the other way around.
         menuIconObserver = UserDefaults.standard.observe(\.hideMenuBarIcon, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.statusItem.isVisible = !Settings.hideMenuBarIcon } }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.statusItem.isVisible = !Settings.hideMenuBarIcon
+                    if Settings.hideMenuBarIcon && !Settings.showInDock { UserDefaults.standard.set(true, forKey: Keys.showInDock) }
+                }
+            }
+        }
+        dockObserver = UserDefaults.standard.observe(\.showInDock, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.applyDockSetting() } }
         }
 
+        AppLogic.shared.trackPreviousApp()
         HotKeyCenter.shared.handler = { AppLogic.shared.run($0) }
         HotKeyCenter.shared.reload()
 
@@ -41,7 +51,7 @@ import AppKit
             LiveCaptureTest.runIfRequested, SelfTest.runIfRequested, SelectionSelfTest.runIfRequested, TextSelfTest.runIfRequested,
             TextStyleSelfTest.runIfRequested, InfoSelfTest.runIfRequested, CalloutSelfTest.runIfRequested,
             AppearanceSelfTest.runIfRequested, DefaultsSelfTest.runIfRequested, Phase3SelfTest.runIfRequested, OnboardingSelfTest.runIfRequested, ShapesSelfTest.runIfRequested, FlowsSelfTest.runIfRequested,
-            RibbonSelfTest.runIfRequested,
+            RibbonSelfTest.runIfRequested, SpacesSelfTest.runIfRequested,
         ]
         if selfTests.contains(where: { $0() }) { return }
         if RibbonDemo.openIfRequested() { return }
@@ -63,6 +73,14 @@ import AppKit
         for url in urls {
             if url.isFileURL { AppLogic.shared.openFile(url) } else { AppLogic.shared.handleDeepLink(url) }
         }
+    }
+
+    private func applyDockSetting() {
+        if !Settings.showInDock && Settings.hideMenuBarIcon { UserDefaults.standard.set(false, forKey: Keys.hideMenuBarIcon) }
+        let wasActive = NSApp.isActive
+        NSApp.setActivationPolicy(Settings.showInDock ? .regular : .accessory)
+        // Changing the policy can take the focus away from the window the setting was changed in.
+        if wasActive { NSApp.activate() }
     }
 
     /// Opening the app again (Finder, Dock, Spotlight) shows its home window.
@@ -178,12 +196,13 @@ import AppKit
     private func buildMainMenu() -> NSMenu {
         let main = NSMenu()
 
-        func submenu(_ title: String, _ items: [NSMenuItem]) {
+        @discardableResult func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenu {
             let holder = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             let m = NSMenu(title: title)
             items.forEach { m.addItem($0) }
             holder.submenu = m
             main.addItem(holder)
+            return m
         }
         func mi(_ title: String, _ action: String, _ key: String, _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
             let i = NSMenuItem(title: title, action: NSSelectorFromString(action), keyEquivalent: key)
@@ -195,7 +214,18 @@ import AppKit
         prefs.target = self
         let update = NSMenuItem(title: "Check for Updates…", action: #selector(Updates.checkForUpdates(_:)), keyEquivalent: "")
         update.target = Updates.shared
-        submenu("ScreenShot", [prefs, update, .separator(), mi("Hide ScreenShot", "hide:", "h"), .separator(), mi("Quit ScreenShot", "terminate:", "q")])
+        submenu("ScreenShot", [
+            mi("About ScreenShot", "orderFrontStandardAboutPanel:", ""),
+            .separator(),
+            prefs,
+            update,
+            .separator(),
+            mi("Hide ScreenShot", "hide:", "h"),
+            mi("Hide Others", "hideOtherApplications:", "h", [.command, .option]),
+            mi("Show All", "unhideAllApplications:", ""),
+            .separator(),
+            mi("Quit ScreenShot", "terminate:", "q"),
+        ])
         let library = NSMenuItem(title: "Library…", action: #selector(showLibrary), keyEquivalent: "l")
         library.target = self
         submenu("File", [
@@ -227,7 +257,22 @@ import AppKit
             mi("Zoom Out", "zoomOut:", "-"),
             mi("Zoom to Fit", "zoomToFit:", "0"),
         ])
+        NSApp.windowsMenu = submenu("Window", [
+            mi("Minimize", "performMiniaturize:", "m"),
+            mi("Zoom", "performZoom:", ""),
+            .separator(),
+            mi("Bring All to Front", "arrangeInFront:", ""),
+        ])
+        let guide = NSMenuItem(title: "Welcome Guide…", action: #selector(showWelcome), keyEquivalent: "")
+        guide.target = self
+        let help = NSMenuItem(title: "ScreenShot Help", action: #selector(openHelp), keyEquivalent: "?")
+        help.target = self
+        NSApp.helpMenu = submenu("Help", [help, guide])
         return main
+    }
+
+    @objc private func openHelp() {
+        if let url = URL(string: "https://github.com/Domi-X-in/ScreenShot#readme") { NSWorkspace.shared.open(url) }
     }
 }
 
@@ -235,4 +280,5 @@ extension UserDefaults {
     /// KVO-observable mirror of the "appearance" key (the property name must match the key for KVO).
     @objc dynamic var appearance: String? { string(forKey: "appearance") }
     @objc dynamic var hideMenuBarIcon: Bool { bool(forKey: Keys.hideMenuBarIcon) }
+    @objc dynamic var showInDock: Bool { bool(forKey: Keys.showInDock) }
 }

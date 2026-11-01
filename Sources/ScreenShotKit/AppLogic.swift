@@ -8,6 +8,7 @@ import ScreenCaptureKit
     private var lastArea: (displayID: CGDirectDisplayID, rect: CGRect)?
     /// The one editor window (ROADMAP, Fase 6 · R11): everything opened goes into it.
     private(set) var editor: EditorWindowController?
+    private var previousApp: NSRunningApplication?
 
     func run(_ a: HotkeyAction) {
         switch a {
@@ -202,7 +203,23 @@ import ScreenCaptureKit
         (NSApp.delegate as? AppDelegate)?.closePreferences()
         if NSColorPanel.sharedColorPanelExists { NSColorPanel.shared.orderOut(nil) }
         if NSFontPanel.sharedFontPanelExists { NSFontPanel.shared.orderOut(nil) }
-        NSApp.deactivate()
+        // With a Dock icon (R12) macOS doesn't hand the focus back on deactivate, so it is given to that app by name.
+        if let previousApp, !previousApp.isTerminated {
+            NSApp.yieldActivation(to: previousApp)
+            previousApp.activate()
+        } else {
+            NSApp.deactivate()
+        }
+    }
+
+    /// Remembers the last other app in front, for `closeAllWindows`.
+    func trackPreviousApp() {
+        let me = NSRunningApplication.current
+        if let front = NSWorkspace.shared.frontmostApplication, front != me { previousApp = front }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app != me else { return }
+            MainActor.assumeIsolated { AppLogic.shared.previousApp = app }
+        }
     }
 
     func loadFromClipboard() {

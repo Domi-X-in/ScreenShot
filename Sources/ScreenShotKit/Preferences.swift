@@ -95,6 +95,7 @@ import ServiceManagement
         form.row("After Area Crop, show", DefaultsRadio.group(key: Keys.afterAreaShow, options: [("Thumbnail", "thumbnail"), ("Editor", "editor")]))
         form.row("Autostart", [LoginCheckbox()])
         form.row("Appearance", DefaultsRadio.group(key: "appearance", options: [("System", "system"), ("Light", "light"), ("Dark", "dark")]))
+        form.row("Dock", [DefaultsCheckbox("Show the app icon in the Dock", key: Keys.showInDock)])
         form.row("Menu bar", [DefaultsCheckbox("Hide the menu bar icon", key: Keys.hideMenuBarIcon)])
         form.separator()
         form.row("Screenshots folder", [FolderButton()])
@@ -252,11 +253,14 @@ final class DefaultsCheckbox: NSButton {
         state = UserDefaults.standard.bool(forKey: key) ? .on : .off
         target = self
         action = #selector(toggled)
+        // The Dock and menu bar icons can't both be hidden: turning one off can turn the other back on.
+        NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: UserDefaults.didChangeNotification, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func toggled() { UserDefaults.standard.set(state == .on, forKey: key) }
+    @objc private func refresh() { state = UserDefaults.standard.bool(forKey: key) ? .on : .off }
 }
 
 final class DefaultsRadio: NSButton {

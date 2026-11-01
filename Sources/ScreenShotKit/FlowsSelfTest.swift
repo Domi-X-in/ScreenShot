@@ -247,6 +247,7 @@ import ScreenCaptureKit
             ("side-bar", sideBarFlow),
             ("single-editor", singleEditorFlow),
             ("close-reopen", closeReopenFlow),
+            ("dock", dockFlow),
             ("welcome", welcomeFlow),
             ("accessibility", accessibilityFlow),
             ("panels", panelsFlow),

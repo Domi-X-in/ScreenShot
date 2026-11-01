@@ -18,9 +18,13 @@ The step names in the footer jump between steps; Skip goes to the last one. If m
 
 ![Welcome guide](docs/screenshots/welcome-2-dark.png)
 
+## Dock
+
+The app has a Dock icon by default, and so the full menu bar while it is in front; turn it off in Preferences › General. Over another app in full screen, the capture windows and pins stay on that Space. The editor opens on the desktop's Space, as any app's window does, and Copy and Close goes back to the full-screen app.
+
 ## Home window
 
-**Open ScreenShot** (first item in the menu bar menu, ⌘L) opens the app's home window, made of floating cards like the editor: a ribbon-style bar with Area, Window and Fullscreen capture buttons (each with its shortcut), Open Image and Show Folder, search, the thumbnail size and Preferences; below it every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. Opening the app again from Finder or Spotlight shows it too.
+**Open ScreenShot** (first item in the menu bar menu, ⌘L) opens the app's home window, made of floating cards like the editor: a ribbon-style bar with Area, Window and Fullscreen capture buttons (each with its shortcut), Open Image and Show Folder, search, the thumbnail size and Preferences; below it every screenshot, grouped by day (Today, Yesterday, Earlier this week, Earlier this month, then by month), each with its name, pixel size and time. Clicking the Dock icon, or opening the app again from Finder or Spotlight, shows it too.
 
 ![Home window](docs/screenshots/home-dark.png)
 
@@ -34,7 +38,7 @@ The step names in the footer jump between steps; Skip goes to the last one. If m
 open build/ScreenShot.app
 ```
 
-Only the Command Line Tools are needed (SwiftPM, no Xcode). The app lives in the menu bar (viewfinder icon).
+Only the Command Line Tools are needed (SwiftPM, no Xcode). The app lives in the Dock and the menu bar (viewfinder icon).
 On first use, macOS asks for **Screen Recording** permission. Automatic scrolling capture also needs **Accessibility**.
 The bundle is signed ad hoc with its designated requirement pinned to the bundle id, so the permissions survive rebuilds.
 
@@ -91,7 +95,7 @@ The editor's bottom bar shows three cells that stay visible on any screen width.
 
 The editor is a set of floating cards on a dotted canvas, dark or light, with **#FF5500** as the accent (selection, the active tool, focus).
 
-- **Title card:** the window buttons, Copy image, Save, Pin, the drag-out handle, and Undo / Redo. Drag it to move the window. **Copy and Close** and **Save and Close**: after copying or saving, every ScreenShot window closes except pins, and the app you were in before gets the focus back, so you can paste right away; the app keeps running in the menu bar. If a save fails, nothing closes. Turn it off in Preferences › General › Editor; ⌘C, ⌘S and Esc work as before.
+- **Title card:** the window buttons, Copy image, Save, Pin, the drag-out handle, and Undo / Redo. Drag it to move the window. **Copy and Close** and **Save and Close**: after copying or saving, every ScreenShot window closes except pins, and the app you were in before gets the focus back, so you can paste right away; the app keeps running, in the Dock and the menu bar. If a save fails, nothing closes. Turn it off in Preferences › General › Editor; ⌘C, ⌘S and Esc work as before.
 - **Ribbon** (as in Microsoft Office): **Clipboard** (Paste, Cut, Copy, Format painter), **Font** (family, size you can type, grow / shrink, bold, italic, underline, strikethrough, change case, text direction), **Paragraph** (horizontal and vertical alignment with Justify, bullets, numbering), **Color** (Shape Fill, Shape Outline with weight and dashes, Font Color, Font Outline, with Office's palette), **Shapes** (Select, Freehand, Line, Arrow, Rectangle, Oval, Callout, Counter, Text Box), **Tools** (Highlighter, Blur, Spotlight, Magnifier, Ruler, Crop, OCR / QR, Image Area Selection) and **Arrange** (Arrange, Align, Rotate, Flip). With the Text or Callout tool in hand and nothing typed yet, Font and Paragraph set the format the next text starts with. As the window narrows, groups fold from right to left into single buttons that open a flyout; a folded group still shows the active tool in the accent.
 - **Side bar:** a narrow bar beside the canvas with the options of the tool in hand or the selected objects, and nothing else:
 
@@ -124,7 +128,7 @@ The editor is a set of floating cards on a dotted canvas, dark or light, with **
 - **OCR of an area:** with a Crop or Image Area selection, ⌘O (or Read Text in the side bar) reads only that part. Image Area Selection also copies, blurs or crops to the area. Preferences › Advanced › **OCR main language** chooses what Vision reads first.
 - **Hand-drawn style** for arrows, lines, rectangles and ovals (Shape Outline › Dashes › Hand-Drawn).
 - **Blinking GIF** (File › Save Blinking GIF, `⇧⌘G`): a looping two-frame GIF that shows the screenshot with and without the annotations.
-- **Capture settings:** hide the menu bar icon (open the app again to get Preferences); mouse pointer Auto (fullscreen only) / Include / Exclude; save Retina screenshots at 1×; window background None / Desktop wallpaper / Color; maximum scrolling capture height; turn `screenshot://` links on or off.
+- **Capture settings:** show the app icon in the Dock (on by default) or hide the menu bar icon (at least one of them stays; opening the app again shows the home window); mouse pointer Auto (fullscreen only) / Include / Exclude; save Retina screenshots at 1×; window background None / Desktop wallpaper / Color; maximum scrolling capture height; turn `screenshot://` links on or off.
 
 ## Shapes like in PowerPoint
 

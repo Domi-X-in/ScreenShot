@@ -21,6 +21,7 @@ enum Keys {
     static let toolCustomColor = "toolCustomColor"
     static let afterAreaShow = "afterAreaShow"
     static let hideMenuBarIcon = "hideMenuBarIcon"
+    static let showInDock = "showInDock"
     static let captureCursor = "captureCursor"
     static let saveRetinaAt1x = "saveRetinaAt1x"
     static let scrollMaxHeight = "scrollMaxHeight"
@@ -57,6 +58,7 @@ enum Settings {
             Keys.toolWidth: 4.0,
             Keys.afterAreaShow: "editor",
             Keys.hideMenuBarIcon: false,
+            Keys.showInDock: true,
             Keys.captureCursor: "auto",
             Keys.saveRetinaAt1x: false,
             Keys.scrollMaxHeight: 30000,
@@ -94,6 +96,7 @@ enum Settings {
     static var showThumbnail: Bool { d.string(forKey: Keys.afterAreaShow) == "thumbnail" }
 
     static var hideMenuBarIcon: Bool { d.bool(forKey: Keys.hideMenuBarIcon) }
+    static var showInDock: Bool { d.bool(forKey: Keys.showInDock) }
     /// "auto" shows the pointer in fullscreen and delayed screenshots only; "include" / "exclude" always / never.
     static func showsCursor(fullscreen: Bool) -> Bool {
         switch d.string(forKey: Keys.captureCursor) {
