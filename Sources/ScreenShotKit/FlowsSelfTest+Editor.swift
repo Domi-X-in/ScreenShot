@@ -146,7 +146,9 @@ extension FlowsSelfTest {
         check(v.tool == .crop, "X picks Crop")
         drag(ed, CGPoint(x: 100, y: 100), CGPoint(x: 500, y: 400))
         key("return")
-        check(abs(v.doc.image.width - 400) <= 1 && abs(v.doc.image.height - 300) <= 1, "Return crops the image to 400×300 at zoom \(v.currentZoom), window \(ed.window?.frame.size ?? .zero) (got \(v.doc.image.width)×\(v.doc.image.height))")
+        // Each edge lands within a screen point, which is more than one image pixel when zoomed out (CI's small screen).
+        let cropSlack = Int(max(1, (2 / v.currentZoom).rounded(.up)))
+        check(abs(v.doc.image.width - 400) <= cropSlack && abs(v.doc.image.height - 300) <= cropSlack, "Return crops the image to 400×300 at zoom \(v.currentZoom), window \(ed.window?.frame.size ?? .zero) (got \(v.doc.image.width)×\(v.doc.image.height))")
         check(v.doc.objects.contains { $0.id == inside.id && abs($0.rect.minX - 50) <= 1 }, "an object inside moves with the crop")
         check(!v.doc.objects.contains { $0.id == outside.id }, "an object entirely outside the crop is dropped")
         let size = Renderer.canvasSize(v.doc)
