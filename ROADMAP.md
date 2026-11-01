@@ -216,8 +216,9 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
 - [x] **R13 · El editor persiste; el Dock lo muestra** (petición del 1-nov-2026):
   - [x] El botón rojo, ⌘W, Esc, Pin, Copy and Close y Save and Close solo ocultan el editor, tras guardar. Vuelve igual, con su historial de deshacer.
   - [x] El clic en el Dock (y abrir la app desde Finder o Spotlight) siempre muestra el editor, también con un pin o la Biblioteca en pantalla. Sin editor abre la captura más reciente; con la carpeta vacía, la Biblioteca hasta que exista el estado vacío (R14). Un arranque normal hace lo mismo; al iniciar sesión o con un enlace o archivo, no.
+  - [x] El Edit del pin vuelve al archivo del que salió, con sus objetos editables, en lugar de abrir la imagen aplanada (visto en la prueba manual).
   - [x] Los nombres de Copy y Save siguen el ajuste al momento: el editor oculto ya no se recrea, así que leerlos al abrir dejaría de bastar.
-  - [x] Verificado: flujo `close-reopen` ampliado (ocultar por cada camino, volver con el mismo documento e historial, desde minimizado, sin editor). 113 tests unitarios; todas las suites de integración pasan, FLOWS 417/0 y LIVE 22/0 (1 omitida: requiere dos pantallas). Falta comprobar a mano el clic real en el Dock y el arranque al iniciar sesión.
+  - [x] Verificado: flujo `close-reopen` ampliado (ocultar por cada camino, volver con el mismo documento e historial, desde minimizado, sin editor). 113 tests unitarios; todas las suites de integración pasan, FLOWS 419/0 y LIVE 22/0 (1 omitida: requiere dos pantallas). Falta comprobar a mano el clic real en el Dock y el arranque al iniciar sesión.
 
 Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 

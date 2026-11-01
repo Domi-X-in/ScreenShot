@@ -4,7 +4,7 @@ import AppKit
 @MainActor enum Pins {
     private static var windows: [PinWindow] = []
 
-    static func pin(_ img: CGImage, scale: CGFloat, near: NSRect?) {
+    static func pin(_ img: CGImage, scale: CGFloat, near: NSRect?, source: URL? = nil) {
         let screen = NSScreen.containingMouse().visibleFrame
         var size = CGSize(width: CGFloat(img.width) / scale, height: CGFloat(img.height) / scale)
         let fit = min(1, screen.width * 0.8 / size.width, screen.height * 0.8 / size.height)
@@ -12,6 +12,7 @@ import AppKit
         let center = near.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: screen.midX, y: screen.midY)
         let frame = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
         let w = PinWindow(image: img, scale: scale, frame: frame)
+        w.source = source
         windows.append(w)
         w.makeKeyAndOrderFront(nil)
     }
@@ -24,6 +25,8 @@ import AppKit
 final class PinWindow: NSPanel {
     let image: CGImage
     let scale: CGFloat
+    /// The file the pin came from, whose objects are still editable; nil for a picture with no file.
+    var source: URL?
 
     init(image: CGImage, scale: CGFloat, frame: CGRect) {
         self.image = image
@@ -213,7 +216,11 @@ final class PinView: NSView {
     @objc private func savePin() { Exporter.save(image, scale: pin?.scale ?? 2) }
 
     @objc private func editPin() {
-        AppLogic.shared.openEditor(image, scale: pin?.scale ?? 2)
+        if let source = pin?.source, FileManager.default.fileExists(atPath: source.path) {
+            AppLogic.shared.openFile(source)
+        } else {
+            AppLogic.shared.openEditor(image, scale: pin?.scale ?? 2)
+        }
         window?.close()
     }
 

@@ -72,6 +72,19 @@ extension FlowsSelfTest {
         await clickDock(windows: true)
         check(AppLogic.shared.editor === ed && ed.window?.isVisible == true && ed.doc === doc, "the Dock icon shows the same editor and picture")
         check(!doc.undoStack.isEmpty, "with its undo history")
+        // The pin's Edit comes back to the same picture, its objects still editable.
+        ed.pinImage()
+        await sleep(0.3)
+        if let edited = NSApp.windows.last(where: { $0 is PinWindow && $0.isVisible && $0 !== pin }),
+           let down = NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: edited.windowNumber,
+                                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
+           let item = edited.contentView?.menu(for: down)?.items.first(where: { $0.title == "Edit" }), let action = item.action {
+            NSApp.sendAction(action, to: item.target, from: item)
+            await sleep(0.5)
+            check(ed.window?.isVisible == true && ed.doc === doc && !doc.undoStack.isEmpty && doc.objects.contains { $0.kind == .rect },
+                  "the pin's Edit shows the same picture, editable, with its undo history")
+            check(!edited.isVisible, "and the pin goes away")
+        } else { check(false, "the pin has an Edit item") }
         pin?.close()
         ed.window?.miniaturize(nil)
         await sleep(0.6)

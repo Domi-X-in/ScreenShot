@@ -397,8 +397,9 @@ import UniformTypeIdentifiers
 
     @objc func pinImage() {
         guard let img = rendered() else { return }
-        Pins.pin(img, scale: doc.scale, near: window?.frame)
-        hideEditor()
+        let frame = window?.frame
+        hideEditor() // saves first, so the pin's Edit can come back to the file, with its objects
+        Pins.pin(img, scale: doc.scale, near: frame, source: doc.fileURL)
     }
 
     /// Reads the area selected with the Crop tool, or the whole screenshot when nothing is selected.
