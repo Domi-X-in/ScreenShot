@@ -246,6 +246,7 @@ import ScreenCaptureKit
             ("ribbon-r6", ribbonR6Flow),
             ("side-bar", sideBarFlow),
             ("single-editor", singleEditorFlow),
+            ("close-reopen", closeReopenFlow),
             ("welcome", welcomeFlow),
             ("accessibility", accessibilityFlow),
             ("panels", panelsFlow),

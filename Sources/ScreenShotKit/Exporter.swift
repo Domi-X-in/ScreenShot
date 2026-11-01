@@ -65,6 +65,19 @@ import UniformTypeIdentifiers
         return "ScreenShot \(f.string(from: Date())).\(ext)"
     }
 
+    /// A new file in `folder`: names only go down to the second, so two captures saved in the same second get "… 2".
+    static func unusedURL(in folder: URL, ext: String) -> URL {
+        let first = folder.appendingPathComponent(fileName(ext: ext))
+        let stem = first.deletingPathExtension().lastPathComponent
+        var url = first
+        var n = 2
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = folder.appendingPathComponent("\(stem) \(n).\(ext)")
+            n += 1
+        }
+        return url
+    }
+
     private static func chosenType(_ img: CGImage) -> UTType {
         switch Settings.saveFormat {
         case "jpg": .jpeg

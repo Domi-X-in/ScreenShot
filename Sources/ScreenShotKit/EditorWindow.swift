@@ -479,21 +479,20 @@ import UniformTypeIdentifiers
             guard let loaded = EditableFile.load(url) else { Toast.show("Image Reading Error"); return }
             next = Self.makeDocument(image: loaded.image, scale: loaded.scale, state: loaded.state, url: url)
         }
-        // A capture that was never saved gets a file now, so it can be come back to from the strip.
-        present(next, saveUnsaved: true)
+        present(next)
     }
 
     /// A new capture, an opened file or the clipboard, in this window (the app has one editor): the picture shown now
-    /// is auto-saved first if it was edited, as when the window closes.
+    /// is auto-saved first, as when the window closes.
     func show(image: CGImage, scale: CGFloat, state: EditState?, url: URL?) {
         if let url, url.standardizedFileURL == doc.fileURL?.standardizedFileURL { return }
         let next = url.flatMap { visited[$0.standardizedFileURL] } ?? Self.makeDocument(image: image, scale: scale, state: state, url: url)
         if url.flatMap({ visited[$0.standardizedFileURL] }) == nil { next.savedRevision = next.revision }
-        present(next, saveUnsaved: false)
+        present(next)
     }
 
-    private func present(_ next: EditorDocument, saveUnsaved: Bool) {
-        flushAutosave(force: saveUnsaved && doc.fileURL == nil)
+    private func present(_ next: EditorDocument) {
+        saveBeforeLeaving()
         if let current = doc.fileURL { visited[current.standardizedFileURL] = doc }
         if visited.count > 20 { visited.removeAll() }
         shotView.switchDocument(next)
@@ -529,6 +528,10 @@ import UniformTypeIdentifiers
         if force || doc.hasUnsavedChanges { autosave(sync: true) }
     }
 
+    /// The picture is leaving the window: a capture that was never saved gets a file now, even with no edits, so it
+    /// stays in the recent strip and the Library.
+    private func saveBeforeLeaving() { flushAutosave(force: doc.fileURL == nil) }
+
     /// Writes the document with editable annotations: rendering happens here, encoding and the file write off the main thread.
     private func autosave(sync: Bool) {
         let d = doc
@@ -539,7 +542,7 @@ import UniformTypeIdentifiers
         } else {
             let folder = Settings.saveFolder
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            url = folder.appendingPathComponent(Exporter.fileName(ext: "png"))
+            url = Exporter.unusedURL(in: folder, ext: "png")
             d.fileURL = url
             window?.title = url.lastPathComponent
             recent.currentURL = url
@@ -556,7 +559,7 @@ import UniformTypeIdentifiers
     }
 
     func windowWillClose(_ notification: Notification) {
-        flushAutosave()
+        saveBeforeLeaving()
         AppLogic.shared.editorClosed(self)
     }
 }

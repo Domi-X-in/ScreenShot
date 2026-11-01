@@ -30,7 +30,12 @@ extension FlowsSelfTest {
         let beforeUnedited = pngs()
         _ = await openEditor(Self.sampleImage(500, 300, text: "Third"))
         _ = await openEditor(Self.sampleImage(400, 300, text: "Fourth"))
-        check(editors.count == 1 && pngs() == beforeUnedited, "an unedited capture is replaced without leaving a file")
+        check(editors.count == 1 && pngs().subtracting(beforeUnedited).count == 1, "an unedited capture it replaced is kept in the folder too")
+        // Replaced within the same second: each one keeps its own file.
+        let beforeBurst = pngs()
+        ed.show(image: Self.sampleImage(300, 200, text: "Fifth"), scale: 2, state: nil, url: nil)
+        ed.show(image: Self.sampleImage(200, 200, text: "Sixth"), scale: 2, state: nil, url: nil)
+        check(pngs().subtracting(beforeBurst).count == 2, "captures replaced in the same second don't overwrite each other")
 
         // Copy closes every window but pins.
         d.set(true, forKey: Keys.closeAfterCopySave)
