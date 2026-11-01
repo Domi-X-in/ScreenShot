@@ -9,6 +9,7 @@ import ScreenCaptureKit
     /// The one editor window (ROADMAP, Fase 6 · R11): everything opened goes into it.
     private(set) var editor: EditorWindowController?
     private var previousApp: NSRunningApplication?
+    private var editorHiddenForCapture = false
 
     func run(_ a: HotkeyAction) {
         switch a {
@@ -27,6 +28,7 @@ import ScreenCaptureKit
     /// Shown only when ScreenCaptureKit actually refuses. CGPreflightScreenCaptureAccess() is cached per process and can
     /// keep saying "no" after the user grants access, so it is not used to gate captures.
     private func report(_ error: Error, _ prefix: String) {
+        restoreEditorAfterCapture()
         guard Capturer.isPermissionError(error) else {
             Toast.show("\(prefix): \(error.localizedDescription)")
             return
@@ -91,6 +93,7 @@ import ScreenCaptureKit
     private func curtainFinished(_ result: CurtainResult, mode: CurtainMode, manualScroll: Bool, content: SCShareableContent) {
         switch result {
         case .cancelled:
+            restoreEditorAfterCapture()
             return
         case let .area(screen, image, pointRect):
             lastArea = (screen.displayID, pointRect)
@@ -153,6 +156,7 @@ import ScreenCaptureKit
 
     func handleCapture(_ img: CGImage, scale: CGFloat, area: Bool = false) {
         if let hook = captureHookForTest { hook(img, scale); return }
+        defer { restoreEditorAfterCapture() }
         let copy = Settings.afterCopy, save = Settings.afterSave
         let show = Settings.afterShow || (!copy && !save)
         if copy {
@@ -188,8 +192,8 @@ import ScreenCaptureKit
         ed.applyDefaultZoom()
     }
 
-    /// The Dock icon: the editor as it was left or, with none yet, the newest screenshot. An empty folder falls back to
-    /// the Library, which has the capture buttons.
+    /// The Dock icon: the editor as it was left or, with none yet, the newest screenshot. An empty folder shows the
+    /// editor's page of capture buttons.
     func showEditor() {
         NSApp.activate()
         if let editor {
@@ -206,10 +210,41 @@ import ScreenCaptureKit
                 } else if let newest {
                     self.openFile(newest)
                 } else {
-                    LibraryWindowController.show()
+                    self.openEmptyEditor()
                 }
             }
         }
+    }
+
+    private func openEmptyEditor() {
+        let blank = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
+        guard let blank else { return }
+        let ed = EditorWindowController(image: blank, scale: 2)
+        ed.doc.savedRevision = ed.doc.revision
+        editor = ed
+        ed.showWindow(nil)
+        ed.showEmptyState()
+        ed.window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// A capture started from the editor: the window steps aside so it isn't in the picture, and comes back if no new
+    /// picture replaces what it shows.
+    func captureFromEditor(_ a: HotkeyAction) {
+        hideEditorForCapture()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.run(a) }
+    }
+
+    func hideEditorForCapture() {
+        editor?.hideEditor()
+        editorHiddenForCapture = editor != nil
+    }
+
+    private func restoreEditorAfterCapture() {
+        guard editorHiddenForCapture else { return }
+        editorHiddenForCapture = false
+        NSApp.activate()
+        editor?.reveal()
     }
 
     func editorClosed(_ ed: EditorWindowController) {

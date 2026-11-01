@@ -141,13 +141,18 @@ extension FlowsSelfTest {
         let menu = NSMenu()
         (NSApp.delegate as? AppDelegate)?.menuNeedsUpdate(menu)
         let titles = menu.items.map(\.title)
-        for t in ["Open ScreenShot", "Area Capture", "Fullscreen Screenshot", "Welcome Guide…", "Check for Updates…", "Preferences…", "Quit ScreenShot"] {
+        for t in ["Open ScreenShot", "Library…", "Area Capture", "Fullscreen Screenshot", "Welcome Guide…", "Check for Updates…", "Preferences…", "Quit ScreenShot"] {
             check(titles.contains(t), "the menu bar menu has “\(t)”")
         }
         if let open = menu.items.first(where: { $0.title == "Open ScreenShot" }), let action = open.action {
             NSApp.sendAction(action, to: open.target, from: open)
+            await sleep(0.5)
+            check(AppLogic.shared.editor?.window?.isVisible == true, "Open ScreenShot shows the editor")
+        }
+        if let library = menu.items.first(where: { $0.title == "Library…" }), let action = library.action {
+            NSApp.sendAction(action, to: library.target, from: library)
             await sleep(0.4)
-            check(LibraryWindowController.shared?.window?.isVisible == true, "Open ScreenShot shows the home window")
+            check(LibraryWindowController.shared?.window?.isVisible == true, "Library… shows the Library")
         }
     }
 

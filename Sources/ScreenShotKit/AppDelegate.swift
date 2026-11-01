@@ -107,11 +107,13 @@ import AppKit
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        // The home window: capture buttons and every screenshot (the Library).
-        let open = item("Open ScreenShot", #selector(showLibrary))
-        open.keyEquivalent = "l"
-        open.image = Icons.image(.photo, size: 16)
+        let open = item("Open ScreenShot", #selector(showEditor))
+        open.image = Icons.image(.statusMark, size: 16)
         menu.addItem(open)
+        let library = item("Library…", #selector(showLibrary))
+        library.keyEquivalent = "l"
+        library.image = Icons.image(.photo, size: 16)
+        menu.addItem(library)
         menu.addItem(.separator())
         let order: [HotkeyAction?] = [.fullscreen, .area, .repeatArea, .delayed, nil, .anyWindow, .activeWindow, nil,
                                       .scrolling, .scrollingManual, nil, .ocr]
@@ -189,6 +191,7 @@ import AppKit
     @objc private func loadClipboard() { AppLogic.shared.loadFromClipboard() }
     @objc private func openImage() { AppLogic.shared.chooseFile() }
     @objc func showLibrary() { LibraryWindowController.show() }
+    @objc func showEditor() { AppLogic.shared.showEditor() }
     @objc func showWelcome() { OnboardingWindowController.show(from: 0) }
 
     func closePreferences() { prefs?.close() }

@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
     /// Documents visited in this window, so returning to one keeps its undo history.
     private var visited: [URL: EditorDocument] = [:]
     private var autosaveTimer: Timer?
+    private(set) var emptyState: EditorEmptyState?
     private let saveQueue = DispatchQueue(label: "screenshot.autosave")
     private let info = InfoCellsView()
     private let recent = RecentStrip()
@@ -87,7 +88,7 @@ import UniformTypeIdentifiers
         let drag = DragOutView(icon: Icons.image(.drag, size: 18, color: DesignTokens.color(.ink2))) { [weak self] in
             self?.rendered().map { ($0, self?.doc.scale ?? 2) }
         }
-        let title = TitleCard(actions: EditorRibbon.titleBarGroup([r.copyImage, r.save, r.pin]), drag: drag,
+        let title = TitleCard(actions: EditorRibbon.titleBarGroup([r.capture, r.copyImage, r.save, r.pin]), drag: drag,
                               history: EditorRibbon.titleBarGroup([r.undo, r.redo]))
         let ribbon = CardView(), canvas = CardView(), status = CardView(), strip = CardView()
         r.view.drawsChrome = false
@@ -497,6 +498,7 @@ import UniformTypeIdentifiers
 
     private func present(_ next: EditorDocument) {
         saveBeforeLeaving()
+        hideEmptyState()
         if let current = doc.fileURL { visited[current.standardizedFileURL] = doc }
         if visited.count > 20 { visited.removeAll() }
         shotView.switchDocument(next)
@@ -534,7 +536,26 @@ import UniformTypeIdentifiers
 
     /// The picture is leaving the window: a capture that was never saved gets a file now, even with no edits, so it
     /// stays in the recent strip and the Library.
-    private func saveBeforeLeaving() { flushAutosave(force: doc.fileURL == nil) }
+    private func saveBeforeLeaving() {
+        if emptyState == nil { flushAutosave(force: doc.fileURL == nil) }
+    }
+
+    /// No screenshot at all yet: a blank document behind a page of capture buttons, never saved. The first picture replaces it.
+    func showEmptyState() {
+        guard emptyState == nil, let content = window?.contentView else { return }
+        let page = EditorEmptyState()
+        page.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(page)
+        NSLayoutConstraint.activate([page.leadingAnchor.constraint(equalTo: content.leadingAnchor), page.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                                     page.topAnchor.constraint(equalTo: content.topAnchor), page.bottomAnchor.constraint(equalTo: content.bottomAnchor)])
+        emptyState = page
+        window?.makeFirstResponder(page)
+    }
+
+    private func hideEmptyState() {
+        emptyState?.removeFromSuperview()
+        emptyState = nil
+    }
 
     /// Writes the document with editable annotations: rendering happens here, encoding and the file write off the main thread.
     private func autosave(sync: Bool) {
@@ -579,7 +600,7 @@ import UniformTypeIdentifiers
         recent.reload()
         if window?.isMiniaturized == true { window?.deminiaturize(nil) }
         window?.makeKeyAndOrderFront(nil)
-        window?.makeFirstResponder(shotView)
+        window?.makeFirstResponder(emptyState ?? shotView)
     }
 
     func windowWillClose(_ notification: Notification) {

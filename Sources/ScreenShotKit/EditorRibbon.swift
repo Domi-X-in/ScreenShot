@@ -16,7 +16,7 @@ import AppKit
     // Tools without a Tool of their own
     let ocr: RibbonItem, areaSelect: RibbonItem
     // Title bar
-    let copyImage: RibbonItem, save: RibbonItem, pin: RibbonItem, undo: RibbonItem, redo: RibbonItem
+    let capture: RibbonItem, copyImage: RibbonItem, save: RibbonItem, pin: RibbonItem, undo: RibbonItem, redo: RibbonItem
 
     /// The ribbon's tools, in the design's order, with their icons.
     static let shapeTools: [(Tool, IconName)] = [(.select, .select), (.freehand, .freehand), (.line, .line), (.arrow, .arrow), (.rect, .rect),
@@ -44,6 +44,16 @@ import AppKit
             guard let v = editor?.shotView else { return }
             v.beginAreaSelection()
             v.window?.makeFirstResponder(v)
+        }
+        capture = RibbonItem("capture", kind: .small, title: "New Capture", icon: .capArea, action: { AppLogic.shared.captureFromEditor(.area) })
+        capture.shortcut = HotKeyCenter.shared.shortcut(for: .area)?.display
+        capture.split = true
+        capture.menu = {
+            let m = NSMenu()
+            for a in [HotkeyAction.area, .anyWindow, .fullscreen] {
+                m.addItem(ClosureMenuItem(a.title, icon: AppDelegate.icon(for: a)) { AppLogic.shared.captureFromEditor(a) })
+            }
+            return m
         }
         copyImage = RibbonItem("copyImage", kind: .small, title: Settings.closeAfterCopySave ? "Copy and Close" : "Copy Full Image", icon: .copyImage,
                                action: { [weak editor] in editor?.copyFromTitleCard() })

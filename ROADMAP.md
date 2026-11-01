@@ -219,6 +219,11 @@ Rama `ui-refactor`. Todo va detrás del ajuste `newEditorUI` (solo en debug, `de
   - [x] El Edit del pin vuelve al archivo del que salió, con sus objetos editables, en lugar de abrir la imagen aplanada (visto en la prueba manual).
   - [x] Los nombres de Copy y Save siguen el ajuste al momento: el editor oculto ya no se recrea, así que leerlos al abrir dejaría de bastar.
   - [x] Verificado: flujo `close-reopen` ampliado (ocultar por cada camino, volver con el mismo documento e historial, desde minimizado, sin editor). 113 tests unitarios; todas las suites de integración pasan, FLOWS 419/0 y LIVE 22/0 (1 omitida: requiere dos pantallas). Falta comprobar a mano el clic real en el Dock y el arranque al iniciar sesión.
+- [x] **R14 · El editor como inicio** (petición del 1-nov-2026):
+  - [x] Botón New Capture en la tarjeta de título (Área; su menú añade Ventana y Pantalla completa). El editor se aparta para no salir en la captura y vuelve si se cancela, si falla o si la captura solo copia.
+  - [x] Con la carpeta vacía, el editor muestra una página con Área, Ventana, Pantalla completa y Abrir imagen, sobre un documento en blanco que nunca se guarda ni se puede editar.
+  - [x] Menú de estado: "Open ScreenShot" abre el editor y "Library…" (⌘L) la Biblioteca.
+  - [x] Verificado: flujo nuevo `editor-home` (la parte de carpeta vacía se ejecuta sin `-saveFolder`, porque ese argumento fija la carpeta). 113 tests unitarios; todas las suites de integración pasan, FLOWS 425/0 y LIVE 22/0 (1 omitida: requiere dos pantallas).
 
 Camino crítico: R1 → R2 → R3. R4, R5 y R7 dependen de R3 pero no entre sí; R6 y R8 pueden ir en paralelo desde R2. R5b va antes de R6: cambia la colocación de la cinta, el lienzo y las barras, y conviene asentarla antes de añadir más controles. R7 (ventana de inicio) y R8 (bienvenida) deben adoptar el mismo estilo de tarjetas.
 

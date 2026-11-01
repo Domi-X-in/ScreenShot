@@ -20,8 +20,8 @@ extension FlowsSelfTest {
                 check(titleFrame.contains(b.convert(b.bounds, to: nil)), "window button \(kind.rawValue) sits inside the title card (\(b.convert(b.bounds, to: nil)) in \(titleFrame))")
             }
         }
-        check(allViews(RibbonButton.self, in: cards.title).map(\.item.id) == ["copyImage", "save", "pin", "undo", "redo"],
-              "the title card has Copy image, Save, Pin, Undo and Redo")
+        check(allViews(RibbonButton.self, in: cards.title).map(\.item.id) == ["capture", "copyImage", "save", "pin", "undo", "redo"],
+              "the title card has New Capture, Copy image, Save, Pin, Undo and Redo")
         check(cards.title.mouseDownCanMoveWindow, "dragging the title card moves the window")
         check(r.view.window === win && r.view.frame.height == DesignTokens.Metrics.ribbonHeight, "the ribbon sits in the window, 94 pt tall")
         // Cards: 10 pt from the window's edges and from each other, 12 pt corners.
