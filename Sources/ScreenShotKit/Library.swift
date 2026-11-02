@@ -171,8 +171,10 @@ import Vision
     func collectionView(_ collectionView: NSCollectionView, viewForSupplementaryElementOfKind kind: NSCollectionView.SupplementaryElementKind,
                         at indexPath: IndexPath) -> NSView {
         let header = collectionView.makeSupplementaryView(ofKind: kind, withIdentifier: LibrarySectionHeader.id, for: indexPath) as! LibrarySectionHeader
-        let s = sections[indexPath.section]
-        header.show(title: s.title, count: s.items.count)
+        if indexPath.section < sections.count {
+            let s = sections[indexPath.section]
+            header.show(title: s.title, count: s.items.count)
+        }
         return header
     }
 
@@ -207,7 +209,9 @@ import Vision
 
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let cell = collectionView.makeItem(withIdentifier: LibraryCell.id, for: indexPath) as! LibraryCell
-        cell.configure(sections[indexPath.section].items[indexPath.item])
+        if indexPath.section < sections.count, indexPath.item < sections[indexPath.section].items.count {
+            cell.configure(sections[indexPath.section].items[indexPath.item])
+        }
         return cell
     }
 
@@ -261,12 +265,16 @@ struct LibraryItem: Sendable {
     func matches(_ query: String, text: String?) -> Bool {
         let words = query.lowercased().split(whereSeparator: \.isWhitespace)
         guard !words.isEmpty else { return true }
+        let haystack = [url.lastPathComponent, Self.searchDate.string(from: date), Self.localDate.string(from: date), text ?? ""].joined(separator: " ").lowercased()
+        return words.allSatisfy { haystack.contains($0) }
+    }
+
+    private static let searchDate: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd MMMM EEEE"
         f.locale = Locale(identifier: "en_US_POSIX")
-        let haystack = [url.lastPathComponent, f.string(from: date), Self.localDate.string(from: date), text ?? ""].joined(separator: " ").lowercased()
-        return words.allSatisfy { haystack.contains($0) }
-    }
+        return f
+    }()
 
     private static let localDate: DateFormatter = {
         let f = DateFormatter()
@@ -315,14 +323,18 @@ final class TextIndex: @unchecked Sendable {
     private var queue: [URL] = []
 
     @MainActor func indexInBackground(_ urls: [URL]) {
-        lock.lock()
-        let todo = urls.filter { u in entries[Self.key(u)]?.modified != modified(u) && !queue.contains(u) }
-        queue = todo + queue
-        let start = !running && !queue.isEmpty
-        if start { running = true }
-        lock.unlock()
-        guard start else { return }
         DispatchQueue.global(qos: .utility).async { [self] in
+            prune()
+            // One file-system look per file, so never on the main thread or holding the lock.
+            let dates = urls.map { ($0, modified($0)) }
+            lock.lock()
+            let waiting = Set(queue)
+            let todo = dates.filter { u, date in entries[Self.key(u)]?.modified != date && !waiting.contains(u) }.map(\.0)
+            queue = todo + queue
+            let start = !running && !queue.isEmpty
+            if start { running = true }
+            lock.unlock()
+            guard start else { return }
             var done = 0
             while true {
                 lock.lock()
@@ -344,7 +356,7 @@ final class TextIndex: @unchecked Sendable {
     }
 
     static func recognize(_ url: URL) -> String? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil), ImageLimits.allows(src) else { return nil }
         let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 2400,
                                      kCGImageSourceCreateThumbnailWithTransform: true]
         guard let img = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
@@ -352,23 +364,63 @@ final class TextIndex: @unchecked Sendable {
         // Accurate, not fast: it runs in the background once per file, and search is only as good as what it reads.
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = true
-        VisionGate.perform([req], on: img)
+        VisionGate.perform([req], on: img, background: true)
         return (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+    }
+
+    /// Forgets the text of files that no longer exist: deleting a screenshot deletes what was read from it.
+    func prune() {
+        lock.lock()
+        let paths = Array(entries.keys)
+        lock.unlock()
+        let gone = paths.filter { !FileManager.default.fileExists(atPath: $0) }
+        guard !gone.isEmpty else { return }
+        lock.lock()
+        gone.forEach { entries[$0] = nil }
+        lock.unlock()
+        save()
+    }
+
+    /// Preferences › Advanced: everything read so far goes; the Library reads the files again when it next opens.
+    func clear() {
+        lock.lock()
+        entries.removeAll()
+        queue.removeAll()
+        lock.unlock()
+        try? FileManager.default.removeItem(at: file)
     }
 
     private func save() {
         lock.lock()
         let snapshot = entries
         lock.unlock()
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(snapshot).write(to: file, options: .atomic)
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(snapshot).write(to: file, options: .atomic)
+            // It holds what the screenshots say: only the owner reads it.
+            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            Log.files.error("Could not save the search index: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 
 /// A thumbnail with the file's name, pixel size and time under it.
 final class LibraryCell: NSCollectionViewItem {
     static let id = NSUserInterfaceItemIdentifier("LibraryCell")
-    private static let cache = NSCache<NSURL, NSImage>()
+    private static let cache: NSCache<NSURL, NSImage> = {
+        let c = NSCache<NSURL, NSImage>()
+        c.countLimit = 500
+        return c
+    }()
+    /// Thumbnails read a few at a time, however fast the grid scrolls.
+    private static let thumbnails: OperationQueue = {
+        let q = OperationQueue()
+        q.maxConcurrentOperationCount = 4
+        q.qualityOfService = .userInitiated
+        return q
+    }()
     private let thumb = NSImageView()
     private let caption = NSTextField(labelWithString: "")
     /// The second line: pixel size and time.
@@ -435,8 +487,8 @@ final class LibraryCell: NSCollectionViewItem {
         }
         thumb.image = nil
         let u = item.url
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let src = CGImageSourceCreateWithURL(u as CFURL, nil) else { return }
+        Self.thumbnails.addOperation {
+            guard let src = CGImageSourceCreateWithURL(u as CFURL, nil), ImageLimits.allows(src) else { return }
             let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
             let pixels = (props?[kCGImagePropertyPixelWidth] as? Int).flatMap { w in (props?[kCGImagePropertyPixelHeight] as? Int).map { CGSize(width: w, height: $0) } }
             let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 680,

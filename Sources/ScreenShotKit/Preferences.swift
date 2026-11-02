@@ -161,6 +161,10 @@ import ServiceManagement
         form.row("Zoom with mouse wheel", [DefaultsCheckbox("Scroll zooms the editor", key: "wheelZooms")])
         form.row("Default zoom level", [DefaultsCheckbox("Prefer 100%", key: "prefer100")])
         form.row("URL Scheme API", [DefaultsCheckbox("Allow screenshot://grab/area, …", key: Keys.urlScheme)])
+        form.row("Search index", [ClosureButton(title: "Forget Text Read from Screenshots") {
+            TextIndex.shared.clear()
+            Toast.show("Search index cleared")
+        }])
         form.separator()
         let auto = ClosureCheckbox("Check automatically", on: Updates.shared.automaticallyChecks) { Updates.shared.automaticallyChecks = $0 }
         auto.isEnabled = Updates.shared.isAvailable

@@ -1020,10 +1020,64 @@ final class EditorDocument {
     var hasUnsavedChanges: Bool { revision != savedRevision }
     private var overlayCache: [UUID: CGImage] = [:]
 
+    /// When this document was last on screen, for the window's memory budget.
+    var lastShown = Date()
+    /// The file's date after this window last wrote or opened it; another date means someone else changed it.
+    private var lastFileDate: Date?
+
+    private func fileDate() -> Date? {
+        guard let fileURL else { return nil }
+        var url = fileURL
+        url.removeCachedResourceValue(forKey: .contentModificationDateKey)
+        return (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
+    func noteFileWritten() { lastFileDate = fileDate() }
+
+    /// False when the file is gone or was changed elsewhere since this document last read or wrote it.
+    var fileMatchesLastWrite: Bool {
+        if hasUnsavedChanges { return true }
+        guard let now = fileDate() else { return false }
+        return lastFileDate == nil || lastFileDate == now
+    }
+
+    /// Bitmaps held: the image, the undo history's other images, and the caches.
+    var memoryCost: Int {
+        func cost(_ i: CGImage) -> Int { i.bytesPerRow * i.height }
+        var seen = Set<ObjectIdentifier>()
+        var total = 0
+        for i in [image] + (undoStack + redoStack).map(\.image) where seen.insert(ObjectIdentifier(i)).inserted { total += cost(i) }
+        if let p = pixelCache { total += p.width * p.height * 4 }
+        if let b = blurredCache?.blurred { total += cost(b) }
+        return total + concealCache.values.reduce(0) { $0 + cost($1) } + overlayCache.values.reduce(0) { $0 + cost($1) }
+    }
+
+    /// Everything that can be made again from the image.
+    func releaseCaches() {
+        pixelCache = nil
+        blurredCache = nil
+        concealCache.removeAll()
+        overlayCache.removeAll()
+    }
+
+    /// Drops the oldest undo steps while the images they alone hold are over `budget`; the last step always stays.
+    func trimUndo(budget: Int = 1024 * 1024 * 1024) {
+        func held() -> Int {
+            var seen = Set<ObjectIdentifier>()
+            return undoStack.reduce(0) { sum, s in
+                seen.insert(ObjectIdentifier(s.image)).inserted ? sum + s.image.bytesPerRow * s.image.height : sum
+            }
+        }
+        var total = held()
+        while total > budget, undoStack.count > 1 {
+            undoStack.removeFirst()
+            total = held()
+        }
+    }
+
     func overlayImage(for o: Annotation) -> CGImage? {
         if let c = overlayCache[o.id] { return c }
-        guard let data = o.imageData, let src = CGImageSourceCreateWithData(data as CFData, nil),
-              let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+        guard let data = o.imageData, let img = ImageLimits.decode(data) else { return nil }
         overlayCache[o.id] = img
         return img
     }
@@ -1163,6 +1217,8 @@ final class EditorDocument {
     /// Flattens the image, annotations and backdrop into a single bitmap.
     func render() -> CGImage? {
         let size = Renderer.canvasSize(self)
+        // Objects can reach far past the image; a canvas too big to allocate is a failed render, not a crash.
+        guard ImageLimits.allows(width: size.width, height: size.height) else { return nil }
         var space = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
         if space.model != .rgb { space = CGColorSpace(name: CGColorSpace.sRGB)! }
         guard let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,

@@ -4,12 +4,29 @@ import Vision
 /// Runs Vision requests one at a time. Simultaneous text recognitions (Library indexing, Blur Text, ⌘O) can
 /// deadlock inside Vision on machines with few cores, so every request in the app goes through here.
 enum VisionGate {
-    private static let lock = NSLock()
+    private static let gate = NSCondition()
+    nonisolated(unsafe) private static var busy = false
+    nonisolated(unsafe) private static var waitingForeground = 0
 
-    static func perform(_ requests: [VNRequest], on image: CGImage) {
-        lock.lock()
-        defer { lock.unlock() }
-        try? VNImageRequestHandler(cgImage: image).perform(requests)
+    /// `background` work (Library indexing) lets anything the user asked for go first.
+    static func perform(_ requests: [VNRequest], on image: CGImage, background: Bool = false) {
+        gate.lock()
+        if !background { waitingForeground += 1 }
+        while busy || (background && waitingForeground > 0) { gate.wait() }
+        busy = true
+        if !background { waitingForeground -= 1 }
+        gate.unlock()
+        defer {
+            gate.lock()
+            busy = false
+            gate.broadcast()
+            gate.unlock()
+        }
+        do {
+            try VNImageRequestHandler(cgImage: image).perform(requests)
+        } catch {
+            Log.capture.error("Vision request failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 

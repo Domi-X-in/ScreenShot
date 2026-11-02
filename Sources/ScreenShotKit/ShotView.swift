@@ -372,6 +372,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
         doc.undoStack.append(snapshot)
         if doc.undoStack.count > 200 { doc.undoStack.removeFirst() }
         doc.redoStack.removeAll()
+        doc.trimUndo()
         markChanged()
     }
 
@@ -1513,7 +1514,7 @@ final class ShotView: NSView, NSTextFieldDelegate, NSMenuItemValidation {
 
     private func applyCrop() {
         guard let r = cropRect?.integral.intersection(doc.imageRect), r.width >= 2, r.height >= 2,
-              let cropped = doc.image.cropping(to: r) else { return }
+              let cropped = doc.image.cropping(to: r)?.ownedCopy() else { return }
         pushUndo()
         doc.image = cropped
         // Objects entirely outside the kept area go; the rest move with it.

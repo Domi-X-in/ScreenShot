@@ -66,7 +66,8 @@ enum DesignTokens {
     /// Text on a filled accent button: white on #FF5500 is under 4.5:1, so the label is near-black.
     static let onAccent = NSColor(srgb: 0x1A0A00FF)
 
-    private static var cache: [Role: NSColor] = [:]
+    /// Behind `lock`.
+    nonisolated(unsafe) private static var cache: [Role: NSColor] = [:]
     private static let lock = NSLock()
 
     /// A color that resolves to the dark or light value for the appearance it is drawn in.
@@ -131,12 +132,12 @@ enum DesignTokens {
     }
 
     enum Font {
-        static let ribbonLabel = NSFont.systemFont(ofSize: 12)
-        static let largeCaption = NSFont.systemFont(ofSize: 11.5)
-        static let groupLabel = NSFont.systemFont(ofSize: 11)
-        static let readout = NSFont.systemFont(ofSize: 12, weight: .medium)
-        static let caption = NSFont.systemFont(ofSize: 10.5)
-        static let menuItem = NSFont.systemFont(ofSize: 12.5)
+        nonisolated(unsafe) static let ribbonLabel = NSFont.systemFont(ofSize: 12)
+        nonisolated(unsafe) static let largeCaption = NSFont.systemFont(ofSize: 11.5)
+        nonisolated(unsafe) static let groupLabel = NSFont.systemFont(ofSize: 11)
+        nonisolated(unsafe) static let readout = NSFont.systemFont(ofSize: 12, weight: .medium)
+        nonisolated(unsafe) static let caption = NSFont.systemFont(ofSize: 10.5)
+        nonisolated(unsafe) static let menuItem = NSFont.systemFont(ofSize: 12.5)
     }
 
     // MARK: Contrast

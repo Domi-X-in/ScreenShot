@@ -6,8 +6,9 @@
 # Versions are dates, YYMMDD.N in local time: the first release on 23 Oct 2026 is 261023.1, a second one that day
 # 261023.2, and the next day starts again at .1. The number comes from the existing v<version> tags.
 #
-# Updates: the zip is signed with the EdDSA key in ~/.screenshot-release/sparkle_ed25519.key (exported from the login
-# Keychain item made by Sparkle's generate_keys, account local.screenshot.app); the app checks it against SUPublicEDKey. appcast.xml is attached to every release, and
+# Updates: the zip is signed with the EdDSA key in the login Keychain item made by Sparkle's generate_keys, account
+# local.screenshot.app (or the file in SPARKLE_KEY_FILE, if set); the app checks it against SUPublicEDKey. Whoever has
+# this key can install code on every user's Mac, so keep it out of plain files. appcast.xml is attached to every release, and
 # the app reads it from releases/latest/download/appcast.xml.
 #
 # Notarization (optional, needs a paid Apple Developer account):
@@ -34,6 +35,11 @@ TAG="v$VERSION"
 PREV=$(git tag -l 'v[0-9]*.[0-9]*' --sort=-version:refname | head -1)
 echo "Releasing $VERSION${PREV:+ (previous: $PREV)}"
 
+# Nothing is published that doesn't pass the unit tests, then the in-app tests.
+Tools/test.sh
+Tools/integration-tests.sh
+[ -n "${DEVELOPER_ID:-}" ] || echo "Warning: no DEVELOPER_ID, so this build is ad hoc signed: another program can take over its permissions."
+
 VERSION="$VERSION" ./build.sh
 
 mkdir -p dist
@@ -48,10 +54,8 @@ fi
 ditto -c -k --sequesterRsrc --keepParent build/ScreenShot.app "$ZIP"
 
 # Sparkle signature and length for the appcast enclosure.
-# The key file avoids a Keychain prompt on every release; without it, the Keychain item is used.
-KEY_FILE="${SPARKLE_KEY_FILE:-$HOME/.screenshot-release/sparkle_ed25519.key}"
-if [ -f "$KEY_FILE" ]; then
-    SIG=$("$SPARKLE_BIN/sign_update" --ed-key-file "$KEY_FILE" "$ZIP")
+if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+    SIG=$("$SPARKLE_BIN/sign_update" --ed-key-file "$SPARKLE_KEY_FILE" "$ZIP")
 else
     SIG=$("$SPARKLE_BIN/sign_update" --account local.screenshot.app "$ZIP")
 fi

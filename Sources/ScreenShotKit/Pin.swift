@@ -5,7 +5,7 @@ import AppKit
     private static var windows: [PinWindow] = []
 
     static func pin(_ img: CGImage, scale: CGFloat, near: NSRect?, source: URL? = nil) {
-        let screen = NSScreen.containingMouse().visibleFrame
+        let screen = NSScreen.mouseVisibleFrame
         var size = CGSize(width: CGFloat(img.width) / scale, height: CGFloat(img.height) / scale)
         let fit = min(1, screen.width * 0.8 / size.width, screen.height * 0.8 / size.height)
         size = CGSize(width: size.width * fit, height: size.height * fit)
@@ -74,7 +74,7 @@ final class PinView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func barButton(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
-        let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: self, action: action)
+        let b = NSButton(image: NSImage.symbol(symbol, tip), target: self, action: action)
         b.isBordered = false
         b.contentTintColor = .white
         b.toolTip = tip
@@ -235,7 +235,7 @@ final class PinDragHandle: NSView, NSDraggingSource {
         self.image = image
         super.init(frame: .zero)
         toolTip = "Drag'n'Drop Image"
-        let icon = NSImageView(image: NSImage(systemSymbolName: "hand.draw", accessibilityDescription: "Drag image")!)
+        let icon = NSImageView(image: NSImage.symbol("hand.draw", "Drag image"))
         icon.contentTintColor = .white
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
@@ -251,9 +251,7 @@ final class PinDragHandle: NSView, NSDraggingSource {
 
     override func mouseDragged(with event: NSEvent) {
         let scale = (window as? PinWindow)?.scale ?? 2
-        guard let data = Exporter.encode(image, scale: scale, type: .png) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(Exporter.fileName(ext: "png"))
-        guard (try? data.write(to: url)) != nil else { return }
+        guard let data = Exporter.encode(image, scale: scale, type: .png), let url = Exporter.dragFile(data) else { return }
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         let preview = NSImage(cgImage: image, size: NSSize(width: 100, height: 100 * CGFloat(image.height) / CGFloat(max(1, image.width))))
         let p = convert(event.locationInWindow, from: nil)

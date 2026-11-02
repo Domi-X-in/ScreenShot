@@ -279,6 +279,7 @@ enum Icons {
         return image
     }
 
-    private static var pathCache: [IconName: (stroke: CGPath, fill: CGPath, accent: CGPath, accentFill: CGPath)] = [:]
+    /// Behind `lock`.
+    nonisolated(unsafe) private static var pathCache: [IconName: (stroke: CGPath, fill: CGPath, accent: CGPath, accentFill: CGPath)] = [:]
     private static let lock = NSLock()
 }

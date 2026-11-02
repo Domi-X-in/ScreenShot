@@ -58,8 +58,8 @@ import AppKit
         let gen = generation
         let kind = kind(for: text)
 
-        let icon = NSImageView(image: NSImage(systemSymbolName: kind.symbol, accessibilityDescription: nil)!
-            .withSymbolConfiguration(.init(pointSize: 17, weight: .semibold))!)
+        let icon = NSImageView(image: NSImage.symbol(kind.symbol, nil)
+            .withSymbolConfiguration(.init(pointSize: 17, weight: .semibold)) ?? NSImage.symbol(kind.symbol, nil))
         icon.contentTintColor = kind.tint
         let label = NSTextField(wrappingLabelWithString: text)
         label.font = .systemFont(ofSize: 13, weight: .medium)
@@ -82,7 +82,7 @@ import AppKit
         stack.frame = fx.bounds
         fx.addSubview(stack)
 
-        let screen = NSScreen.containingMouse().visibleFrame
+        let screen = NSScreen.mouseVisibleFrame
         let frame = CGRect(x: screen.midX - size.width / 2, y: screen.maxY - size.height - 28, width: size.width, height: size.height)
         let p = NSPanel(contentRect: frame.offsetBy(dx: 0, dy: 10), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.level = .statusBar

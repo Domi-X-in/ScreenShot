@@ -44,7 +44,18 @@ else
     # An ad hoc signature's default designated requirement is the cdhash, which changes on every build and makes
     # macOS forget the Screen Recording / Accessibility grants. Pinning it to the bundle id keeps them across rebuilds
     # (and lets the debug build reuse the grants for the live capture test).
-    codesign --force --sign - --requirements '=designated => identifier "local.screenshot.app"' "$APP"
+    # That pin has no identity behind it: another program signed with this identifier also meets it. Only a Developer
+    # ID build closes that, so builds for other people should set DEVELOPER_ID.
+    # The hardened runtime refuses injected libraries (DYLD_INSERT_LIBRARIES, debuggers); ad hoc code has no Team ID, so
+    # it needs the entitlement to load its own Sparkle.framework.
+    ENT="$(mktemp)"
+    trap 'rm -f "$ENT"' EXIT
+    cat > "$ENT" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>
+PLIST
+    codesign --force --sign - --options runtime --entitlements "$ENT" --requirements '=designated => identifier "local.screenshot.app"' "$APP"
 fi
 
 echo "Built $APP ($VERSION)"

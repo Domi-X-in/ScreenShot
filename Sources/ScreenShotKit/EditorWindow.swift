@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
     private var visited: [URL: EditorDocument] = [:]
     private var autosaveTimer: Timer?
     private(set) var emptyState: EditorEmptyState?
-    private let saveQueue = DispatchQueue(label: "screenshot.autosave")
+    private let saveQueue = EditableFile.ioQueue
     private let info = InfoCellsView()
     private let recent = RecentStrip()
     /// The bottom bar: messages, readouts and Backdrop.
@@ -174,7 +174,7 @@ import UniformTypeIdentifiers
 
     private func sizeWindow() {
         guard let win = window else { return }
-        let screen = NSScreen.containingMouse().visibleFrame
+        let screen = NSScreen.mouseVisibleFrame
         let c = Renderer.canvasSize(doc)
         // The new editor's cards: title 6+40, ribbon, canvas, status, strip, with 10 pt gaps and margins.
         let chrome: CGFloat = 6 + 40 + 10 + DesignTokens.Metrics.ribbonHeight + 10 + 10 + DesignTokens.Metrics.statusBarHeight + 10 + 84 + 10 + 32
@@ -384,7 +384,7 @@ import UniformTypeIdentifiers
             return
         }
         let folder = Settings.saveFolder
-        let url = folder.appendingPathComponent(Exporter.fileName(ext: "gif"))
+        let url = Exporter.unusedURL(in: folder, ext: "gif")
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
@@ -472,6 +472,7 @@ import UniformTypeIdentifiers
             d.backdrop = state.backdrop
         }
         d.fileURL = url
+        d.noteFileWritten()
         return d
     }
 
@@ -479,7 +480,7 @@ import UniformTypeIdentifiers
     func switchTo(_ url: URL) {
         guard url.standardizedFileURL != doc.fileURL?.standardizedFileURL else { return }
         let next: EditorDocument
-        if let cached = visited[url.standardizedFileURL] {
+        if let cached = cachedDocument(for: url) {
             next = cached
         } else {
             guard let loaded = EditableFile.load(url) else { Toast.show("Image Reading Error"); return }
@@ -492,16 +493,50 @@ import UniformTypeIdentifiers
     /// is auto-saved first, as when the window closes.
     func show(image: CGImage, scale: CGFloat, state: EditState?, url: URL?) {
         if let url, url.standardizedFileURL == doc.fileURL?.standardizedFileURL { return }
-        let next = url.flatMap { visited[$0.standardizedFileURL] } ?? Self.makeDocument(image: image, scale: scale, state: state, url: url)
-        if url.flatMap({ visited[$0.standardizedFileURL] }) == nil { next.savedRevision = next.revision }
+        let cached = url.flatMap { cachedDocument(for: $0) }
+        let next = cached ?? Self.makeDocument(image: image, scale: scale, state: state, url: url)
+        if cached == nil { next.savedRevision = next.revision }
         present(next)
+    }
+
+    /// The document kept for `url`, unless the file changed or went away since this window last wrote it.
+    private func cachedDocument(for url: URL) -> EditorDocument? {
+        let key = url.standardizedFileURL
+        guard let cached = visited[key] else { return nil }
+        if cached.fileMatchesLastWrite { return cached }
+        visited[key] = nil
+        return nil
+    }
+
+    /// Keeps what a return visit needs (its undo history) while the memory stays in budget.
+    private func trimVisited(keeping next: EditorDocument) {
+        while visited.count > Self.maxVisited || visited.values.reduce(0, { $0 + $1.memoryCost }) > Self.visitedBudget {
+            let others = visited.filter { $0.value !== next }
+            guard let oldest = others.min(by: { $0.value.lastShown < $1.value.lastShown }) else { return }
+            visited[oldest.key] = nil
+        }
+    }
+
+    var visitedCount: Int { visited.count }
+
+    private static let maxVisited = 20
+    private static let visitedBudget = 1536 * 1024 * 1024
+
+    /// Memory pressure: only what is on screen stays, without the caches it can make again.
+    func releaseMemory() {
+        flushAutosave()
+        visited = visited.filter { $0.value === doc }
+        doc.releaseCaches()
+        doc.trimUndo(budget: 256 * 1024 * 1024)
     }
 
     private func present(_ next: EditorDocument) {
         saveBeforeLeaving()
         hideEmptyState()
         if let current = doc.fileURL { visited[current.standardizedFileURL] = doc }
-        if visited.count > 20 { visited.removeAll() }
+        doc.releaseCaches()
+        doc.lastShown = Date()
+        trimVisited(keeping: next)
         shotView.switchDocument(next)
         applyDefaultZoom()
         window?.title = next.fileURL?.lastPathComponent ?? "ScreenShot"
@@ -561,10 +596,18 @@ import UniformTypeIdentifiers
     /// Writes the document with editable annotations: rendering happens here, encoding and the file write off the main thread.
     private func autosave(sync: Bool) {
         let d = doc
-        guard let rendered = d.render() else { return }
+        guard let rendered = d.render() else {
+            Toast.show("Auto-save failed: the picture is too large to save")
+            return
+        }
         let url: URL
         if let existing = d.fileURL {
-            url = existing
+            url = Exporter.saveTarget(for: existing)
+            if url != existing {
+                d.fileURL = url
+                window?.title = url.lastPathComponent
+                recent.currentURL = url
+            }
         } else {
             let folder = Settings.saveFolder
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -579,6 +622,7 @@ import UniformTypeIdentifiers
         if sync {
             saveQueue.sync { job.write() }
             d.savedRevision = max(d.savedRevision, job.revision)
+            d.noteFileWritten()
         } else {
             saveQueue.async { job.write() }
         }
@@ -589,6 +633,12 @@ import UniformTypeIdentifiers
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         hideEditor()
         return false
+    }
+
+    /// The app is quitting: everything, including a capture that never had a file, is on disk when this returns.
+    func saveForQuit() {
+        saveBeforeLeaving()
+        saveQueue.sync {}
     }
 
     func hideEditor() {
@@ -814,9 +864,8 @@ final class DragOutView: NSControl, NSDraggingSource {
     override func mouseDown(with event: NSEvent) {}
 
     override func mouseDragged(with event: NSEvent) {
-        guard !dragging, let (img, scale) = provider(), let data = Exporter.encode(img, scale: scale, type: .png) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(Exporter.fileName(ext: "png"))
-        guard (try? data.write(to: url)) != nil else { return }
+        guard !dragging, let (img, scale) = provider(), let data = Exporter.encode(img, scale: scale, type: .png),
+              let url = Exporter.dragFile(data) else { return }
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         let preview = NSImage(cgImage: img, size: NSSize(width: 120, height: 120 * CGFloat(img.height) / CGFloat(max(1, img.width))))
         let p = convert(event.locationInWindow, from: nil)
@@ -862,10 +911,12 @@ private final class AutosaveJob: @unchecked Sendable {
             try EditableFile.write(rendered: data, type: type, state: state, base: base, to: url)
             DispatchQueue.main.async {
                 self.doc.savedRevision = max(self.doc.savedRevision, self.revision)
+                self.doc.noteFileWritten()
                 NotificationCenter.default.post(name: .screenshotSaved, object: self.url)
             }
         } catch {
             let message = error.localizedDescription
+            Log.files.error("Auto-save failed: \(message, privacy: .public)")
             DispatchQueue.main.async { MainActor.assumeIsolated { Toast.show("Auto-save failed: \(message)") } }
         }
     }

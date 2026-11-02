@@ -10,6 +10,10 @@ import ScreenCaptureKit
     private(set) var editor: EditorWindowController?
     private var previousApp: NSRunningApplication?
     private var editorHiddenForCapture = false
+    /// An area capture is taking its pictures, before the overlay exists: a second request must not start another.
+    /// (An overlay nothing owns stays on top of everything and ignores Esc.)
+    private var areaCaptureStarting = false
+    private var lastLinkCapture = Date.distantPast
 
     func run(_ a: HotkeyAction) {
         switch a {
@@ -59,7 +63,7 @@ import ScreenCaptureKit
                     Toast.show("Screenshot in \(s)…", duration: 0.9)
                     try await Task.sleep(for: .seconds(1))
                 }
-                let screen = NSScreen.containingMouse()
+                guard let screen = NSScreen.containingMouse() else { throw CaptureError.noDisplay }
                 let content = try await Capturer.content()
                 let img = try await Capturer.captureScreen(screen, content: content, cursor: Settings.showsCursor(fullscreen: true))
                 handleCapture(img, scale: screen.backingScaleFactor)
@@ -70,8 +74,10 @@ import ScreenCaptureKit
     }
 
     func captureArea(mode: CurtainMode, manualScroll: Bool = false) {
-        guard CurtainController.current == nil, ScrollCapture.current == nil else { return }
+        guard CurtainController.current == nil, ScrollCapture.current == nil, !areaCaptureStarting else { return }
+        areaCaptureStarting = true
         Task {
+            defer { areaCaptureStarting = false }
             do {
                 let content = try await Capturer.content()
                 let windows = Capturer.windowList()
@@ -125,7 +131,9 @@ import ScreenCaptureKit
             do {
                 let content = try await Capturer.content()
                 let img = try await Capturer.captureWindow(id: win.id, content: content)
-                let screen = NSScreen.screens.first { $0.frame.intersects(Geo.flip(win.frame)) } ?? NSScreen.containingMouse()
+                guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(Geo.flip(win.frame)) }) ?? NSScreen.containingMouse() else {
+                    throw CaptureError.noDisplay
+                }
                 handleCapture(img, scale: screen.backingScaleFactor)
             } catch {
                 report(error, "Window grab failed")
@@ -240,11 +248,19 @@ import ScreenCaptureKit
         editorHiddenForCapture = editor != nil
     }
 
-    private func restoreEditorAfterCapture() {
+    func restoreEditorAfterCapture() {
         guard editorHiddenForCapture else { return }
         editorHiddenForCapture = false
         NSApp.activate()
         editor?.reveal()
+    }
+
+    /// macOS says memory is short: gives back everything that can be made again.
+    func releaseMemory(in window: EditorWindowController? = nil) {
+        Log.memory.notice("Memory pressure: releasing caches")
+        (window ?? editor)?.releaseMemory()
+        // Last: the editor's pending save fills this cache again.
+        BasePNGCache.shared.clear()
     }
 
     func editorClosed(_ ed: EditorWindowController) {
@@ -319,6 +335,11 @@ import ScreenCaptureKit
             return
         }
         let path = ([url.host ?? ""] + url.pathComponents.filter { $0 != "/" }).joined(separator: "/").lowercased()
+        // A page or an app can fire these as fast as it likes; captures from links are at most one a second.
+        if path.hasPrefix("grab/") || path == "ocr" {
+            guard Date().timeIntervalSince(lastLinkCapture) >= 1 else { return }
+            lastLinkCapture = Date()
+        }
         switch path {
         case "grab/area": run(.area)
         case "grab/fullscreen": run(.fullscreen)

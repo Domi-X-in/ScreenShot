@@ -8,10 +8,12 @@ import AppKit
     private var menuIconObserver: NSKeyValueObservation?
     private var dockObserver: NSKeyValueObservation?
     private var launchedByUser = false
+    private var memoryPressure: DispatchSourceMemoryPressure?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
         Settings.applyAppearance()
+        startUpkeep()
         // Preferences writes the choice to defaults; apply it the moment it changes.
         appearanceObserver = UserDefaults.standard.observe(\.appearance, options: [.new]) { _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { Settings.applyAppearance() } }
@@ -69,6 +71,35 @@ import AppKit
             OnboardingWindowController.show()
         }
         Updates.shared.start()
+    }
+
+    /// Quitting (⌘Q, logging out, an update's relaunch) skips the window's close: saves here what closing would.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        #if SCREENSHOT_SELFTESTS
+        if SelfTestSandbox.isTestRun { return .terminateNow }
+        #endif
+        AppLogic.shared.editor?.saveForQuit()
+        return .terminateNow
+    }
+
+    private func startUpkeep() {
+        CrashReports.shared.start()
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { MainActor.assumeIsolated { AppLogic.shared.releaseMemory() } }
+        source.resume()
+        memoryPressure = source
+        #if SCREENSHOT_SELFTESTS
+        if SelfTestSandbox.isTestRun { return }
+        #endif
+        let folder = Settings.saveFolder
+        let migrated = UserDefaults.standard.bool(forKey: Keys.editStateMigrated)
+        UserDefaults.standard.set(true, forKey: Keys.editStateMigrated)
+        EditableFile.ioQueue.async {
+            if !migrated { EditableFile.migrateLegacyFiles(in: folder) }
+            EditableFile.sweepStore()
+            Exporter.clearDragFolder()
+            TextIndex.shared.prune()
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
