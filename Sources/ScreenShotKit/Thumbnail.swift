@@ -25,7 +25,7 @@ import AppKit
         self.image = image
         self.scale = scale
         let size = CGSize(width: 267, height: 270)
-        let vf = NSScreen.containingMouse().visibleFrame
+        let vf = NSScreen.mouseVisibleFrame
         panel = KeyPanel(contentRect: CGRect(x: vf.maxX - size.width - 20, y: vf.minY + 20, width: size.width, height: size.height),
                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating
@@ -99,8 +99,8 @@ import AppKit
     }
 
     private func button(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
-        let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!
-            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))!, target: self, action: action)
+        let b = NSButton(image: NSImage.symbol(symbol, tip)
+            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) ?? NSImage.symbol(symbol, tip), target: self, action: action)
         b.isBordered = false
         b.toolTip = tip
         b.contentTintColor = .secondaryLabelColor
@@ -198,9 +198,7 @@ private final class ThumbnailImageView: NSView, NSDraggingSource {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let data = Exporter.encode(image, scale: scale, type: .png) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(Exporter.fileName(ext: "png"))
-        guard (try? data.write(to: url)) != nil else { return }
+        guard let data = Exporter.encode(image, scale: scale, type: .png), let url = Exporter.dragFile(data) else { return }
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         let preview = NSImage(cgImage: image, size: bounds.size)
         item.setDraggingFrame(bounds, contents: preview)

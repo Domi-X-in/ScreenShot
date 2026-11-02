@@ -65,17 +65,65 @@ import UniformTypeIdentifiers
         return "ScreenShot \(f.string(from: Date())).\(ext)"
     }
 
+    /// Names handed out whose file may not be written yet (auto-save writes off the main thread).
+    private static var reservedNames = Set<String>()
+
     /// A new file in `folder`: names only go down to the second, so two captures saved in the same second get "… 2".
     static func unusedURL(in folder: URL, ext: String) -> URL {
-        let first = folder.appendingPathComponent(fileName(ext: ext))
-        let stem = first.deletingPathExtension().lastPathComponent
-        var url = first
+        unusedURL(in: folder, stem: URL(fileURLWithPath: fileName(ext: ext)).deletingPathExtension().lastPathComponent, ext: ext)
+    }
+
+    private static func unusedURL(in folder: URL, stem: String, ext: String) -> URL {
+        var url = folder.appendingPathComponent("\(stem).\(ext)")
         var n = 2
-        while FileManager.default.fileExists(atPath: url.path) {
+        while FileManager.default.fileExists(atPath: url.path) || reservedNames.contains(url.path) {
             url = folder.appendingPathComponent("\(stem) \(n).\(ext)")
             n += 1
         }
+        reservedNames.insert(url.path)
         return url
+    }
+
+    /// Whether a save can replace this file: the app writes PNG and JPEG only, and bytes of another format under a
+    /// .gif, .heic or .tiff name would destroy the original (a GIF's animation, for one).
+    nonisolated static func canWriteInPlace(_ url: URL) -> Bool {
+        ["png", "jpg", "jpeg"].contains(url.pathExtension.lowercased())
+    }
+
+    /// Where a save of `url` goes: the file itself, or for any other format a new PNG beside it.
+    static func saveTarget(for url: URL) -> URL {
+        guard !canWriteInPlace(url) else { return url }
+        let dir = url.deletingLastPathComponent()
+        let folder = FileManager.default.isWritableFile(atPath: dir.path) ? dir : Settings.saveFolder
+        return unusedURL(in: folder, stem: url.deletingPathExtension().lastPathComponent + " edited", ext: "png")
+    }
+
+    /// A file for dragging out, in a folder of the app's own that is emptied at launch and by the next drag.
+    static func dragFile(_ data: Data) -> URL? {
+        let fm = FileManager.default
+        let folder = dragFolder
+        clearDragFolder(olderThan: 3600)
+        do {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let url = unusedURL(in: folder, ext: "png")
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            Log.files.error("Could not write a drag file: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private nonisolated static var dragFolder: URL { FileManager.default.temporaryDirectory.appendingPathComponent("ScreenShot-Drag", isDirectory: true) }
+
+    /// Keeps recent ones by default: the app that received a drop may still be reading the file.
+    nonisolated static func clearDragFolder(olderThan age: TimeInterval = 0) {
+        let fm = FileManager.default
+        let files = (try? fm.contentsOfDirectory(at: dragFolder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for f in files {
+            let date = (try? f.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            if Date().timeIntervalSince(date) >= age { try? fm.removeItem(at: f) }
+        }
     }
 
     private static func chosenType(_ img: CGImage) -> UTType {
@@ -109,7 +157,7 @@ import UniformTypeIdentifiers
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let type = chosenType(img)
-            let url = folder.appendingPathComponent(fileName(ext: type.preferredFilenameExtension ?? "png"))
+            let url = unusedURL(in: folder, ext: type.preferredFilenameExtension ?? "png")
             let (out, outScale) = forSaving(img, scale: scale)
             guard let data = encode(out, scale: outScale, type: type) else { throw CocoaError(.fileWriteUnknown) }
             try data.write(to: url, options: .atomic)
@@ -129,20 +177,23 @@ import UniformTypeIdentifiers
             let url: URL
             let type: UTType
             if let t = target ?? doc.fileURL {
-                url = t
-                type = ["jpg", "jpeg"].contains(t.pathExtension.lowercased()) ? .jpeg : .png
+                url = saveTarget(for: t)
+                type = ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) ? .jpeg : .png
             } else {
                 let folder = Settings.saveFolder
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                 type = chosenType(rendered)
-                url = folder.appendingPathComponent(fileName(ext: type.preferredFilenameExtension ?? "png"))
+                url = unusedURL(in: folder, ext: type.preferredFilenameExtension ?? "png")
             }
             // Only the visible image is reduced; the editable copy inside keeps every pixel.
             let (out, outScale) = forSaving(rendered, scale: doc.scale)
             guard let data = encode(out, scale: outScale, type: type) else { throw CocoaError(.fileWriteUnknown) }
             let state = EditState(scale: doc.scale, backdrop: doc.backdrop, objects: doc.objects)
-            try EditableFile.write(rendered: data, type: type, state: state, base: doc.image, to: url)
+            // Behind any auto-save still on its way, so that one can't overwrite this newer picture.
+            let base = doc.image
+            try EditableFile.ioQueue.sync { try EditableFile.write(rendered: data, type: type, state: state, base: base, to: url) }
             doc.fileURL = url
+            doc.noteFileWritten()
             if !quiet { Toast.show("Saved \(url.lastPathComponent)") }
             NotificationCenter.default.post(name: .screenshotSaved, object: url)
             return url

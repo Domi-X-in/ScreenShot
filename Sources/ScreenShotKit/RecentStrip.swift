@@ -3,7 +3,7 @@ import ImageIO
 
 /// Bottom strip of the editor: the 10 most recent images in the Screenshots folder, plus a button to browse older ones.
 final class RecentStrip: NSView {
-    static let limit = 10
+    nonisolated static let limit = 10
 
     var currentURL: URL? { didSet { highlight() } }
     /// Thumbnail click: the editor shows that file in the same window.
@@ -82,8 +82,8 @@ final class RecentStrip: NSView {
         let gen = generation
         let folder = Settings.saveFolder
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let items = Self.recentFiles(in: folder).compactMap { url -> (URL, CGImage)? in
-                Self.thumbnail(url).map { (url, $0) }
+            let items = Self.recentFiles(in: folder).compactMap { url -> (URL, CGImage, Bool)? in
+                Self.thumbnail(url).map { (url, $0, EditableFile.hasEdits(url)) }
             }
             DispatchQueue.main.async {
                 guard let self, gen == self.generation else { return }
@@ -92,7 +92,7 @@ final class RecentStrip: NSView {
         }
     }
 
-    static func recentFiles(in folder: URL) -> [URL] {
+    nonisolated static func recentFiles(in folder: URL) -> [URL] {
         let keys: [URLResourceKey] = [.creationDateKey, .isRegularFileKey]
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
         let images = files.filter { ["png", "jpg", "jpeg", "heic", "gif", "tiff"].contains($0.pathExtension.lowercased()) }
@@ -101,17 +101,17 @@ final class RecentStrip: NSView {
         return Array(images.sorted { date($0) > date($1) }.prefix(limit))
     }
 
-    private static func thumbnail(_ url: URL) -> CGImage? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    private nonisolated static func thumbnail(_ url: URL) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil), ImageLimits.allows(src) else { return nil }
         let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 220,
                                      kCGImageSourceCreateThumbnailWithTransform: true]
         return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
     }
 
-    private func show(_ items: [(URL, CGImage)]) {
+    private func show(_ items: [(URL, CGImage, Bool)]) {
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for (url, thumb) in items {
-            let tile = RecentTile(url: url, thumbnail: thumb) { [weak self] in self?.onSelect?($0) }
+        for (url, thumb, edited) in items {
+            let tile = RecentTile(url: url, thumbnail: thumb, edited: edited) { [weak self] in self?.onSelect?($0) }
             row.addArrangedSubview(tile)
         }
         empty.isHidden = !items.isEmpty
@@ -141,7 +141,7 @@ private final class RecentTile: NSView {
     private let caption = NSTextField(labelWithString: "")
     private static let tileHeight: CGFloat = 48
 
-    init(url: URL, thumbnail: CGImage, onSelect: @escaping (URL) -> Void) {
+    init(url: URL, thumbnail: CGImage, edited: Bool, onSelect: @escaping (URL) -> Void) {
         self.url = url
         self.onSelect = onSelect
         super.init(frame: .zero)
@@ -183,10 +183,9 @@ private final class RecentTile: NSView {
             caption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -6), caption.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 6),
             caption.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
-        let edited = EditableFile.hasEdits(url)
         toolTip = url.lastPathComponent + (edited ? " · editable annotations" : "")
         if edited {
-            let badge = NSImageView(image: NSImage(systemSymbolName: "pencil.circle.fill", accessibilityDescription: "Editable")!)
+            let badge = NSImageView(image: NSImage.symbol("pencil.circle.fill", "Editable"))
             badge.contentTintColor = DesignTokens.color(.accent)
             badge.translatesAutoresizingMaskIntoConstraints = false
             card.addSubview(badge)
@@ -293,7 +292,7 @@ private final class BrowseTile: NSView {
         setAccessibilityRole(.button)
         setAccessibilityLabel("Open the Library")
         let icon = NSImageView(image: Icons.image(.library, size: 18)
-            .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))!)
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) ?? Icons.image(.library, size: 18))
         icon.contentTintColor = DesignTokens.color(.ink2)
         let label = NSTextField(labelWithString: "Library")
         label.font = .systemFont(ofSize: 10.5, weight: .medium)

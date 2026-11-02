@@ -75,8 +75,8 @@ final class ColorHelperView: NSView {
         stack.alignment = .leading
         stack.spacing = 14
         for (symbol, title, detail) in rows {
-            let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: title)!
-                .withSymbolConfiguration(.init(pointSize: 22, weight: .regular))!)
+            let icon = NSImageView(image: NSImage.symbol(symbol, title)
+                .withSymbolConfiguration(.init(pointSize: 22, weight: .regular)) ?? NSImage.symbol(symbol, title))
             icon.contentTintColor = Palette.accent
             icon.widthAnchor.constraint(equalToConstant: 34).isActive = true
             let t = NSTextField(labelWithString: title)
@@ -241,7 +241,7 @@ final class ZoomPanelView: NSView {
         onFit = fit
         super.init(frame: .zero)
         func iconButton(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
-            let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: self, action: action)
+            let b = NSButton(image: NSImage.symbol(symbol, tip), target: self, action: action)
             b.bezelStyle = .circular
             b.toolTip = tip
             return b

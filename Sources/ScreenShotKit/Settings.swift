@@ -30,10 +30,12 @@ enum Keys {
     static let urlScheme = "urlSchemeEnabled"
     static let onboardingDone = "onboardingDone"
     static let onboardingPage = "onboardingPage"
+    static let editStateMigrated = "editStateMigrated"
 }
 
 enum Settings {
-    static let d = UserDefaults.standard
+    /// UserDefaults is thread-safe.
+    nonisolated(unsafe) static let d = UserDefaults.standard
 
     static var defaultFolder: URL {
         FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
@@ -64,7 +66,8 @@ enum Settings {
             Keys.scrollMaxHeight: 30000,
             Keys.windowBackground: "none",
             Keys.windowBackgroundColor: "#3B82F6",
-            Keys.urlScheme: true,
+            // Off until asked for: any page or app could otherwise take a screenshot through a link.
+            Keys.urlScheme: false,
             "appearance": "system",
         ])
     }

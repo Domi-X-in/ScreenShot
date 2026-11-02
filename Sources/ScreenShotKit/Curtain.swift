@@ -76,7 +76,8 @@ final class CurtainView: NSView {
     weak var controller: CurtainController?
     private let screen: NSScreen
     private let image: CGImage
-    private let pixels: PixelReader
+    /// Read off the main thread, so the overlay comes up at once; the loupe shows its color as soon as this is there.
+    private var pixels: PixelReader?
     private let scale: CGFloat
     private let mode: CurtainMode
     private var windowMode: Bool
@@ -93,11 +94,17 @@ final class CurtainView: NSView {
     init(frame: CGRect, screen: NSScreen, image: CGImage, windowList: [WindowInfo], mode: CurtainMode) {
         self.screen = screen
         self.image = image
-        self.pixels = PixelReader(image)
         self.scale = CGFloat(image.width) / frame.width
         self.mode = mode
         self.windowMode = mode == .window
         super.init(frame: frame)
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            let reader = PixelReader(image)
+            DispatchQueue.main.async {
+                self?.pixels = reader
+                self?.needsDisplay = true
+            }
+        }
         let o = screen.cgOrigin
         windowRects = windowList.map { ($0.id, $0.frame.offsetBy(dx: -o.x, dy: -o.y)) }
             .filter { $0.1.intersects(CGRect(origin: .zero, size: frame.size)) }
@@ -270,7 +277,7 @@ final class CurtainView: NSView {
 
         var color: NSColor?
         var hex = ""
-        if let c = pixels.color(px, py) {
+        if let c = pixels?.color(px, py) {
             color = c
             hex = c.hexString + "   "
         }
@@ -339,7 +346,7 @@ final class CurtainView: NSView {
         defer { dragStart = nil }
         if let sel = selection, sel.width * scale >= 4, sel.height * scale >= 4 {
             let px = CGRect(x: sel.minX * scale, y: sel.minY * scale, width: sel.width * scale, height: sel.height * scale).integral
-            guard let crop = image.cropping(to: px) else { controller?.finish(.cancelled); return }
+            guard let crop = image.cropping(to: px)?.ownedCopy() else { controller?.finish(.cancelled); return }
             controller?.finish(.area(screen: screen, image: crop, pointRect: sel))
             return
         }

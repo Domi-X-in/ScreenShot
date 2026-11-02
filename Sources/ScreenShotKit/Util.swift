@@ -8,10 +8,14 @@ extension NSScreen {
     /// Height of the primary display; used to flip between CG (top-left) and AppKit (bottom-left) global coordinates.
     static var primaryHeight: CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
 
-    static func containingMouse() -> NSScreen {
+    /// Nil only with no display at all (a closed laptop, a Mac mini with its monitor off).
+    static func containingMouse() -> NSScreen? {
         let p = NSEvent.mouseLocation
-        return screens.first { NSMouseInRect(p, $0.frame, false) } ?? main ?? screens[0]
+        return screens.first { NSMouseInRect(p, $0.frame, false) } ?? main ?? screens.first
     }
+
+    /// Where to place a window: the screen under the mouse, or a usual size when no display is attached.
+    static var mouseVisibleFrame: CGRect { containingMouse()?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900) }
 
     /// Top-left corner of this screen in CG global coordinates.
     var cgOrigin: CGPoint {
@@ -96,14 +100,35 @@ extension CGContext {
     }
 }
 
+extension NSImage {
+    /// An SF Symbol, or an empty image if this macOS doesn't have that name: a missing icon is never worth a crash.
+    static func symbol(_ name: String, _ description: String? = nil) -> NSImage {
+        NSImage(systemSymbolName: name, accessibilityDescription: description) ?? NSImage(size: NSSize(width: 16, height: 16))
+    }
+}
+
 extension CGImage {
     var size: CGSize { CGSize(width: width, height: height) }
+
+    /// A copy with its own pixels. `cropping(to:)` keeps the whole source image alive, however small the crop, so a crop
+    /// that outlives the moment (a kept strip, a captured area) goes through this.
+    func ownedCopy() -> CGImage? {
+        var space = colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        if space.model != .rgb { space = CGColorSpace(name: CGColorSpace.sRGB)! }
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        ctx.setBlendMode(.copy)
+        ctx.interpolationQuality = .none
+        ctx.draw(self, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return ctx.makeImage()
+    }
 }
 
 /// Exact pixel colors in sRGB: the image is drawn once into an 8-bit sRGB buffer (proper color management) and read
 /// directly. NSBitmapImageRep.colorAt misreads some images' color spaces and shifts the values (pure red came back
 /// as #FF2600), which made copied colors and Erase fills slightly wrong.
-final class PixelReader {
+final class PixelReader: @unchecked Sendable {
     let width: Int
     let height: Int
     private var data: [UInt8]

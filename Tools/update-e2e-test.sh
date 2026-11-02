@@ -10,7 +10,8 @@ ID=local.screenshot.updatetest
 W=$(mktemp -d)
 SP=.build/artifacts/sparkle/Sparkle/bin
 TAMPERED=0; [ "${1:-}" = "--tampered" ] && TAMPERED=1
-KEY="${SPARKLE_KEY_FILE:-$HOME/.screenshot-release/sparkle_ed25519.key}"
+# The release key: from the Keychain, as in Tools/release.sh, or the file in SPARKLE_KEY_FILE.
+if [ -n "${SPARKLE_KEY_FILE:-}" ]; then KEY_ARGS=(--ed-key-file "$SPARKLE_KEY_FILE"); else KEY_ARGS=(--account local.screenshot.app); fi
 trap 'kill $SERVER 2>/dev/null || true; defaults delete $ID >/dev/null 2>&1 || true; rm -rf "$W"' EXIT
 
 ./build.sh >/dev/null
@@ -26,11 +27,11 @@ mkdir -p "$W/old" "$W/new" "$W/srv"
 make_copy "$W/old/ScreenShot.app" 261023.9 261023.9 >/dev/null 2>&1
 make_copy "$W/new/ScreenShot.app" 261023.10 261023.10 >/dev/null 2>&1
 ditto -c -k --sequesterRsrc --keepParent "$W/new/ScreenShot.app" "$W/srv/new.zip"
-SIG=$("$SP/sign_update" --ed-key-file "$KEY" "$W/srv/new.zip")
+SIG=$("$SP/sign_update" "${KEY_ARGS[@]}" "$W/srv/new.zip")
 if [ $TAMPERED = 1 ]; then
     # A valid signature, but of other bytes (as if the zip had been swapped on the server).
     ditto -c -k --keepParent "$W/old/ScreenShot.app" "$W/other.zip"
-    OTHER=$("$SP/sign_update" --ed-key-file "$KEY" "$W/other.zip" | grep -o 'sparkle:edSignature="[^"]*"')
+    OTHER=$("$SP/sign_update" "${KEY_ARGS[@]}" "$W/other.zip" | grep -o 'sparkle:edSignature="[^"]*"')
     SIG="$OTHER $(echo "$SIG" | grep -o 'length="[0-9]*"')"
 fi
 cat > "$W/srv/appcast.xml" <<XML

@@ -65,7 +65,7 @@ struct WindowInfo {
         guard let w = content.windows.first(where: { $0.windowID == id }) else { return img }
         let center = CGPoint(x: w.frame.midX, y: w.frame.midY)
         let screen = NSScreen.screens.first { CGRect(origin: $0.cgOrigin, size: $0.frame.size).contains(center) } ?? NSScreen.containingMouse()
-        guard let fill = WindowBackground.current(for: screen) else { return img }
+        guard let screen, let fill = WindowBackground.current(for: screen) else { return img }
         return WindowBackground.compose(img, on: fill) ?? img
     }
 

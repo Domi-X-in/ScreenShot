@@ -144,7 +144,7 @@ extension FlowsSelfTest {
         print("INFO policy \(NSApp.activationPolicy() == .regular ? "regular" : "accessory"), front \(front())")
         await sleep(1)
 
-        let screen = NSScreen.containingMouse()
+        let screen = NSScreen.containingMouse()!
         let image = FlowsSelfTest.sampleImage(screen.frame.width > 0 ? Int(screen.frame.width) : 800, Int(screen.frame.height))
         let curtain = CurtainController(shots: [(screen, image)], windowList: [], mode: .area) { _ in }
         CurtainController.current = curtain

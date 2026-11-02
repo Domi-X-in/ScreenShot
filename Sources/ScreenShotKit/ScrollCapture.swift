@@ -155,7 +155,7 @@ import ApplicationServices
                 still = 0
                 // The last strip is cut short so the capture stops exactly at the maximum height.
                 let take = min(off, maxHeight - total)
-                if take > 0, let strip = cur.cropping(to: CGRect(x: 0, y: cur.height - off, width: cur.width, height: take)) {
+                if take > 0, let strip = cur.cropping(to: CGRect(x: 0, y: cur.height - off, width: cur.width, height: take))?.ownedCopy() {
                     strips.append(strip)
                     total += take
                 }
@@ -174,7 +174,14 @@ import ApplicationServices
         border?.orderOut(nil)
         panel?.orderOut(nil)
         ScrollCapture.current = nil
-        guard let img = Stitcher.compose(strips) else { return }
+        guard let img = Stitcher.compose(strips) else {
+            if !strips.isEmpty {
+                Log.capture.error("Scrolling capture could not be joined (\(strips.count) strips)")
+                Toast.show("Scrolling capture is too large to join. Try a lower height in Preferences › Advanced.", duration: 4)
+            }
+            AppLogic.shared.restoreEditorAfterCapture()
+            return
+        }
         if let hook = ScrollCapture.onFinishForTest { hook(img); return }
         AppLogic.shared.handleCapture(img, scale: screen.backingScaleFactor)
     }
@@ -235,6 +242,7 @@ enum Stitcher {
         if strips.count == 1 { return first }
         let w = first.width
         let total = strips.reduce(0) { $0 + $1.height }
+        guard ImageLimits.allows(width: CGFloat(w), height: CGFloat(total)) else { return nil }
         guard let ctx = CGContext(data: nil, width: w, height: total, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: first.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)

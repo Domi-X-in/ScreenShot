@@ -20,6 +20,9 @@ jobs:
       - name: Unit tests
         run: swift test
         timeout-minutes: 8
+      - name: Unit tests under Thread Sanitizer
+        run: swift test --sanitize=thread
+        timeout-minutes: 8
       - name: Upload the app
         uses: actions/upload-artifact@v4
         with:
