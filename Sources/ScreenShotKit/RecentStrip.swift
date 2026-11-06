@@ -8,6 +8,8 @@ final class RecentStrip: NSView {
     var currentURL: URL? { didSet { highlight() } }
     /// Thumbnail click: the editor shows that file in the same window.
     var onSelect: ((URL) -> Void)?
+    /// Right-click › Move to Trash.
+    var onTrash: ((URL) -> Void)?
     /// Folder button: opens the Library with every screenshot.
     var onBrowse: (() -> Void)?
     private let row = NSStackView()
@@ -111,7 +113,8 @@ final class RecentStrip: NSView {
     private func show(_ items: [(URL, CGImage, Bool)]) {
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for (url, thumb, edited) in items {
-            let tile = RecentTile(url: url, thumbnail: thumb, edited: edited) { [weak self] in self?.onSelect?($0) }
+            let tile = RecentTile(url: url, thumbnail: thumb, edited: edited, onSelect: { [weak self] in self?.onSelect?($0) },
+                                  onTrash: { [weak self] in self?.onTrash?($0) })
             row.addArrangedSubview(tile)
         }
         empty.isHidden = !items.isEmpty
@@ -134,6 +137,7 @@ private final class FlippedClip: NSClipView {
 private final class RecentTile: NSView {
     let url: URL
     private let onSelect: (URL) -> Void
+    private let onTrash: (URL) -> Void
     var isCurrent = false { didSet { refresh() } }
     private var hovering = false { didSet { refresh() } }
     private let card = NSView()
@@ -141,9 +145,10 @@ private final class RecentTile: NSView {
     private let caption = NSTextField(labelWithString: "")
     private static let tileHeight: CGFloat = 48
 
-    init(url: URL, thumbnail: CGImage, edited: Bool, onSelect: @escaping (URL) -> Void) {
+    init(url: URL, thumbnail: CGImage, edited: Bool, onSelect: @escaping (URL) -> Void, onTrash: @escaping (URL) -> Void) {
         self.url = url
         self.onSelect = onSelect
+        self.onTrash = onTrash
         super.init(frame: .zero)
         let ratio = CGFloat(thumbnail.width) / CGFloat(max(1, thumbnail.height))
         let width = max(48, min(96, Self.tileHeight * ratio))
@@ -257,6 +262,8 @@ private final class RecentTile: NSView {
         m.addItem(withTitle: "Edit Here", action: #selector(open), keyEquivalent: "").target = self
         m.addItem(withTitle: "Copy Image", action: #selector(copyImage), keyEquivalent: "").target = self
         m.addItem(withTitle: "Show in Finder", action: #selector(reveal), keyEquivalent: "").target = self
+        m.addItem(.separator())
+        m.addItem(withTitle: "Move to Trash", action: #selector(trash), keyEquivalent: "").target = self
         return m
     }
 
@@ -270,6 +277,8 @@ private final class RecentTile: NSView {
     }
 
     @objc private func reveal() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+
+    @objc private func trash() { onTrash(url) }
 }
 
 /// "Library" tile at the end of the strip: a dashed card that opens the Library.

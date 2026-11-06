@@ -208,6 +208,33 @@ struct EditableFileTests {
         }
     }
 
+    @Test("Move to Trash on the picture on screen moves on, and nothing writes it back")
+    func trashFromStrip() throws {
+        _ = NSApplication.shared
+        try withSaveFolder { dir in
+            let png = try #require(NSBitmapImageRep(cgImage: base).representation(using: .png, properties: [:]))
+            let older = dir.appendingPathComponent("older.png"), newer = dir.appendingPathComponent("newer.png")
+            try png.write(to: older)
+            try png.write(to: newer)
+            let ed = EditorWindowController(image: base, scale: 1, url: newer)
+            ed.doc.objects = [arrow()]
+            ed.doc.revision += 1
+            ed.scheduleAutosave()
+
+            let first = try #require(ed.trash(newer))
+            defer { try? FileManager.default.removeItem(at: first) }
+            #expect(ed.doc.fileURL?.standardizedFileURL == older.standardizedFileURL, "the window shows the screenshot left")
+            #expect(ed.visitedCount == 0)
+            let second = try #require(ed.trash(older))
+            defer { try? FileManager.default.removeItem(at: second) }
+            #expect(ed.doc.fileURL == nil, "with none left, a blank document")
+            #expect(ed.emptyState != nil, "and the empty page")
+
+            ed.saveForQuit()
+            #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty, "the pending edit didn't bring the file back")
+        }
+    }
+
     @Test("a manual save isn't overwritten by an older auto-save still in the queue")
     func saveOrder() throws {
         let url = tempDir().appendingPathComponent("order.png")
