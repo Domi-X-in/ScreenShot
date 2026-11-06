@@ -1,5 +1,10 @@
 import AppKit
+import Testing
 @testable import ScreenShotKit
+
+/// Suites that save edits share BasePNGCache with each other, and some empty it or fill it past its limit: they run one
+/// at a time, or a check about one document's cache entry sees another test's.
+@Suite(.serialized) enum SharedPNGCacheTests {}
 
 /// Builds a test image by drawing into a top-left-origin context.
 func makeImage(_ w: Int, _ h: Int, _ draw: (CGContext) -> Void) -> CGImage {

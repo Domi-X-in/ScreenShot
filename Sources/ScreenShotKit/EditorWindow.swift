@@ -71,6 +71,7 @@ import UniformTypeIdentifiers
         info.onZoomBox = { [weak self] in self?.showZoomPanel(from: $0) }
 
         recent.onSelect = { [weak self] url in self?.switchTo(url) }
+        recent.onTrash = { [weak self] url in self?.trash(url) }
         recent.onBrowse = { LibraryWindowController.show() }
         editorStatus.onBackdropPanel = { [weak self] anchor in self?.showBackdropPanel(from: anchor) }
     }
@@ -497,6 +498,50 @@ import UniformTypeIdentifiers
         let next = cached ?? Self.makeDocument(image: image, scale: scale, state: state, url: url)
         if cached == nil { next.savedRevision = next.revision }
         present(next)
+    }
+
+    /// Right-click › Move to Trash on a recent thumbnail: Put Back in the Finder brings it back. When it is the picture on
+    /// screen, the window moves on to the newest screenshot left, or to the empty page. Returns where it went in the Trash.
+    @discardableResult
+    func trash(_ url: URL) -> URL? {
+        // The same folder can come as /var/… and /private/var/…; compared while the file is still there to resolve.
+        func isTrashed(_ u: URL?) -> Bool { u?.resolvingSymlinksInPath() == url.resolvingSymlinksInPath() }
+        let shown = doc
+        let showing = isTrashed(shown.fileURL)
+        let kept = visited.keys.filter { isTrashed($0) }
+        if showing {
+            // Nothing may write it back: no save waiting, none still in the queue.
+            autosaveTimer?.invalidate()
+            autosaveTimer = nil
+            shotView.commitText()
+            doc.savedRevision = doc.revision
+            saveQueue.sync {}
+        }
+        var trashed: NSURL?
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
+        } catch {
+            Toast.show("Couldn't move it to the Trash")
+            return nil
+        }
+        if showing {
+            if let next = RecentStrip.recentFiles(in: Settings.saveFolder).first { switchTo(next) }
+            if doc === shown { showBlank() }
+        }
+        visited = visited.filter { !kept.contains($0.key) && !(showing && $0.value === shown) }
+        recent.reload()
+        Toast.show("Moved to the Trash")
+        return trashed as URL?
+    }
+
+    /// The empty page, over a blank document that is never saved.
+    private func showBlank() {
+        guard let blank = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage() else { return }
+        let d = Self.makeDocument(image: blank, scale: 2, state: nil, url: nil)
+        d.savedRevision = d.revision
+        present(d)
+        showEmptyState()
     }
 
     /// The document kept for `url`, unless the file changed or went away since this window last wrote it.
