@@ -186,7 +186,8 @@ final class RibbonButton: NSView, NSTextFieldDelegate {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
+        // Only this view's own area: the tooltip's (owned by NSToolTipManager) is in the same list and must stay.
+        trackingAreas.filter { $0.owner === self }.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
     }
 
@@ -377,7 +378,8 @@ final class CompactGroupButton: NSView {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
+        // Only this view's own area: the tooltip's (owned by NSToolTipManager) is in the same list and must stay.
+        trackingAreas.filter { $0.owner === self }.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
     }
     override func mouseEntered(with event: NSEvent) { hovering = true }

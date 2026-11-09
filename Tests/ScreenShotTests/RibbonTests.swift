@@ -144,4 +144,20 @@ struct RibbonViewTests {
         #expect(RibbonButton(bold).accessibilityValue() == nil)
         #expect(RibbonButton(tool).accessibilityValue() as? String == "selected")
     }
+
+    @Test("Tooltips survive tracking-area updates (\"Counter (C)\")")
+    func tooltipsSurviveTrackingUpdates() {
+        let item = RibbonItem("counter", kind: .small, title: "Counter", icon: .counter)
+        item.shortcut = "C"
+        let b = RibbonButton(item)
+        b.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
+        let host = NSView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        host.addSubview(b)
+        b.updateTrackingAreas()
+        b.updateTrackingAreas()
+        #expect(b.toolTip == "Counter (C)")
+        #expect(b.trackingAreas.contains { $0.owner.map { NSStringFromClass(type(of: $0)) } == "NSToolTipManager" },
+                "the tooltip's tracking area is kept")
+        #expect(b.trackingAreas.filter { $0.owner === b }.count == 1, "one hover area, not one more per update")
+    }
 }

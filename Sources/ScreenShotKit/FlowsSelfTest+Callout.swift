@@ -102,6 +102,13 @@ extension FlowsSelfTest {
         check(v.tool == .select && v.doc.objects.filter { $0.kind == .text }.count == 1, "Text: clicking outside finishes it and switches to Select")
         type("c"); click(ed, CGPoint(x: 300, y: 300)); click(ed, CGPoint(x: 360, y: 300))
         check(v.tool == .counter && v.doc.objects.filter { $0.kind == .counter }.count == 2, "Counter stays on so you can number several in a row")
+        // A color picked for the counter just placed (still selected, Counter still on) carries on to the next one.
+        let picked = NSColor(rgbaHex: "#1E88E5FF")!
+        v.applyFill(picked)
+        check(v.doc.objects.last?.color.rgbaHex == picked.rgbaHex, "Shape Fill recolors the counter just placed")
+        click(ed, CGPoint(x: 420, y: 300))
+        check(v.doc.objects.last?.kind == .counter && v.doc.objects.last?.color.rgbaHex == picked.rgbaHex,
+              "the next counter keeps the picked color (got \(v.doc.objects.last?.color.rgbaHex ?? "-"))")
         // Two-line text in a text box and in a shape, for a look at the saved picture.
         type("t"); click(ed, CGPoint(x: 560, y: 420)); await sleep(0.1)
         type("First line"); key("return"); type("Second line"); key("esc")

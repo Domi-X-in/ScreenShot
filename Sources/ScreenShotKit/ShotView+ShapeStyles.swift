@@ -2,7 +2,8 @@ import AppKit
 
 /// What the top toolbar's Shape Styles, Arrange and Align controls work on, and the commands they send. Like Office,
 /// every command acts on the whole selection (a group counts as its objects), skips objects it doesn't apply to, and
-/// is one undo step; with nothing selected it sets the style for the next object drawn.
+/// is one undo step; with nothing selected, or with a drawing tool still in hand, it also sets the style for the next
+/// object drawn.
 extension ShotView {
     /// The selected objects, and the one being typed in.
     var styleTargets: [Annotation] {
@@ -112,6 +113,9 @@ extension ShotView {
             return
         }
         guard !ids.isEmpty else { NSSound.beep(); return }
+        // With a drawing tool still in hand (Counter, or any tool with "Switch back to Select" off), what is selected is
+        // what was just drawn: the next one drawn follows the change too, so (2) keeps the color picked for (1).
+        if tool != .select { newStyle(&style, tool) }
         var changed: [(Int, Annotation)] = []
         for i in doc.objects.indices where ids.contains(doc.objects[i].id) {
             var o = doc.objects[i]
